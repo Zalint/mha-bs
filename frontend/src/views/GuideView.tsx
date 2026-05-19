@@ -137,7 +137,102 @@ export function GuideView() {
         </ConceptItem>
       </Section>
 
-      <Section id="etats" title="5. Les états d'une directive">
+      <Section id="directive-vs-recommandation" title="5. Directive vs Recommandation MHA — ne pas confondre">
+        <p className="mb-3">
+          Les deux ont le même set d'<b>états d'avancement</b> mais leur origine et leur
+          parcours sont différents&nbsp;:
+        </p>
+        <table className="w-full text-sm border-separate border-spacing-0 mb-3">
+          <thead className="bg-surface2">
+            <tr>
+              <Th>&nbsp;</Th>
+              <Th>Directive présidentielle</Th>
+              <Th>Recommandation MHA</Th>
+            </tr>
+          </thead>
+          <tbody>
+            <CompareRow label="Origine" a="Le Président (Conseil des ministres, Conseil inter-ministériel, Coordination SGG/SG)" b="Une instance interne au MHA (COPIL projet, Réforme, CNGI)" />
+            <CompareRow label="Sens" a="Descendante — ordre présidentiel" b="Horizontale — engagement interne du MHA" />
+            <CompareRow label="Identifiant" a={<>Code unique (ex.&nbsp;<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">CI20260204-0007</code>)</>} b={<>Numéro d'ordre dans sa matrice (ex.&nbsp;<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">copilProgepIi #3</code>)</>} />
+            <CompareRow label="Workflow de validation" a={<><b className="text-success">Oui</b> — brouillon → soumis → validé par SG</>} b={<><b className="text-danger">Non</b> — le BS met à jour directement</>} />
+            <CompareRow label="Vue principale" a={<>Menu&nbsp;<i>Directive présidentielle</i></>} b={<>Menu&nbsp;<i>Recommandations MHA</i></>} />
+          </tbody>
+        </table>
+        <Note>
+          <b>Le seul point commun</b> : les 4 états d'avancement (En attente / En cours / Réalisée /
+          Inéligible) s'appliquent aux deux.
+        </Note>
+      </Section>
+
+      <Section id="trois-dimensions" title="6. Les 3 dimensions d'une directive">
+        <p className="mb-3">
+          Une directive a <b>deux jauges indépendantes</b>. Ne pas les confondre est la clé pour
+          bien utiliser l'app.
+        </p>
+
+        <div className="grid sm:grid-cols-2 gap-3 mb-4">
+          <div className="border border-border rounded-lg p-4 bg-surface2">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-fg-muted mb-1">Jauge n°1</div>
+            <div className="font-semibold text-fg mb-2">État métier</div>
+            <p className="text-sm text-fg-2 mb-2"><b>Où en est l'exécution&nbsp;?</b></p>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="badge bg-info-bg text-info">En attente</span>
+              <span className="badge bg-warning-bg text-warning">En cours</span>
+              <span className="badge bg-success-bg text-success">Réalisée</span>
+              <span className="badge bg-neutral-bg text-neutral">Inéligible</span>
+            </div>
+          </div>
+          <div className="border border-border rounded-lg p-4 bg-surface2">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-fg-muted mb-1">Jauge n°2</div>
+            <div className="font-semibold text-fg mb-2">Statut de validation</div>
+            <p className="text-sm text-fg-2 mb-2"><b>La fiche est-elle officielle&nbsp;?</b></p>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="badge bg-muted text-fg-2">Brouillon</span>
+              <span className="badge bg-info-bg text-info">Soumis</span>
+              <span className="badge bg-success-bg text-success">Validé</span>
+            </div>
+          </div>
+        </div>
+
+        <p className="mb-2 font-semibold text-fg">Les deux jauges évoluent indépendamment&nbsp;:</p>
+        <table className="w-full text-sm border-separate border-spacing-0 mb-4">
+          <thead className="bg-surface2">
+            <tr>
+              <Th>Situation</Th>
+              <Th>État</Th>
+              <Th>Statut validation</Th>
+            </tr>
+          </thead>
+          <tbody>
+            <ExampleRow situation="Le BS vient de créer la fiche, action pas commencée" etat="attente" valid="brouillon" />
+            <ExampleRow situation="BS a fini sa saisie, attend l'OK du SG" etat="attente" valid="soumis" />
+            <ExampleRow situation="SG a validé, BS commence le travail" etat="enCours" valid="valide" />
+            <ExampleRow situation="Action terminée, fiche officielle" etat="realisee" valid="valide" />
+          </tbody>
+        </table>
+
+        <p className="mb-2 font-semibold text-fg">Et la file de travail BS ?</p>
+        <p>
+          Ce n'est <b>pas un état</b>, mais <b>6 lunettes de filtrage</b> qui croisent les deux
+          jauges&nbsp;:
+        </p>
+        <ul className="list-disc pl-5 mt-2 space-y-0.5 text-sm">
+          <li>5 onglets filtrent sur la <b>jauge n°1 (état)</b>&nbsp;: À traiter, En attente, En retard, Clôturées, Inéligibles</li>
+          <li>1 onglet filtre sur la <b>jauge n°2 (validation)</b>&nbsp;: Soumises au SG</li>
+        </ul>
+
+        <Note>
+          <b>Analogie</b> &middot; Pensez à un dossier d'urbanisme&nbsp;:<br />
+          <b>État métier</b> = le bâtiment est-il construit ? (pas commencé / en construction /
+          terminé)<br />
+          <b>Statut validation</b> = le dossier est-il signé par le maire ? (brouillon / déposé /
+          approuvé)<br />
+          <b>File de travail</b> = vos onglets dans votre logiciel pour ne voir que ce qui vous
+          intéresse.
+        </Note>
+      </Section>
+
+      <Section id="etats" title="7. Les états d'une directive">
         <p className="mb-3">Chaque directive a un état métier (avancement de l'exécution)&nbsp;:</p>
         <table className="w-full text-sm border-separate border-spacing-0 mb-4">
           <thead className="bg-surface2">
@@ -160,7 +255,7 @@ export function GuideView() {
         </Note>
       </Section>
 
-      <Section id="workflow" title="6. Le workflow de validation">
+      <Section id="workflow" title="8. Le workflow de validation">
         <p className="mb-4">
           Indépendamment de l'état métier, chaque directive suit un cycle de validation à trois
           étapes&nbsp;:
@@ -196,7 +291,7 @@ export function GuideView() {
         </ol>
       </Section>
 
-      <Section id="file-bs" title="7. La file de travail (BS)">
+      <Section id="file-bs" title="9. La file de travail (BS)">
         <p className="mb-3">
           Le menu <i>File de travail</i> du Bureau de Suivi regroupe les directives en{' '}
           <b>6 onglets</b>&nbsp;:
@@ -215,7 +310,7 @@ export function GuideView() {
         </Note>
       </Section>
 
-      <Section id="creer-directive" title="8. Créer / éditer une directive">
+      <Section id="creer-directive" title="10. Créer / éditer une directive">
         <ol className="list-decimal pl-5 space-y-2">
           <li>
             Mode <b>Bureau de Suivi</b> → menu <i>Nouvelle recommandation</i> (icône{' '}
@@ -233,7 +328,7 @@ export function GuideView() {
         </Note>
       </Section>
 
-      <Section id="referentiels" title="9. Référentiels (admin uniquement)">
+      <Section id="referentiels" title="11. Référentiels (admin uniquement)">
         <p>
           Le menu <Settings className="inline w-3.5 h-3.5" /> <i>Configuration</i> (visible
           admin uniquement) permet de gérer 12 listes éditables&nbsp;:
@@ -258,7 +353,7 @@ export function GuideView() {
         </Note>
       </Section>
 
-      <Section id="utilisateurs" title="10. Gestion des utilisateurs (admin uniquement)">
+      <Section id="utilisateurs" title="12. Gestion des utilisateurs (admin uniquement)">
         <p>
           Menu <Users className="inline w-3.5 h-3.5" /> <i>Utilisateurs</i>. L'administrateur
           peut&nbsp;:
@@ -275,7 +370,7 @@ export function GuideView() {
         </Note>
       </Section>
 
-      <Section id="mon-mdp" title="11. Changer son propre mot de passe">
+      <Section id="mon-mdp" title="13. Changer son propre mot de passe">
         <p>
           En haut à droite, à côté du bouton de déconnexion, cliquez sur l'icône{' '}
           <KeyRound className="inline w-3.5 h-3.5" /> <b>clé</b>. La modale demande le mot de
@@ -283,7 +378,7 @@ export function GuideView() {
         </p>
       </Section>
 
-      <Section id="format-dates" title="12. Conventions">
+      <Section id="format-dates" title="14. Conventions">
         <ul className="space-y-1.5">
           <li>
             <b>Format des dates</b>&nbsp;: <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">YYYY-MM-DD</code>{' '}
@@ -305,7 +400,7 @@ export function GuideView() {
         </ul>
       </Section>
 
-      <Section id="raccourcis" title="13. Raccourcis utiles">
+      <Section id="raccourcis" title="15. Raccourcis utiles">
         <ul className="space-y-1.5">
           <li>
             <Inbox className="inline w-3.5 h-3.5" /> <b>File de travail</b> — point d'entrée
@@ -342,15 +437,17 @@ function Toc() {
     { id: 'roles', label: '2. Les profils utilisateur' },
     { id: 'vues', label: '3. Vue SG vs Bureau de Suivi' },
     { id: 'concepts', label: '4. Les concepts principaux' },
-    { id: 'etats', label: "5. Les états d'une directive" },
-    { id: 'workflow', label: '6. Workflow de validation' },
-    { id: 'file-bs', label: '7. La file de travail (BS)' },
-    { id: 'creer-directive', label: '8. Créer / éditer une directive' },
-    { id: 'referentiels', label: '9. Référentiels (admin)' },
-    { id: 'utilisateurs', label: '10. Utilisateurs (admin)' },
-    { id: 'mon-mdp', label: '11. Changer son mot de passe' },
-    { id: 'format-dates', label: '12. Conventions' },
-    { id: 'raccourcis', label: '13. Raccourcis utiles' },
+    { id: 'directive-vs-recommandation', label: '5. Directive vs Recommandation' },
+    { id: 'trois-dimensions', label: "6. Les 3 dimensions d'une directive" },
+    { id: 'etats', label: "7. Les états d'une directive" },
+    { id: 'workflow', label: '8. Workflow de validation' },
+    { id: 'file-bs', label: '9. La file de travail (BS)' },
+    { id: 'creer-directive', label: '10. Créer / éditer une directive' },
+    { id: 'referentiels', label: '11. Référentiels (admin)' },
+    { id: 'utilisateurs', label: '12. Utilisateurs (admin)' },
+    { id: 'mon-mdp', label: '13. Changer son mot de passe' },
+    { id: 'format-dates', label: '14. Conventions' },
+    { id: 'raccourcis', label: '15. Raccourcis utiles' },
   ];
   return (
     <nav className="bg-surface border border-border rounded-lg p-4 mb-6">
@@ -482,5 +579,63 @@ function FileTab({ label, desc }: { label: string; desc: string }) {
       <span className="font-semibold text-fg min-w-[140px]">{label}</span>
       <span className="text-fg-2">{desc}</span>
     </li>
+  );
+}
+
+function CompareRow({
+  label,
+  a,
+  b,
+}: {
+  label: string;
+  a: React.ReactNode;
+  b: React.ReactNode;
+}) {
+  return (
+    <tr className="border-b border-border last:border-0 align-top">
+      <td className="px-3 py-2.5 text-fg-muted text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
+        {label}
+      </td>
+      <td className="px-3 py-2.5 text-fg-2">{a}</td>
+      <td className="px-3 py-2.5 text-fg-2">{b}</td>
+    </tr>
+  );
+}
+
+const ETAT_BADGE: Record<string, { label: string; style: string }> = {
+  attente: { label: 'En attente', style: 'bg-info-bg text-info' },
+  enCours: { label: 'En cours', style: 'bg-warning-bg text-warning' },
+  realisee: { label: 'Réalisée', style: 'bg-success-bg text-success' },
+  ineligible: { label: 'Inéligible', style: 'bg-neutral-bg text-neutral' },
+};
+
+const VALIDATION_BADGE: Record<string, { label: string; style: string }> = {
+  brouillon: { label: 'Brouillon', style: 'bg-muted text-fg-2' },
+  soumis: { label: 'Soumis', style: 'bg-info-bg text-info' },
+  valide: { label: 'Validé', style: 'bg-success-bg text-success' },
+};
+
+function ExampleRow({
+  situation,
+  etat,
+  valid,
+}: {
+  situation: string;
+  etat: keyof typeof ETAT_BADGE;
+  valid: keyof typeof VALIDATION_BADGE;
+}) {
+  const e = ETAT_BADGE[etat];
+  const v = VALIDATION_BADGE[valid];
+  if (!e || !v) return null;
+  return (
+    <tr className="border-b border-border last:border-0 align-middle">
+      <td className="px-3 py-2.5 text-fg-2">{situation}</td>
+      <td className="px-3 py-2.5">
+        <span className={cn('badge', e.style)}>{e.label}</span>
+      </td>
+      <td className="px-3 py-2.5">
+        <span className={cn('badge', v.style)}>{v.label}</span>
+      </td>
+    </tr>
   );
 }
