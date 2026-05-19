@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { FormField } from '../ui/FormField.js';
+import { PasswordInput } from '../ui/PasswordInput.js';
 import { ApiClientError, api } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
 
@@ -58,19 +59,15 @@ export function ChangeMyPasswordModal({ open, onOpenChange }: Props) {
           </Dialog.Description>
           <form onSubmit={(e) => void onSubmit(e)} className="space-y-1">
             <FormField label="Mot de passe actuel" htmlFor="currentPassword" required error={errors.currentPassword?.message}>
-              <input
+              <PasswordInput
                 id="currentPassword"
-                type="password"
-                className="input font-mono"
                 autoComplete="current-password"
                 {...register('currentPassword', { required: 'Champ obligatoire' })}
               />
             </FormField>
             <FormField label="Nouveau mot de passe" htmlFor="newPassword" required error={errors.newPassword?.message}>
-              <input
+              <PasswordInput
                 id="newPassword"
-                type="password"
-                className="input font-mono"
                 autoComplete="new-password"
                 {...register('newPassword', {
                   required: 'Champ obligatoire',
@@ -79,10 +76,8 @@ export function ChangeMyPasswordModal({ open, onOpenChange }: Props) {
               />
             </FormField>
             <FormField label="Confirmation" htmlFor="confirm" required error={errors.confirm?.message}>
-              <input
+              <PasswordInput
                 id="confirm"
-                type="password"
-                className="input font-mono"
                 autoComplete="new-password"
                 {...register('confirm', {
                   required: 'Champ obligatoire',

@@ -8,6 +8,7 @@ import { USER_ROLES, type UserRole } from '@mha-bs/shared';
 
 import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { FormField } from '../components/ui/FormField.js';
+import { PasswordInput } from '../components/ui/PasswordInput.js';
 import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
 import { ApiClientError, api } from '../lib/apiClient.js';
@@ -330,10 +331,9 @@ function CreateUserModal({
               </select>
             </FormField>
             <FormField label="Mot de passe initial" htmlFor="password" required error={errors.password?.message}>
-              <input
+              <PasswordInput
                 id="password"
-                type="text"
-                className="input font-mono"
+                defaultVisible
                 placeholder="8 caracteres minimum"
                 {...register('password', {
                   required: 'Champ obligatoire',
@@ -501,10 +501,9 @@ function ResetPasswordModal({
           </Dialog.Description>
           <form onSubmit={(e) => void onSubmit(e)} className="space-y-1">
             <FormField label="Nouveau mot de passe" htmlFor="password" required error={errors.password?.message}>
-              <input
+              <PasswordInput
                 id="password"
-                type="text"
-                className="input font-mono"
+                defaultVisible
                 placeholder="8 caracteres minimum"
                 {...register('password', {
                   required: 'Champ obligatoire',
@@ -513,10 +512,9 @@ function ResetPasswordModal({
               />
             </FormField>
             <FormField label="Confirmation" htmlFor="confirm" required error={errors.confirm?.message}>
-              <input
+              <PasswordInput
                 id="confirm"
-                type="text"
-                className="input font-mono"
+                defaultVisible
                 {...register('confirm', {
                   required: 'Champ obligatoire',
                   validate: (v) => v === pwd || 'Les mots de passe ne correspondent pas',

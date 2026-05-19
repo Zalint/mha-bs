@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import { loginSchema, type LoginInput } from '@mha-bs/shared';
 
+import { PasswordInput } from '../components/ui/PasswordInput.js';
 import { ApiClientError } from '../lib/apiClient.js';
 import { useAuthStore } from '../stores/authStore.js';
 
@@ -78,13 +79,11 @@ export function LoginView() {
               <label htmlFor="password" className="field-label">
                 Mot de passe
               </label>
-              <input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="current-password"
-                {...register('password')}
-                className="input"
                 placeholder="••••••••"
+                {...register('password')}
               />
               {errors.password && (
                 <p className="text-xs text-danger mt-1">{errors.password.message}</p>
