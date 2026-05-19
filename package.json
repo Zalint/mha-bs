@@ -1,0 +1,63 @@
+{
+  "name": "mha-bs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Outil de suivi des recommandations ministerielles - Bureau de Suivi du MHA Senegal",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "shared"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "npm-run-all --parallel dev:backend dev:frontend",
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm-run-all build:shared build:backend build:frontend",
+    "build:shared": "npm run build --workspace=shared",
+    "build:backend": "npm run build --workspace=backend",
+    "build:frontend": "npm run build --workspace=frontend",
+    "lint": "eslint . --max-warnings=0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "typecheck": "npm-run-all --parallel typecheck:*",
+    "typecheck:backend": "npm run typecheck --workspace=backend",
+    "typecheck:frontend": "npm run typecheck --workspace=frontend",
+    "typecheck:shared": "npm run typecheck --workspace=shared",
+    "test": "npm-run-all --parallel test:*",
+    "test:backend": "npm run test --workspace=backend",
+    "test:frontend": "npm run test --workspace=frontend",
+    "db:create": "npm run db:create --workspace=backend",
+    "db:schema": "npm run db:schema --workspace=backend",
+    "db:migrate-excel": "npm run migrate:excel --workspace=backend",
+    "db:bootstrap-admin": "npm run bootstrap:admin --workspace=backend",
+    "db:reset-and-seed": "npm run db:create && npm run db:schema && npm run db:bootstrap-admin && npm run db:migrate-excel",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-react": "^7.34.2",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.5",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^3.3.2",
+    "typescript": "^5.4.5"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,css}": [
+      "prettier --write"
+    ]
+  }
+}

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Répartition par direction · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .grid-mix { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+    @media (max-width: 1100px) { .grid-mix { grid-template-columns: 1fr; } }
+    .dir-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 16px; display: grid; grid-template-columns: 48px 1fr auto; gap: 14px; align-items: center; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+    .dir-card:hover { border-color: var(--color-primary); box-shadow: var(--shadow); }
+    .dir-card.selected { border-color: var(--color-primary); background: rgba(2,132,199,.03); }
+    .dir-logo { width: 48px; height: 48px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-family: var(--font-mono); font-size: 13px; color: #fff; flex-shrink: 0; }
+    .dir-name { font-size: 14.5px; font-weight: 600; color: var(--color-fg); margin: 0; }
+    .dir-full { font-size: 11.5px; color: var(--color-fg-muted); margin: 2px 0 0; }
+    .dir-stats { display: flex; gap: 12px; font-family: var(--font-mono); font-size: 12.5px; margin-top: 6px; }
+    .dir-stats span { color: var(--color-fg-muted); }
+    .dir-stats span b { color: var(--color-fg); font-weight: 600; }
+    .dir-pct { font-family: var(--font-mono); font-size: 22px; font-weight: 600; color: var(--color-fg); }
+    .dir-pct.success { color: var(--color-success); }
+    .dir-pct.warning { color: var(--color-warning); }
+    .dir-pct.danger { color: var(--color-danger); }
+    .dir-list { display: flex; flex-direction: column; gap: 10px; }
+    .ranking-bar { display: grid; grid-template-columns: 130px 1fr 60px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px dashed var(--color-border); }
+    .ranking-bar:last-child { border-bottom: 0; }
+    .ranking-bar .lbl { font-size: 13px; font-weight: 500; }
+    .ranking-bar .track { background: var(--color-muted); height: 14px; border-radius: 999px; overflow: hidden; position: relative; }
+    .ranking-bar .track > span { display: block; height: 100%; background: var(--color-primary); border-radius: 999px; }
+    .ranking-bar .v { font-family: var(--font-mono); font-weight: 600; text-align: right; font-size: 13px; }
+    .matrix { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+    .matrix-head { padding: 14px 18px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; }
+    .matrix-head h2 { margin: 0; font-size: 14.5px; font-weight: 600; }
+    .heatmap { display: grid; grid-template-columns: 200px repeat(4, 1fr); gap: 1px; background: var(--color-border); }
+    .heatmap .h { background: var(--color-surface-2); padding: 10px 12px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--color-fg-muted); }
+    .heatmap .cell { background: var(--color-surface); padding: 14px; text-align: center; font-family: var(--font-mono); font-size: 14px; font-weight: 600; color: var(--color-fg); position: relative; }
+    .heatmap .cell.label { text-align: left; font-family: var(--font-sans); font-weight: 500; font-size: 13px; color: var(--color-fg); padding-left: 18px; }
+    .heatmap .cell.lvl-0 { background: var(--color-surface); color: var(--color-fg-muted); }
+    .heatmap .cell.lvl-1 { background: rgba(2,132,199,.10); }
+    .heatmap .cell.lvl-2 { background: rgba(2,132,199,.30); color: var(--color-primary-700); }
+    .heatmap .cell.lvl-3 { background: rgba(2,132,199,.55); color: #fff; }
+    .heatmap .cell.lvl-4 { background: var(--color-primary); color: #fff; }
+  </style>
+</head>
+<body data-page="par-direction" data-role="cabinet">
+<div id="app-content">
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+    <div>
+      <h1 class="page-title">Répartition par direction</h1>
+      <p class="page-sub">Répartition des recommandations par direction du MHA et entités associées · pour identifier les charges et les blocages</p>
+    </div>
+    <div style="display:flex;gap:10px">
+      <select class="select"><option>Toutes les sources</option><option>CM/CI/SG</option><option>COPIL</option><option>CNGI</option><option>Réformes</option></select>
+      <button class="btn btn-secondary"><i data-lucide="download" class="icon-sm"></i> Exporter</button>
+    </div>
+  </div>
+
+  <!-- Top KPI strip -->
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Directions actives</div><div class="kpi-value">12</div><div class="kpi-delta">internes + entités sous tutelle</div><div class="kpi-icon"><i data-lucide="building-2"></i></div></div>
+    <div class="kpi success"><div class="kpi-label">Top performeur</div><div class="kpi-value" style="font-size:22px">DPGI</div><div class="kpi-delta">94 % de taux d'exécution</div><div class="kpi-icon"><i data-lucide="trophy"></i></div></div>
+    <div class="kpi warning"><div class="kpi-label">Charge la plus lourde</div><div class="kpi-value" style="font-size:22px">ONAS</div><div class="kpi-delta">63 directives en suivi</div><div class="kpi-icon"><i data-lucide="briefcase"></i></div></div>
+    <div class="kpi danger"><div class="kpi-label">À relancer</div><div class="kpi-value" style="font-size:22px">CPCSP</div><div class="kpi-delta">5 retards critiques</div><div class="kpi-icon"><i data-lucide="alert-circle"></i></div></div>
+  </div>
+
+  <div class="grid-mix">
+    <!-- Direction list -->
+    <div>
+      <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:var(--color-fg-muted);text-transform:uppercase;letter-spacing:.05em">Toutes les directions · 12</h2>
+      <div class="dir-list" id="dir-list"></div>
+    </div>
+
+    <!-- Right column -->
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><div><h2 class="card-title">Top 5 · Volume de directives</h2><p class="card-sub">Charge totale</p></div></div>
+        <div class="card-body" id="top-volume"></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><h2 class="card-title">Top 5 · Retards</h2><p class="card-sub">Directives échues non clôturées</p></div></div>
+        <div class="card-body" id="top-retards"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Heatmap -->
+  <div style="margin-top:24px">
+    <h2 style="font-size:14px;font-weight:600;margin:0 0 12px;color:var(--color-fg-muted);text-transform:uppercase;letter-spacing:.05em">Matrice direction × source</h2>
+    <div class="matrix">
+      <div class="heatmap">
+        <div class="h"></div><div class="h" style="text-align:center">CM/CI/SG</div><div class="h" style="text-align:center">COPIL</div><div class="h" style="text-align:center">CNGI</div><div class="h" style="text-align:center">Réformes</div>
+        <div class="cell label">ONAS</div><div class="cell lvl-4">38</div><div class="cell lvl-3">15</div><div class="cell lvl-3">7</div><div class="cell lvl-2">3</div>
+        <div class="cell label">DPGI</div><div class="cell lvl-3">22</div><div class="cell lvl-2">7</div><div class="cell lvl-4">9</div><div class="cell lvl-1">1</div>
+        <div class="cell label">DGPRE</div><div class="cell lvl-2">14</div><div class="cell lvl-3">8</div><div class="cell lvl-1">2</div><div class="cell lvl-0">0</div>
+        <div class="cell label">OFOR</div><div class="cell lvl-2">11</div><div class="cell lvl-3">12</div><div class="cell lvl-0">0</div><div class="cell lvl-1">1</div>
+        <div class="cell label">DA (Direction Assainissement)</div><div class="cell lvl-2">9</div><div class="cell lvl-1">2</div><div class="cell lvl-1">1</div><div class="cell lvl-3">5</div>
+        <div class="cell label">CPCSP</div><div class="cell lvl-1">4</div><div class="cell lvl-4">18</div><div class="cell lvl-0">0</div><div class="cell lvl-1">1</div>
+        <div class="cell label">DGUA</div><div class="cell lvl-1">3</div><div class="cell lvl-0">0</div><div class="cell lvl-2">2</div><div class="cell lvl-0">0</div>
+        <div class="cell label">OLAC</div><div class="cell lvl-2">7</div><div class="cell lvl-3">6</div><div class="cell lvl-0">0</div><div class="cell lvl-0">0</div>
+      </div>
+    </div>
+    <p style="margin-top:8px;font-size:12px;color:var(--color-fg-muted);text-align:center">Intensité de couleur proportionnelle au volume de directives</p>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  const directions = [
+    { code: 'ONAS',    full: "Office National d'Assainissement du Sénégal",        total: 63, real: 41, encours: 14, attente: 6, retard: 4, color: '#0284C7' },
+    { code: 'DPGI',    full: "Direction Prévention & Gestion des Inondations",      total: 39, real: 37, encours: 1,  attente: 1, retard: 0, color: '#06B6D4' },
+    { code: 'DGPRE',   full: "Direction Gestion & Planification Ressources en Eau", total: 24, real: 19, encours: 3,  attente: 2, retard: 1, color: '#0891B2' },
+    { code: 'OFOR',    full: "Office des Forages Ruraux",                            total: 24, real: 18, encours: 5,  attente: 1, retard: 2, color: '#0EA5E9' },
+    { code: 'CPCSP',   full: "Cellule de Préparation, Coordination & Suivi Projets", total: 23, real: 14, encours: 6,  attente: 3, retard: 5, color: '#0369A1' },
+    { code: 'DA',      full: "Direction de l'Assainissement",                        total: 17, real: 12, encours: 3,  attente: 2, retard: 1, color: '#22D3EE' },
+    { code: 'OLAC',    full: "Office des Lacs & Cours d'Eau",                        total: 13, real: 9,  encours: 3,  attente: 1, retard: 1, color: '#0E7490' },
+    { code: 'DH',      full: "Direction de l'Hydraulique",                           total: 12, real: 10, encours: 1,  attente: 1, retard: 0, color: '#155E75' },
+    { code: 'SONES',   full: "Société Nationale des Eaux du Sénégal",                total: 8,  real: 6,  encours: 1,  attente: 1, retard: 0, color: '#67E8F9' },
+    { code: 'DGUA',    full: "Direction Générale de l'Architecture & Urbanisme",     total: 5,  real: 3,  encours: 1,  attente: 1, retard: 1, color: '#0F766E' },
+    { code: 'ADM',     full: "Agence de Développement Municipal",                    total: 5,  real: 2,  encours: 2,  attente: 1, retard: 2, color: '#164E63' },
+    { code: 'APIX',    full: "Agence pour la Promotion des Investissements",         total: 4,  real: 1,  encours: 2,  attente: 1, retard: 2, color: '#22D3EE' },
+  ];
+
+  function pctClass(p) { return p >= 80 ? 'success' : p >= 50 ? 'warning' : 'danger'; }
+
+  document.getElementById('dir-list').innerHTML = directions.map((d, i) => {
+    const pct = Math.round(d.real / d.total * 1000) / 10;
+    return `<div class="dir-card ${i===0?'selected':''}">
+      <div class="dir-logo" style="background:linear-gradient(135deg, ${d.color}, ${d.color}cc)">${d.code.slice(0,3)}</div>
+      <div>
+        <h3 class="dir-name">${d.code}</h3>
+        <p class="dir-full">${d.full}</p>
+        <div class="dir-stats">
+          <span><b>${d.total}</b> total</span>
+          <span style="color:var(--color-success)"><b>${d.real}</b> réalisées</span>
+          <span style="color:var(--color-warning)"><b>${d.encours}</b> en cours</span>
+          <span style="color:var(--color-primary)"><b>${d.attente}</b> attente</span>
+          ${d.retard > 0 ? `<span style="color:var(--color-danger)"><b>${d.retard}</b> retards</span>` : ''}
+        </div>
+      </div>
+      <div class="dir-pct ${pctClass(pct)}">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  // Top volume
+  const byVolume = [...directions].sort((a, b) => b.total - a.total).slice(0, 5);
+  const maxV = byVolume[0].total;
+  document.getElementById('top-volume').innerHTML = byVolume.map(d => `
+    <div class="ranking-bar">
+      <div class="lbl">${d.code}</div>
+      <div class="track"><span style="width:${d.total/maxV*100}%;background:${d.color}"></span></div>
+      <div class="v">${d.total}</div>
+    </div>
+  `).join('');
+
+  // Top retards
+  const byRetard = [...directions].filter(d => d.retard > 0).sort((a, b) => b.retard - a.retard).slice(0, 5);
+  const maxR = byRetard[0]?.retard || 1;
+  document.getElementById('top-retards').innerHTML = byRetard.map(d => `
+    <div class="ranking-bar">
+      <div class="lbl">${d.code}</div>
+      <div class="track"><span style="width:${d.retard/maxR*100}%;background:var(--color-danger)"></span></div>
+      <div class="v" style="color:var(--color-danger)">${d.retard}</div>
+    </div>
+  `).join('');
+
+  if (window.lucide) lucide.createIcons();
+})();
+</script>
+</body>
+</html>

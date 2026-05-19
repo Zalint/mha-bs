@@ -1,0 +1,162 @@
+# =============================================================================
+# Render Blueprint — MHA · Bureau de Suivi
+#
+# Provisionne :
+#   - 1 PostgreSQL (managed)
+#   - 1 Web Service Node.js (backend API)
+#   - 1 Static Site (frontend PWA React)
+#   - 2 Cron Jobs (rapport hebdo + calcul alertes)
+#
+# Usage : depuis le dashboard Render → "New +" → "Blueprint" → pointer ce fichier.
+# Documentation : https://render.com/docs/blueprint-spec
+# =============================================================================
+
+databases:
+  - name: mha-bs-db
+    databaseName: mha_bs
+    user: mha_bs
+    plan: starter
+    region: frankfurt
+    postgresMajorVersion: '15'
+    ipAllowList: [] # accessible uniquement depuis les services Render
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend API (Express + TypeScript)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: mha-bs-api
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    buildCommand: npm install && npm run build:shared && npm run build:backend
+    startCommand: node backend/dist/server.js
+    preDeployCommand: psql "$DATABASE_URL" -f database/schema.sql
+    healthCheckPath: /api/healthz
+    disk:
+      name: uploads
+      mountPath: /opt/render/project/src/uploads
+      sizeGB: 1
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: '10000'
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mha-bs-db
+          property: connectionString
+      - key: PUBLIC_URL
+        value: https://mha-bs.onrender.com
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://mha-bs.onrender.com
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES
+        value: 7d
+      - key: EXTERNAL_API_ENABLED
+        value: 'true'
+      - key: BOOTSTRAP_ADMIN_USERNAME
+        value: admin
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        value: admin@mha.sn
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false # à renseigner manuellement dans le dashboard
+      - key: BOOTSTRAP_ADMIN_FULLNAME
+        value: Administrateur MHA
+      - key: RESEND_API_KEY
+        sync: false # à renseigner manuellement
+      - key: MAIL_FROM
+        value: Bureau de Suivi MHA <noreply@mha.sn>
+      - key: UPLOADS_DIR
+        value: /opt/render/project/src/uploads
+      - key: UPLOADS_MAX_BYTES
+        value: '20971520'
+      - key: LOG_LEVEL
+        value: info
+      - key: PGSSLMODE
+        value: require
+
+  # ---------------------------------------------------------------------------
+  # Frontend PWA (React + Vite)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: mha-bs
+    runtime: static
+    plan: starter
+    region: frankfurt
+    branch: main
+    buildCommand: npm install && npm run build:shared && npm run build:frontend
+    staticPublishPath: ./frontend/dist
+    autoDeploy: true
+    headers:
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /service-worker.js
+        name: Cache-Control
+        value: no-store
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+    routes:
+      # SPA fallback : toutes les routes non-fichier vers index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://mha-bs-api.onrender.com/api
+
+  # ---------------------------------------------------------------------------
+  # Cron Job : envoi du rapport hebdomadaire chaque lundi 08:00 (UTC)
+  # ---------------------------------------------------------------------------
+  - type: cron
+    name: mha-bs-rapport-hebdo
+    runtime: node
+    plan: starter
+    region: frankfurt
+    schedule: '0 8 * * 1'
+    buildCommand: npm install && npm run build:shared && npm run build:backend
+    startCommand: node backend/dist/scripts/sendWeeklyReport.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mha-bs-db
+          property: connectionString
+      - key: RESEND_API_KEY
+        sync: false
+      - key: PGSSLMODE
+        value: require
+
+  # ---------------------------------------------------------------------------
+  # Cron Job : calcul nocturne des alertes (échéances dépassées, etc.)
+  # ---------------------------------------------------------------------------
+  - type: cron
+    name: mha-bs-alertes-nightly
+    runtime: node
+    plan: starter
+    region: frankfurt
+    schedule: '0 4 * * *'
+    buildCommand: npm install && npm run build:shared && npm run build:backend
+    startCommand: node backend/dist/scripts/computeAlerts.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: mha-bs-db
+          property: connectionString
+      - key: PGSSLMODE
+        value: require

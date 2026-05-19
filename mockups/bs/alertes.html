@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mes alertes · BS · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .filter-tabs { display: flex; gap: 4px; padding: 4px; background: var(--color-muted); border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--color-border); }
+    .filter-tabs button { background: transparent; border: 0; padding: 8px 14px; border-radius: 6px; font-size: 12.5px; font-weight: 500; color: var(--color-fg-2); cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+    .filter-tabs button .cnt { background: var(--color-border); color: var(--color-fg-2); font-size: 11px; padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+    .filter-tabs button.active { background: var(--color-surface); color: var(--color-fg); box-shadow: var(--shadow-sm); }
+    .filter-tabs button.active.critique .cnt { background: var(--color-danger); color: #fff; }
+    .filter-tabs button.active.warning .cnt { background: var(--color-warning); color: #fff; }
+    .filter-tabs button.active.info .cnt { background: var(--color-primary); color: #fff; }
+    .alerts-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: start; }
+    @media (max-width: 1100px) { .alerts-grid { grid-template-columns: 1fr; } }
+    .alert-list { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+    .alert-row { display: grid; grid-template-columns: 36px 1fr auto auto; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--color-border); align-items: start; transition: background .15s; }
+    .alert-row:last-child { border-bottom: 0; }
+    .alert-row:hover { background: var(--color-surface-2); }
+    .alert-row.unread { background: rgba(2,132,199,.03); }
+    .alert-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .alert-icon.critique { background: var(--color-danger-bg); color: var(--color-danger); }
+    .alert-icon.warning { background: var(--color-warning-bg); color: var(--color-warning); }
+    .alert-icon.info { background: var(--color-primary-100); color: var(--color-primary); }
+    .alert-content .alert-title { font-size: 13.5px; font-weight: 600; color: var(--color-fg); display: flex; align-items: center; gap: 8px; }
+    .alert-content .alert-title .unread-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary); flex-shrink: 0; }
+    .alert-content .alert-desc { font-size: 13px; color: var(--color-fg-2); line-height: 1.5; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .alert-content .alert-meta { font-size: 11.5px; color: var(--color-fg-muted); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .alert-content .alert-meta .num { font-family: var(--font-mono); }
+    .alert-actions { display: flex; gap: 6px; }
+    .alert-actions button { width: 32px; height: 32px; border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--color-fg-2); }
+    .alert-actions button:hover { background: var(--color-muted); color: var(--color-primary); border-color: var(--color-primary); }
+    .alert-time { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-fg-muted); white-space: nowrap; padding-top: 2px; }
+    .side-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 16px; }
+    .side-card h4 { margin: 0 0 12px; font-size: 12px; font-weight: 600; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .rule-row { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px dashed var(--color-border); font-size: 13px; }
+    .rule-row:last-child { border-bottom: 0; }
+    .rule-row .rule-name { flex: 1; font-weight: 500; }
+    .rule-row .rule-when { font-size: 11.5px; color: var(--color-fg-muted); }
+    .toggle { position: relative; width: 36px; height: 20px; background: var(--color-border); border-radius: 999px; cursor: pointer; flex-shrink: 0; transition: background .15s; }
+    .toggle input { opacity: 0; position: absolute; }
+    .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform .15s; box-shadow: var(--shadow-sm); }
+    .toggle.on { background: var(--color-success); }
+    .toggle.on::after { transform: translateX(16px); }
+  </style>
+</head>
+<body data-page="bs-alertes" data-role="bs">
+<div id="app-content">
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+    <div>
+      <h1 class="page-title">Mes alertes</h1>
+      <p class="page-sub">Notifications opérationnelles : retards, échéances proches, relances et validations attendues</p>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-secondary"><i data-lucide="settings" class="icon-sm"></i> Règles d'alerte</button>
+      <button class="btn btn-secondary"><i data-lucide="check-check" class="icon-sm"></i> Tout marquer lu</button>
+    </div>
+  </div>
+
+  <!-- KPI strip -->
+  <div class="kpi-grid">
+    <div class="kpi danger"><div class="kpi-label">Critiques</div><div class="kpi-value">5</div><div class="kpi-delta">échéances dépassées de +30 j</div><div class="kpi-icon"><i data-lucide="alert-triangle"></i></div></div>
+    <div class="kpi warning"><div class="kpi-label">Urgentes (7 j)</div><div class="kpi-value">8</div><div class="kpi-delta">échéance cette semaine</div><div class="kpi-icon"><i data-lucide="clock"></i></div></div>
+    <div class="kpi"><div class="kpi-label">À venir (30 j)</div><div class="kpi-value">14</div><div class="kpi-delta">échéances du mois</div><div class="kpi-icon"><i data-lucide="calendar"></i></div></div>
+    <div class="kpi"><div class="kpi-label">À valider SG</div><div class="kpi-value">3</div><div class="kpi-delta">soumissions en attente</div><div class="kpi-icon"><i data-lucide="user-check"></i></div></div>
+  </div>
+
+  <div class="filter-tabs">
+    <button class="active" data-cat="all"><i data-lucide="layout-list" class="icon-sm"></i> Toutes <span class="cnt">30</span></button>
+    <button class="critique" data-cat="critique"><i data-lucide="alert-triangle" class="icon-sm"></i> Critiques <span class="cnt">5</span></button>
+    <button class="warning" data-cat="warning"><i data-lucide="clock" class="icon-sm"></i> Urgentes <span class="cnt">8</span></button>
+    <button class="info" data-cat="info"><i data-lucide="bell" class="icon-sm"></i> Information <span class="cnt">17</span></button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;padding-right:6px">
+      <span style="font-size:12px;color:var(--color-fg-muted)">Filtre :</span>
+      <select class="select" style="height:32px"><option>Tous les modules</option><option>CM/CI/SG</option><option>COPIL</option><option>CNGI</option><option>Réformes</option></select>
+    </div>
+  </div>
+
+  <div class="alerts-grid">
+    <!-- Alerts list -->
+    <div class="alert-list" id="alert-list"></div>
+
+    <!-- Side -->
+    <div>
+      <div class="side-card">
+        <h4>Règles d'alerte actives</h4>
+        <div class="rule-row">
+          <div style="flex:1">
+            <div class="rule-name">Échéance dépassée (J+0)</div>
+            <div class="rule-when">Alerte critique immédiate</div>
+          </div>
+          <div class="toggle on"><input type="checkbox" checked></div>
+        </div>
+        <div class="rule-row">
+          <div style="flex:1">
+            <div class="rule-name">Échéance proche (J-7)</div>
+            <div class="rule-when">Alerte hebdomadaire</div>
+          </div>
+          <div class="toggle on"><input type="checkbox" checked></div>
+        </div>
+        <div class="rule-row">
+          <div style="flex:1">
+            <div class="rule-name">Recommandation sans MAJ (30 j)</div>
+            <div class="rule-when">Rappel mensuel</div>
+          </div>
+          <div class="toggle on"><input type="checkbox" checked></div>
+        </div>
+        <div class="rule-row">
+          <div style="flex:1">
+            <div class="rule-name">Nouvelle rencontre saisie</div>
+            <div class="rule-when">Notification immédiate</div>
+          </div>
+          <div class="toggle"><input type="checkbox"></div>
+        </div>
+        <div class="rule-row">
+          <div style="flex:1">
+            <div class="rule-name">Validation SG effectuée</div>
+            <div class="rule-when">Notification immédiate</div>
+          </div>
+          <div class="toggle on"><input type="checkbox" checked></div>
+        </div>
+      </div>
+
+      <div class="side-card">
+        <h4>Canaux de notification</h4>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px">
+          <i data-lucide="monitor" style="color:var(--color-primary)"></i><span style="flex:1">Dans l'application</span><div class="toggle on"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px">
+          <i data-lucide="mail" style="color:var(--color-primary)"></i><span style="flex:1">Email · quotidien 8h00</span><div class="toggle on"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px">
+          <i data-lucide="smartphone" style="color:var(--color-primary)"></i><span style="flex:1">SMS critique uniquement</span><div class="toggle"></div>
+        </div>
+      </div>
+
+      <div class="side-card">
+        <h4>Résumé hebdomadaire</h4>
+        <p style="font-size:13px;color:var(--color-fg-2);margin:0 0 12px;line-height:1.5">Un rapport hebdomadaire des retards et alertes est envoyé chaque lundi à <b>8h00</b>.</p>
+        <button class="btn btn-secondary btn-sm" style="width:100%"><i data-lucide="play" class="icon-sm"></i> Envoyer maintenant</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  const ALERTS = [
+    { cat: 'critique', title: 'Échéance dépassée de 287 jours', desc: "Accélérer significativement la mise en œuvre du programme d'approvisionnement en eau potable des zones rurales et urbaines, en lien avec la SONES et la SEN'EAU…", source: 'CI20250507-0014', echeance: '30-09-2025', module: 'CM/CI/SG', when: 'il y a 2 j', unread: true },
+    { cat: 'critique', title: 'Échéance dépassée de 178 jours', desc: "La CPCSP et les agences d'exécution accéléreront de manière significative le rythme de mise en œuvre du PASEA-RD pour atteindre le régime de croisière…", source: 'CO-PASEA-001', echeance: '15-11-2025', module: 'COPIL PASEA-RD', when: 'il y a 1 j', unread: true },
+    { cat: 'critique', title: 'Recommandation sans mise à jour depuis 67 jours', desc: "L'ONAS, en relation avec les structures concernées, prendra toutes dispositions nécessaires pour finaliser les travaux structurants de drainage…", source: 'CNGI-CR06', echeance: '15-05-2026', module: 'CNGI', when: 'il y a 3 j', unread: true },
+    { cat: 'warning', title: 'Échéance dans 3 jours', desc: "L'ONAS proposera un plan d'actions spécifique de finalisation desdits travaux avant le 15 mai 2026.", source: 'CNGI-CR06', echeance: '15-05-2026', module: 'CNGI', when: 'il y a 4 h', unread: true },
+    { cat: 'warning', title: 'Échéance dans 6 jours', desc: "La DPGI, assurant la coordination générale du dispositif de prévention et de gestion des inondations, présentera un plan d'actions opérationnel…", source: 'CNGI-CR02', echeance: '20-05-2026', module: 'CNGI', when: 'il y a 4 h', unread: false },
+    { cat: 'info', title: 'Soumission validée par le SG', desc: "La directive CM20260204-0023 sur la coordination interministérielle avec le MEPC a été validée et clôturée par le SG.", source: 'CM20260204-0023', echeance: null, module: 'CM/CI/SG', when: 'il y a 6 h', unread: false },
+    { cat: 'warning', title: 'Validation SG en attente', desc: "Votre soumission du 12-05-2026 sur la fiche CI20260415-0019 est en attente de validation par le SG depuis 48 heures.", source: 'CI20260415-0019', echeance: null, module: 'CM/CI/SG', when: 'hier · 09:42', unread: false },
+    { cat: 'info', title: 'Nouvelle réunion technique enregistrée', desc: "Aminata DIALLO a enregistré la réunion 'Préparation hivernage · plan d'actions DPGI' du 12-05-2026.", source: null, echeance: null, module: 'Réunions', when: 'lun. 12:34', unread: false },
+    { cat: 'critique', title: 'Échéance dépassée de 412 jours', desc: "Les services du Ministère des Finances et du Budget prendront les dispositions requises pour le paiement des frais d'enregistrement de contrats…", source: 'CO-PDBH-002', echeance: '28-03-2025', module: 'COPIL PDBH', when: 'il y a 4 j', unread: false },
+    { cat: 'critique', title: 'Échéance dépassée de 92 jours', desc: "La Banque mondiale, la CPCSP et l'ONAS accéléreront avec la plus haute priorité le processus de sélection du titulaire des travaux d'assainissement…", source: 'CO-PISEA-005', echeance: '12-02-2026', module: 'COPIL PISEA', when: 'il y a 5 j', unread: false },
+  ];
+
+  function renderList(filter='all') {
+    const rows = filter === 'all' ? ALERTS : ALERTS.filter(a => a.cat === filter);
+    const icons = { critique: 'alert-triangle', warning: 'clock', info: 'info' };
+    document.getElementById('alert-list').innerHTML = rows.map(a => `
+      <div class="alert-row ${a.unread?'unread':''}">
+        <div class="alert-icon ${a.cat}"><i data-lucide="${icons[a.cat]}"></i></div>
+        <div class="alert-content">
+          <div class="alert-title">${a.unread ? '<span class="unread-dot"></span>':''}${esc(a.title)}</div>
+          <div class="alert-desc">${esc(a.desc)}</div>
+          <div class="alert-meta">
+            ${a.source ? `<span><i data-lucide="hash" class="icon-sm" style="vertical-align:middle"></i> <span class="num">${esc(a.source)}</span></span>` : ''}
+            ${a.echeance ? `<span><i data-lucide="calendar" class="icon-sm" style="vertical-align:middle"></i> <span class="num">${esc(a.echeance)}</span></span>` : ''}
+            <span><i data-lucide="folder" class="icon-sm" style="vertical-align:middle"></i> ${esc(a.module)}</span>
+          </div>
+        </div>
+        <div class="alert-time">${esc(a.when)}</div>
+        <div class="alert-actions">
+          <button title="Ouvrir" type="button"><i data-lucide="external-link" class="icon-sm"></i></button>
+          <button title="Marquer lu" type="button"><i data-lucide="check" class="icon-sm"></i></button>
+        </div>
+      </div>
+    `).join('');
+    if (window.lucide) lucide.createIcons();
+  }
+
+  document.querySelectorAll('.filter-tabs button[data-cat]').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tabs button[data-cat]').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      renderList(b.dataset.cat);
+    });
+  });
+
+  // Toggle interaction (UI demo)
+  document.querySelectorAll('.toggle').forEach(t => {
+    t.addEventListener('click', e => { e.preventDefault(); t.classList.toggle('on'); });
+  });
+
+  renderList();
+  function esc(s) { return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]); }
+})();
+</script>
+</body>
+</html>

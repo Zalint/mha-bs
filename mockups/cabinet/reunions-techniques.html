@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Suivi Réunions techniques · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .grid-mix { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 1100px) { .grid-mix { grid-template-columns: 1fr; } }
+    .calendar { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 16px; }
+    .cal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .cal-head h2 { margin: 0; font-size: 14.5px; font-weight: 600; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: var(--color-border); border-radius: 6px; overflow: hidden; font-size: 12px; }
+    .cal-grid .dow { background: var(--color-surface-2); padding: 8px 4px; text-align: center; font-weight: 600; color: var(--color-fg-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .cal-grid .day { background: var(--color-surface); min-height: 80px; padding: 5px; position: relative; }
+    .cal-grid .day.muted { color: var(--color-fg-muted); background: var(--color-surface-2); }
+    .cal-grid .day .n { font-family: var(--font-mono); font-size: 11px; color: var(--color-fg-muted); }
+    .cal-grid .day.today .n { background: var(--color-primary); color: #fff; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+    .cal-grid .day .evt { background: var(--color-primary-100); color: var(--color-primary-700); padding: 2px 6px; font-size: 10.5px; border-radius: 3px; margin-top: 3px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cal-grid .day .evt.copil { background: rgba(6,182,212,.15); color: var(--color-accent); }
+    .reunion-item { display: grid; grid-template-columns: 70px 1fr auto; gap: 12px; padding: 12px 0; border-bottom: 1px dashed var(--color-border); align-items: start; }
+    .reunion-item:last-child { border-bottom: 0; }
+    .reunion-item .date { font-family: var(--font-mono); font-size: 12px; color: var(--color-fg-muted); padding-top: 1px; }
+    .reunion-item .label { font-size: 13.5px; color: var(--color-fg); font-weight: 500; }
+    .reunion-item .meta { font-size: 11.5px; color: var(--color-fg-muted); margin-top: 2px; }
+    .reunion-item .meta .badge { font-size: 10.5px; padding: 2px 7px; }
+    .ss-bar-row { display: grid; grid-template-columns: 200px 1fr 50px; gap: 12px; align-items: center; margin-bottom: 10px; }
+    .ss-bar-row .lbl { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+    .ss-bar-row .bar { height: 12px; background: var(--color-muted); border-radius: 999px; overflow: hidden; }
+    .ss-bar-row .bar > span { display: block; height: 100%; border-radius: 999px; }
+    .ss-bar-row .v { font-family: var(--font-mono); font-weight: 600; text-align: right; }
+  </style>
+</head>
+<body data-page="reunions-tech" data-role="cabinet">
+<div id="app-content">
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+    <div>
+      <h1 class="page-title">Suivi Réunions techniques</h1>
+      <p class="page-sub">Activité du MHA · 2026 · calendrier des réunions, répartition par sous-secteur Eau / GIRE / Assainissement / Inondations</p>
+    </div>
+    <a class="btn btn-primary" href="../bs/reunion.html"><i data-lucide="plus" class="icon-sm"></i> Nouvelle réunion</a>
+  </div>
+
+  <!-- KPI strip -->
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Réunions tenues</div><div class="kpi-value" id="cnt-reu">—</div><div class="kpi-delta">depuis janvier 2026</div><div class="kpi-icon"><i data-lucide="calendar"></i></div></div>
+    <div class="kpi"><div class="kpi-label">COPIL réunis</div><div class="kpi-value">5</div><div class="kpi-delta">PROMOREN · PISEA · PASEA-RD · PROGEP · PDBH</div><div class="kpi-icon"><i data-lucide="folder-kanban"></i></div></div>
+    <div class="kpi"><div class="kpi-label">Cette semaine</div><div class="kpi-value">3</div><div class="kpi-delta">2 internes · 1 PTF</div><div class="kpi-icon"><i data-lucide="calendar-clock"></i></div></div>
+    <div class="kpi"><div class="kpi-label">Prochaine échéance</div><div class="kpi-value" style="font-size:18px">Hivernage 2026</div><div class="kpi-delta">curage à finaliser fin juin</div><div class="kpi-icon"><i data-lucide="cloud-rain"></i></div></div>
+  </div>
+
+  <!-- Calendar + Sous-secteurs -->
+  <div class="grid-mix">
+    <div class="calendar">
+      <div class="cal-head">
+        <h2>Calendrier · Mai 2026</h2>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-ghost btn-icon"><i data-lucide="chevron-left" class="icon-sm"></i></button>
+          <span style="font-family:var(--font-mono);font-size:13px;font-weight:600;min-width:80px;text-align:center">Mai 2026</span>
+          <button class="btn btn-ghost btn-icon"><i data-lucide="chevron-right" class="icon-sm"></i></button>
+        </div>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div style="margin-top:12px;display:flex;gap:14px;font-size:12px;flex-wrap:wrap">
+        <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:var(--color-primary-100)"></span> Réunion technique</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:2px;background:rgba(6,182,212,.15)"></span> COPIL</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Répartition par sous-secteur</h2>
+          <p class="card-sub">Volume de réunions traitées en 2026</p>
+        </div>
+      </div>
+      <div class="card-body" id="ss-bars"></div>
+    </div>
+  </div>
+
+  <!-- Agenda -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Agenda · prochaines réunions techniques</h2>
+        <p class="card-sub">À 30 jours · vue chronologique</p>
+      </div>
+      <div class="card-actions">
+        <select class="select" style="height:32px"><option>Tous sous-secteurs</option><option>Eau</option><option>GIRE</option><option>Assainissement</option><option>Inondations</option></select>
+        <button class="btn btn-secondary btn-sm"><i data-lucide="download" class="icon-sm"></i> Export agenda</button>
+      </div>
+    </div>
+    <div class="card-body" id="reu-list"></div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  const REU = window.MHA_DATA.reunions_techniques;
+  document.getElementById('cnt-reu').textContent = REU.length;
+
+  // ===== Calendar (May 2026) =====
+  const days = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+  const year = 2026, month = 4;
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = (firstDay.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = 14;
+  const evtByDay = {};
+  REU.forEach(r => {
+    if (!r.DATE) return;
+    const d = new Date(r.DATE);
+    if (d.getFullYear() === year && d.getMonth() === month) {
+      const day = d.getDate();
+      (evtByDay[day] = evtByDay[day] || []).push({ kind: 'reunion', label: r.THEME || 'Réunion' });
+    }
+  });
+  evtByDay[5] = (evtByDay[5] || []).concat({ kind: 'copil', label: 'COPIL PASEA-RD' });
+  evtByDay[19] = (evtByDay[19] || []).concat({ kind: 'reunion', label: 'Préparation hivernage' });
+  evtByDay[22] = (evtByDay[22] || []).concat({ kind: 'reunion', label: 'Plan d\'actions DPGI' });
+  evtByDay[28] = (evtByDay[28] || []).concat({ kind: 'copil', label: 'COPIL PROGEP II' });
+
+  let cellsHtml = days.map(d => `<div class="dow">${d}</div>`).join('');
+  for (let i = 0; i < startWeekday; i++) cellsHtml += `<div class="day muted"></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const evts = evtByDay[d] || [];
+    cellsHtml += `<div class="day ${d===today?'today':''}">
+      <span class="n">${d}</span>
+      ${evts.slice(0,2).map(e => `<div class="evt ${e.kind}" title="${esc(e.label)}">${esc(e.label).slice(0,18)}</div>`).join('')}
+      ${evts.length > 2 ? `<div class="evt" style="background:var(--color-muted);color:var(--color-fg-muted)">+${evts.length-2}</div>` : ''}
+    </div>`;
+  }
+  document.getElementById('cal-grid').innerHTML = cellsHtml;
+
+  // Sous-secteur bars
+  const subSecteurs = [
+    { name: 'Sous-secteur Eau (accès)',   value: 6, color: '#0284C7', icon: 'droplet' },
+    { name: 'GIRE (ressources en eau)',   value: 3, color: '#06B6D4', icon: 'waves' },
+    { name: 'Assainissement (eaux usées)', value: 5, color: '#0891B2', icon: 'recycle' },
+    { name: 'Eaux pluviales / Inondations', value: 4, color: '#0EA5E9', icon: 'cloud-rain' },
+    { name: 'Projets transversaux',        value: 1, color: '#0369A1', icon: 'shuffle' },
+  ];
+  const max = Math.max(...subSecteurs.map(s => s.value));
+  document.getElementById('ss-bars').innerHTML = subSecteurs.map(s => `
+    <div class="ss-bar-row">
+      <div class="lbl"><i data-lucide="${s.icon}" class="icon-sm" style="color:${s.color}"></i> ${s.name}</div>
+      <div class="bar"><span style="width:${s.value/max*100}%;background:${s.color}"></span></div>
+      <div class="v">${s.value}</div>
+    </div>
+  `).join('');
+
+  // Upcoming list (showing all reunions, more entries)
+  const upcoming = REU.slice(0, 10);
+  document.getElementById('reu-list').innerHTML = upcoming.map(r => {
+    const d = r.DATE ? r.DATE.slice(0, 10) : '—';
+    const ssLabel = pickSousSecteur(r.THEME);
+    return `<div class="reunion-item">
+      <div class="date">${d}</div>
+      <div>
+        <div class="label">${esc(r.THEME || 'Réunion technique')}</div>
+        <div class="meta">
+          <span class="badge neutral"><span class="dot"></span>${ssLabel}</span>
+          · SG · 10h00 · Salle MHA
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" type="button"><i data-lucide="external-link" class="icon-sm"></i></button>
+    </div>`;
+  }).join('');
+
+  if (window.lucide) lucide.createIcons();
+  function esc(s) { return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]); }
+  function pickSousSecteur(theme) {
+    const t = (theme||'').toLowerCase();
+    if (t.includes('assain')) return 'Assainissement';
+    if (t.includes('inond') || t.includes('hivern')) return 'Inondations';
+    if (t.includes('ofor')) return 'Eau (accès)';
+    if (t.includes('olac') || t.includes('gire')) return 'GIRE';
+    if (t.includes('copil')) return 'Projets';
+    return 'Transversal';
+  }
+})();
+</script>
+</body>
+</html>

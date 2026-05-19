@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard global · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .chart-box { position: relative; height: 260px; }
+    .legend-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 13px; border-bottom: 1px dashed var(--color-border); }
+    .legend-row:last-child { border-bottom: 0; }
+    .legend-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .ranking-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--color-border); align-items: start; }
+    .ranking-row:last-child { border-bottom: 0; }
+    .ranking-rank { font-family: var(--font-mono); color: var(--color-fg-muted); font-size: 12px; padding-top: 2px; }
+    .ranking-title { font-size: 13px; line-height: 1.45; color: var(--color-fg-2); }
+    .ranking-meta { font-size: 12px; color: var(--color-fg-muted); margin-top: 2px; }
+    .module-row { display: grid; grid-template-columns: 1fr auto; gap: 4px; padding: 10px 0; border-bottom: 1px dashed var(--color-border); }
+    .module-row:last-child { border-bottom: 0; }
+    .module-name { font-size: 13px; font-weight: 500; }
+    .module-pct { font-family: var(--font-mono); font-size: 13px; font-weight: 600; }
+    .timeline-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--color-border); }
+    .timeline-item:last-child { border-bottom: 0; }
+    .timeline-date { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-fg-muted); min-width: 70px; padding-top: 1px; }
+    .timeline-text { font-size: 13px; color: var(--color-fg-2); line-height: 1.45; }
+    .timeline-text b { color: var(--color-fg); font-weight: 600; }
+  </style>
+</head>
+<body data-page="dashboard" data-role="cabinet">
+<div id="app-content">
+
+  <h1 class="page-title">Dashboard global</h1>
+  <p class="page-sub">Vue temps réel du suivi des recommandations ministérielles · dernière mise à jour <span class="num">2026-05-14 09:42</span></p>
+
+  <!-- KPIs -->
+  <div class="kpi-grid" id="kpi-grid"></div>
+
+  <!-- Row 1: répartition + évolution -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Évolution mensuelle · directives traitées</h2>
+          <p class="card-sub">Sur les 12 derniers mois, tous types de rencontres confondus</p>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-ghost btn-sm" type="button"><i data-lucide="download" class="icon-sm"></i> Exporter</button>
+        </div>
+      </div>
+      <div class="card-body"><div class="chart-box"><canvas id="chart-evol"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Répartition par état</h2>
+          <p class="card-sub">198 directives</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-box" style="height: 200px"><canvas id="chart-donut"></canvas></div>
+        <div style="margin-top:14px" id="donut-legend"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 2: par module + top retards -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Taux d'exécution par module</h2>
+          <p class="card-sub">Vue par source des recommandations</p>
+        </div>
+      </div>
+      <div class="card-body" id="modules-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Top retards à traiter</h2>
+          <p class="card-sub">Directives en cours / en attente les plus en retard</p>
+        </div>
+        <div class="card-actions"><a class="btn btn-ghost btn-sm" href="conseil-ministres.html">Tout voir <i data-lucide="arrow-right" class="icon-sm"></i></a></div>
+      </div>
+      <div class="card-body" id="top-retards"></div>
+    </div>
+  </div>
+
+  <!-- Row 3: par type de rencontre + dernières rencontres -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Volume par type de rencontre</h2>
+          <p class="card-sub">Conseil hebdomadaire, Interministériel, Coordination MSGG/SG</p>
+        </div>
+      </div>
+      <div class="card-body"><div class="chart-box"><canvas id="chart-types"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Dernières rencontres</h2>
+          <p class="card-sub">Activité récente du MHA</p>
+        </div>
+      </div>
+      <div class="card-body" id="recent-rencontres"></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  const D = window.MHA_DATA;
+  const PLAN = D.plan;
+
+  // ===== KPI computations =====
+  const states = PLAN.reduce((a, r) => { a[r.ETAT] = (a[r.ETAT] || 0) + 1; return a; }, {});
+  const total = PLAN.length;
+  const real = states['Réalisée'] || 0;
+  const enc = states['En cours'] || 0;
+  const att = states['En attente'] || 0;
+  const ine = states['Inéligible'] || 0;
+  const tauxExec = Math.round((real / total) * 1000) / 10;
+  // Estimate "en retard" : in-progress past échéance OR with negative JOURS_RETARD
+  const today = new Date('2026-05-14');
+  const enRetard = PLAN.filter(r => {
+    if (r.ETAT !== 'En cours' && r.ETAT !== 'En attente') return false;
+    if (!r.ECHEANCE) return false;
+    const d = new Date(r.ECHEANCE.split('-').reverse().join('-'));
+    return d < today;
+  }).length;
+
+  const kpis = [
+    { label: 'Taux d\'exécution', value: tauxExec + ' %', delta: '+2.4 pts vs mois -1', icon: 'trending-up', kind: 'success' },
+    { label: 'Directives suivies',  value: total,         delta: 'depuis 2024',          icon: 'list-checks',  kind: '' },
+    { label: 'En cours / attente',  value: enc + att,     delta: enc + ' en cours · ' + att + ' en attente', icon: 'clock', kind: 'warning' },
+    { label: 'En retard',           value: enRetard,      delta: 'à relancer',           icon: 'alert-triangle', kind: 'danger' },
+  ];
+  document.getElementById('kpi-grid').innerHTML = kpis.map(k => `
+    <div class="kpi ${k.kind}">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-delta">${k.delta}</div>
+      <div class="kpi-icon"><i data-lucide="${k.icon}"></i></div>
+    </div>
+  `).join('');
+
+  // ===== Donut: répartition par état =====
+  const stateColors = { 'Réalisée': '#16A34A', 'En cours': '#D97706', 'En attente': '#0284C7', 'Inéligible': '#64748B' };
+  const ctxDonut = document.getElementById('chart-donut').getContext('2d');
+  new Chart(ctxDonut, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(states),
+      datasets: [{ data: Object.values(states), backgroundColor: Object.keys(states).map(s => stateColors[s]), borderWidth: 0, hoverOffset: 6 }]
+    },
+    options: { plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.label}: ${c.parsed} (${Math.round(c.parsed/total*100)}%)` } } }, cutout: '65%' }
+  });
+  document.getElementById('donut-legend').innerHTML = Object.entries(states).map(([k,v]) => `
+    <div class="legend-row">
+      <span class="legend-swatch" style="background:${stateColors[k]}"></span>
+      <span style="flex:1">${k}</span>
+      <span class="num" style="font-weight:600">${v}</span>
+      <span style="color:var(--color-fg-muted);font-size:12px">${Math.round(v/total*100)}%</span>
+    </div>
+  `).join('');
+
+  // ===== Évolution mensuelle =====
+  // group by year-month of DATE_RENCONTRE (DD-MM-YYYY)
+  const byMonth = {};
+  PLAN.forEach(r => {
+    if (!r.DATE_RENCONTRE) return;
+    const parts = r.DATE_RENCONTRE.split('-');
+    const key = parts[2] + '-' + parts[1];
+    byMonth[key] = (byMonth[key] || 0) + 1;
+  });
+  const monthKeys = Object.keys(byMonth).sort().slice(-12);
+  const monthLabels = monthKeys.map(k => { const [y,m] = k.split('-'); const names=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']; return names[parseInt(m,10)-1] + ' ' + y.slice(2); });
+  const monthValues = monthKeys.map(k => byMonth[k]);
+  new Chart(document.getElementById('chart-evol').getContext('2d'), {
+    type: 'line',
+    data: { labels: monthLabels, datasets: [{ label: 'Directives reçues', data: monthValues, borderColor: '#0284C7', backgroundColor: 'rgba(2,132,199,.10)', tension: .35, fill: true, pointRadius: 3, pointBackgroundColor: '#0284C7' }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, grid: { color: '#F1F5F9' } }, x: { grid: { display: false } } } }
+  });
+
+  // ===== Volume par type de rencontre =====
+  const byType = PLAN.reduce((a, r) => { const t = r.TYPE_RENCONTRE || '—'; a[t] = (a[t] || 0) + 1; return a; }, {});
+  const typeShort = { 'CONSEIL HEBDOMADAIRE DES MINISTRES': 'Conseil hebdomadaire', 'CONSEILS/REUNIONS INTERMINISTERIELS': 'Interministériel', 'COORDINATION MSGG/SG': 'Coord. MSGG/SG' };
+  new Chart(document.getElementById('chart-types').getContext('2d'), {
+    type: 'bar',
+    data: { labels: Object.keys(byType).map(t => typeShort[t] || t), datasets: [{ data: Object.values(byType), backgroundColor: ['#0284C7','#06B6D4','#0891B2'], borderRadius: 6 }] },
+    options: { indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + c.parsed.x + ' directives' } } }, scales: { x: { beginAtZero: true, grid: { color: '#F1F5F9' } }, y: { grid: { display: false } } }, responsive: true, maintainAspectRatio: false }
+  });
+
+  // ===== Taux par module =====
+  const modules = [
+    { name: 'Recommandations CM/CI/SG', total: PLAN.length, done: real, color: '#0284C7' },
+    { name: 'COPIL projets', total: 40, done: 0, color: '#06B6D4' },
+    { name: 'CNGI', total: 11, done: 0, color: '#0891B2' },
+    { name: 'Réformes (Assainissement)', total: 8, done: 0, color: '#0EA5E9' },
+    { name: 'Réforme institutionnelle', total: 5, done: 0, color: '#0369A1' },
+  ];
+  document.getElementById('modules-list').innerHTML = modules.map(m => {
+    const pct = m.total ? Math.round(m.done / m.total * 1000) / 10 : 0;
+    return `<div class="module-row">
+      <div>
+        <div class="module-name">${m.name}</div>
+        <div style="color:var(--color-fg-muted);font-size:12px;margin-top:3px">${m.done} / ${m.total} directives</div>
+        <div class="progress" style="margin-top:6px"><span style="width:${pct}%;background:${m.color}"></span></div>
+      </div>
+      <div class="module-pct">${pct} %</div>
+    </div>`;
+  }).join('');
+
+  // ===== Top retards =====
+  const retards = PLAN
+    .filter(r => (r.ETAT === 'En cours' || r.ETAT === 'En attente') && r.ECHEANCE)
+    .map(r => {
+      const d = new Date(r.ECHEANCE.split('-').reverse().join('-'));
+      return { ...r, retardJours: Math.round((today - d) / 86400000) };
+    })
+    .filter(r => r.retardJours > 0)
+    .sort((a, b) => b.retardJours - a.retardJours)
+    .slice(0, 5);
+  if (retards.length === 0) {
+    document.getElementById('top-retards').innerHTML = '<p style="color:var(--color-fg-muted);font-size:13px;text-align:center;padding:24px 0">Aucun retard détecté.</p>';
+  } else {
+    document.getElementById('top-retards').innerHTML = retards.map((r, i) => `
+      <div class="ranking-row">
+        <div class="ranking-rank">#${i+1}</div>
+        <div>
+          <div class="ranking-title">${escapeHtml(r.DIRECTIVES).slice(0, 130)}${r.DIRECTIVES.length > 130 ? '…' : ''}</div>
+          <div class="ranking-meta"><span class="badge ${r.ETAT === 'En cours' ? 'encours' : 'attente'}"><span class="dot"></span>${r.ETAT}</span> · Échéance ${r.ECHEANCE}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="num" style="color:var(--color-danger);font-weight:600">+${r.retardJours} j</div>
+          <div style="color:var(--color-fg-muted);font-size:11.5px;margin-top:2px">${r.CODE_DIRECTIVE || ''}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  // ===== Dernières rencontres =====
+  const rencontresByDate = {};
+  PLAN.forEach(r => {
+    if (!r.DATE_RENCONTRE || !r.RENCONTRE) return;
+    const key = r.DATE_RENCONTRE + '|' + r.RENCONTRE;
+    if (!rencontresByDate[key]) rencontresByDate[key] = { date: r.DATE_RENCONTRE, name: r.RENCONTRE, type: r.TYPE_RENCONTRE, count: 0 };
+    rencontresByDate[key].count++;
+  });
+  const recent = Object.values(rencontresByDate).sort((a, b) => {
+    const da = a.date.split('-').reverse().join('-'); const db = b.date.split('-').reverse().join('-');
+    return db.localeCompare(da);
+  }).slice(0, 6);
+  document.getElementById('recent-rencontres').innerHTML = recent.map(r => `
+    <div class="timeline-item">
+      <div class="timeline-date">${r.date}</div>
+      <div class="timeline-text">
+        <b>${escapeHtml(capitalize(r.name)).slice(0, 90)}${r.name.length > 90 ? '…' : ''}</b>
+        <div style="color:var(--color-fg-muted);font-size:12px;margin-top:2px">${escapeHtml(r.type || '')} · <span class="num">${r.count}</span> directive${r.count>1?'s':''}</div>
+      </div>
+    </div>`).join('');
+
+  function escapeHtml(s) { return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]); }
+  function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : ''; }
+})();
+</script>
+</body>
+</html>

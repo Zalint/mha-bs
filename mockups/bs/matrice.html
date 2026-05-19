@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Saisie matrices · BS · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .picker { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 18px; }
+    .pick-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 14px; cursor: pointer; transition: all .15s; display: flex; flex-direction: column; gap: 6px; }
+    .pick-card:hover { border-color: var(--color-primary); }
+    .pick-card.active { border-color: var(--color-primary); background: var(--color-primary-100); }
+    .pick-card .pc-icon { color: var(--color-primary); }
+    .pick-card .pc-title { font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
+    .pick-card .pc-sub { font-size: 11.5px; color: var(--color-fg-muted); font-family: var(--font-mono); }
+    .pick-card.active .pc-sub { color: var(--color-primary-700); }
+    .save-bar { position: sticky; top: var(--header-h); z-index: 5; background: var(--color-primary-100); border: 1px solid var(--color-primary); border-radius: 10px; padding: 10px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .save-bar .icon { color: var(--color-primary); }
+    .save-bar .info { font-size: 13px; color: var(--color-primary-700); flex: 1; }
+    .save-bar .info b { font-weight: 600; }
+    .matrix-table { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+    .matrix-table thead th { background: var(--color-surface-2); padding: 10px 14px; text-align: left; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--color-fg-muted); border-bottom: 1px solid var(--color-border); }
+    .matrix-table thead th.center { text-align: center; }
+    .matrix-table tbody tr { border-bottom: 1px solid var(--color-border); }
+    .matrix-table tbody tr:last-child { border-bottom: 0; }
+    .matrix-table tbody tr:hover { background: var(--color-surface-2); }
+    .matrix-table td { padding: 14px; vertical-align: top; }
+    .matrix-table td.num { width: 36px; font-family: var(--font-mono); font-weight: 600; color: var(--color-fg-muted); font-size: 13px; padding-top: 16px; }
+    .matrix-table td.txt { font-size: 13px; line-height: 1.5; color: var(--color-fg); }
+    .matrix-table td.state { width: 280px; }
+    .matrix-table td.obs { width: 240px; }
+    .state-cell { display: flex; gap: 4px; padding: 2px; background: var(--color-muted); border-radius: 8px; }
+    .state-cell label { flex: 1; padding: 7px 10px; font-size: 12px; font-weight: 500; text-align: center; border-radius: 6px; cursor: pointer; transition: all .15s; color: var(--color-fg-2); }
+    .state-cell label:hover { background: rgba(255,255,255,.6); }
+    .state-cell input { position: absolute; opacity: 0; }
+    .state-cell input:checked + label.s-att { background: var(--color-info-bg); color: var(--color-info); box-shadow: var(--shadow-sm); }
+    .state-cell input:checked + label.s-cou { background: var(--color-warning-bg); color: var(--color-warning); box-shadow: var(--shadow-sm); }
+    .state-cell input:checked + label.s-rea { background: var(--color-success-bg); color: var(--color-success); box-shadow: var(--shadow-sm); }
+    .obs-input { width: 100%; min-height: 38px; padding: 8px 10px; font-size: 12.5px; font-family: inherit; border: 1px solid transparent; background: transparent; border-radius: 6px; resize: vertical; color: var(--color-fg-2); }
+    .obs-input:hover { border-color: var(--color-border); background: var(--color-surface); }
+    .obs-input:focus { border-color: var(--color-primary); background: var(--color-surface); outline: none; box-shadow: 0 0 0 3px rgba(2,132,199,.15); }
+    .ctx-bar { padding: 12px 16px; background: var(--color-surface-2); border-bottom: 1px solid var(--color-border); display: flex; align-items: center; gap: 12px; font-size: 13px; }
+    .ctx-bar .ic { width: 32px; height: 32px; border-radius: 8px; background: var(--color-primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-family: var(--font-mono); font-size: 12px; }
+    .ctx-bar .ctx-title { font-weight: 600; color: var(--color-fg); }
+    .ctx-bar .ctx-sub { color: var(--color-fg-muted); font-size: 12px; }
+    .ctx-bar .progress-mini { width: 140px; height: 6px; }
+    .ctx-bar .pct-mini { font-family: var(--font-mono); font-weight: 600; font-size: 12px; min-width: 40px; text-align: right; }
+  </style>
+</head>
+<body data-page="bs-matrice" data-role="bs">
+<div id="app-content">
+
+  <h1 class="page-title">Saisie matrices</h1>
+  <p class="page-sub">Mise à jour rapide des recommandations COPIL, CNGI et Réformes en mode grille. Sauvegarde automatique au changement.</p>
+
+  <!-- Matrix picker -->
+  <div class="picker" role="tablist">
+    <div class="pick-card active" data-mat="cngi"><div class="pc-icon"><i data-lucide="cloud-rain" class="icon-lg"></i></div><div class="pc-title">CNGI Avril 2026</div><div class="pc-sub">11 reco.</div></div>
+    <div class="pick-card" data-mat="ref-ass"><div class="pc-icon"><i data-lucide="droplets" class="icon-lg"></i></div><div class="pc-title">Réforme Assainissement</div><div class="pc-sub">8 reco.</div></div>
+    <div class="pick-card" data-mat="copil-progep"><div class="pc-icon"><i data-lucide="folder-kanban" class="icon-lg"></i></div><div class="pc-title">COPIL PROGEP II</div><div class="pc-sub">7 reco.</div></div>
+    <div class="pick-card" data-mat="copil-pisea"><div class="pc-icon"><i data-lucide="folder-kanban" class="icon-lg"></i></div><div class="pc-title">COPIL PISEA</div><div class="pc-sub">12 reco.</div></div>
+    <div class="pick-card" data-mat="copil-pasea"><div class="pc-icon"><i data-lucide="folder-kanban" class="icon-lg"></i></div><div class="pc-title">COPIL PASEA-RD</div><div class="pc-sub">12 reco.</div></div>
+    <div class="pick-card" data-mat="copil-pdbh"><div class="pc-icon"><i data-lucide="folder-kanban" class="icon-lg"></i></div><div class="pc-title">COPIL PDBH</div><div class="pc-sub">4 reco.</div></div>
+    <div class="pick-card" data-mat="copil-promoren"><div class="pc-icon"><i data-lucide="folder-kanban" class="icon-lg"></i></div><div class="pc-title">COPIL PROMOREN</div><div class="pc-sub">5 reco.</div></div>
+  </div>
+
+  <!-- Save bar -->
+  <div class="save-bar">
+    <i data-lucide="cloud" class="icon"></i>
+    <span class="info">Brouillon enregistré · <b id="sb-status">prêt</b> · dernière sauvegarde <span class="num" id="sb-time">à l'instant</span></span>
+    <button class="btn btn-secondary btn-sm"><i data-lucide="history" class="icon-sm"></i> Historique</button>
+    <button class="btn btn-primary btn-sm"><i data-lucide="send" class="icon-sm"></i> Soumettre au SG</button>
+  </div>
+
+  <!-- Matrix table -->
+  <div class="matrix-table">
+    <div class="ctx-bar">
+      <div class="ic" id="ctx-ic">CN</div>
+      <div style="flex:1">
+        <div class="ctx-title" id="ctx-title">CNGI Avril 2026</div>
+        <div class="ctx-sub" id="ctx-sub">Comité national de Gestion Intégrée du Risque d'Inondations · 11 recommandations</div>
+      </div>
+      <div class="progress-mini progress success" style="width:140px;height:6px"><span style="width:32%"></span></div>
+      <span class="pct-mini">32%</span>
+    </div>
+    <table class="matrix-table" style="border:0;border-radius:0;width:100%">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Recommandation</th>
+          <th class="center">État</th>
+          <th>Observations</th>
+        </tr>
+      </thead>
+      <tbody id="mat-body"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  const D = window.MHA_DATA;
+  const MATRICES = {
+    'cngi':           { title: 'CNGI Avril 2026', sub: 'Comité national de Gestion Intégrée du Risque d\'Inondations', ic: 'CN', rows: D.cngi, seed: ['Réalisée','En cours','En cours','En attente','En cours','En attente','Réalisée','En attente','En cours','En attente','En attente'] },
+    'ref-ass':        { title: 'Réforme de l\'assainissement', sub: 'Cadre légal et institutionnel · 8 recommandations stratégiques', ic: 'RA', rows: D.ref_assainissement, seed: ['En cours','En attente','En cours','En attente','En attente','Réalisée','En cours','En attente'] },
+    'copil-progep':   { title: 'COPIL PROGEP II', sub: 'Projet de Gestion des Eaux Pluviales · Phase II', ic: 'PG', rows: D.copils['PROGEP II'], seed: ['Réalisée','Réalisée','En cours','En cours','En cours','En cours','En attente'] },
+    'copil-pisea':    { title: 'COPIL PISEA', sub: 'Programme d\'Investissement Sectoriel Eau-Assainissement', ic: 'PS', rows: D.copils['PISEA'], seed: ['Réalisée','En cours','En cours','En cours','En cours','En cours','En attente','En attente','En cours','En cours','En attente','Réalisée'] },
+    'copil-pasea':    { title: 'COPIL PASEA-RD', sub: 'Programme d\'Appui au Secteur Eau-Assainissement (Diourbel)', ic: 'PR', rows: D.copils['PASEA-RD'], seed: ['En cours','En cours','Réalisée','En cours','En cours','En attente','En cours','En attente','En cours','En attente','Réalisée','En attente'] },
+    'copil-pdbh':     { title: 'COPIL PDBH', sub: 'Programme Drainage Baie de Hann', ic: 'PB', rows: D.copils['PDBH'], seed: ['En cours','En attente','En cours','Réalisée'] },
+    'copil-promoren': { title: 'COPIL PROMOREN', sub: 'Projet de Mobilisation des Ressources en Eau', ic: 'PM', rows: D.copils['PROMOREN'], seed: ['En cours','En cours','Réalisée','En cours','En attente'] },
+  };
+  let current = 'cngi';
+
+  function render() {
+    const m = MATRICES[current];
+    document.getElementById('ctx-title').textContent = m.title;
+    document.getElementById('ctx-sub').textContent = m.sub + ' · ' + m.rows.length + ' recommandations';
+    document.getElementById('ctx-ic').textContent = m.ic;
+    // Compute progress
+    const real = m.seed.filter(s => s === 'Réalisée').length;
+    const pct = Math.round(real / m.rows.length * 100);
+    document.querySelector('.progress-mini > span').style.width = pct + '%';
+    document.querySelector('.pct-mini').textContent = pct + '%';
+
+    document.getElementById('mat-body').innerHTML = m.rows.map((r, i) => {
+      const st = m.seed[i] || 'En attente';
+      const txt = r.TEXTE || r.ACTIVITE || '';
+      const num = r.NUM || (i + 1);
+      return `<tr>
+        <td class="num">${num}</td>
+        <td class="txt">${esc(txt)}</td>
+        <td class="state">
+          <div class="state-cell" role="radiogroup">
+            <input type="radio" name="st-${i}" id="st-${i}-a" ${st==='En attente'?'checked':''}><label for="st-${i}-a" class="s-att">Attente</label>
+            <input type="radio" name="st-${i}" id="st-${i}-c" ${st==='En cours'?'checked':''}><label for="st-${i}-c" class="s-cou">En cours</label>
+            <input type="radio" name="st-${i}" id="st-${i}-r" ${st==='Réalisée'?'checked':''}><label for="st-${i}-r" class="s-rea">Réalisée</label>
+          </div>
+        </td>
+        <td class="obs"><textarea class="obs-input" rows="2" placeholder="Observations…">${esc(r.OBS || '')}</textarea></td>
+      </tr>`;
+    }).join('');
+
+    // Wire saves on change
+    document.querySelectorAll('.state-cell input, .obs-input').forEach(el => {
+      el.addEventListener('change', () => {
+        document.getElementById('sb-status').textContent = 'modifié';
+        document.getElementById('sb-time').textContent = nowTime();
+        setTimeout(() => {
+          document.getElementById('sb-status').textContent = 'enregistré';
+        }, 600);
+      });
+      el.addEventListener('input', () => {
+        document.getElementById('sb-status').textContent = 'modifié';
+      });
+    });
+  }
+
+  document.querySelectorAll('.pick-card').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('.pick-card').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+      current = c.dataset.mat;
+      render();
+    });
+  });
+
+  render();
+  if (window.lucide) lucide.createIcons();
+  function esc(s) { return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]); }
+  function nowTime() { const d = new Date(); return d.toTimeString().slice(0,5); }
+})();
+</script>
+</body>
+</html>

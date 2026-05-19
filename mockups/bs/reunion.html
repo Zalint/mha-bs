@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Réunion / mission · BS · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .toggle-group { display: inline-flex; padding: 4px; background: var(--color-muted); border-radius: 10px; margin-bottom: 20px; }
+    .toggle-group button { background: transparent; border: 0; padding: 8px 18px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--color-fg-2); cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+    .toggle-group button.active { background: var(--color-surface); color: var(--color-fg); box-shadow: var(--shadow-sm); }
+    .form-grid { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+    @media (max-width: 1100px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+    .form-section { padding: 20px; border-bottom: 1px solid var(--color-border); }
+    .form-section:last-child { border-bottom: 0; }
+    .form-section h3 { margin: 0 0 16px; font-size: 13px; font-weight: 600; color: var(--color-fg); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+    .form-section h3 .num { background: var(--color-primary-100); color: var(--color-primary); width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    textarea.input { width: 100%; min-height: 92px; padding: 10px 12px; font-family: inherit; font-size: 13.5px; line-height: 1.5; resize: vertical; }
+    .input, .select { width: 100%; }
+    .chips-input { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; min-height: 38px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); }
+    .chips-input input { border: 0; outline: 0; flex: 1; min-width: 100px; font-family: inherit; font-size: 13px; background: transparent; }
+    .pill { background: var(--color-primary-100); color: var(--color-primary-700); padding: 3px 10px 3px 12px; border-radius: 999px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+    .pill button { background: transparent; border: 0; color: inherit; cursor: pointer; padding: 0; font-size: 14px; line-height: 1; }
+    #mini-map { height: 220px; border-radius: 8px; border: 1px solid var(--color-border); overflow: hidden; margin-top: 8px; }
+    .file-drop { border: 2px dashed var(--color-border); border-radius: 10px; padding: 24px; text-align: center; color: var(--color-fg-muted); cursor: pointer; transition: all .15s; }
+    .file-drop:hover { border-color: var(--color-primary); background: var(--color-primary-100); color: var(--color-primary-700); }
+    .file-drop .lucide { width: 28px; height: 28px; margin-bottom: 6px; }
+    .file-list { margin-top: 10px; }
+    .file-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--color-muted); border-radius: 6px; margin-bottom: 6px; font-size: 12.5px; }
+    .file-row .fr-icon { color: var(--color-primary); }
+    .file-row .fr-name { flex: 1; font-weight: 500; }
+    .file-row .fr-size { color: var(--color-fg-muted); font-family: var(--font-mono); }
+    .sticky-actions { position: sticky; bottom: 0; background: var(--color-surface); border-top: 1px solid var(--color-border); padding: 14px 20px; display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+    .side-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 16px; }
+    .side-card h4 { margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .ouvrage-row { display: flex; gap: 10px; padding: 10px; border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 8px; align-items: center; }
+    .ouvrage-row .ow-ic { color: var(--color-primary); }
+    .ouvrage-row .ow-name { flex: 1; font-size: 13px; font-weight: 500; }
+    .ouvrage-row .ow-state { font-size: 12px; }
+    .ouvrage-row button { background: transparent; border: 0; color: var(--color-fg-muted); cursor: pointer; }
+  </style>
+</head>
+<body data-page="bs-reunion" data-role="bs">
+<div id="app-content">
+
+  <a href="liste.html" style="display:inline-flex;align-items:center;gap:6px;color:var(--color-fg-muted);font-size:13px;margin-bottom:12px"><i data-lucide="arrow-left" class="icon-sm"></i> Retour</a>
+
+  <h1 class="page-title">Nouvelle réunion ou mission</h1>
+  <p class="page-sub">Enregistrer une réunion technique du MHA ou une mission de suivi d'ouvrage sur le terrain</p>
+
+  <!-- Type toggle -->
+  <div class="toggle-group">
+    <button class="active" data-type="reunion"><i data-lucide="users" class="icon-sm"></i> Réunion technique</button>
+    <button data-type="mission"><i data-lucide="map-pin" class="icon-sm"></i> Mission terrain</button>
+  </div>
+
+  <form class="form-grid" onsubmit="event.preventDefault(); alert('Maquette : enregistrement non câblé.')">
+    <div class="form-card">
+
+      <!-- ===== Section 1 — Type & contexte ===== -->
+      <div class="form-section">
+        <h3><span class="num">1</span> Contexte</h3>
+        <div class="row-3">
+          <div class="field">
+            <label class="field-label">Date</label>
+            <input class="input" type="text" value="14-05-2026" style="font-family:var(--font-mono)">
+          </div>
+          <div class="field">
+            <label class="field-label">Heure</label>
+            <input class="input" type="text" value="10:00" style="font-family:var(--font-mono)">
+          </div>
+          <div class="field">
+            <label class="field-label">Durée estimée</label>
+            <input class="input" type="text" value="2h" style="font-family:var(--font-mono)">
+          </div>
+        </div>
+        <div class="row-2" id="ctx-fields">
+          <div class="field">
+            <label class="field-label">Sous-secteur principal</label>
+            <select class="select">
+              <option>Sous-secteur Eau (accès)</option>
+              <option>GIRE (ressources en eau)</option>
+              <option selected>Assainissement (eaux usées)</option>
+              <option>Eaux pluviales / Inondations</option>
+              <option>Projets transversaux</option>
+              <option>Réforme institutionnelle</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label">Projet ou COPIL rattaché</label>
+            <select class="select">
+              <option>—</option>
+              <option>PROGEP II</option><option>PISEA</option><option selected>PASEA-RD</option><option>PDBH</option><option>PROMOREN</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Section 2 — Réunion (default) ===== -->
+      <div class="form-section" id="sec-reunion">
+        <h3><span class="num">2</span> Réunion technique</h3>
+        <div class="field">
+          <label class="field-label req" for="r-theme">Thème</label>
+          <input class="input" id="r-theme" type="text" placeholder="ex. Préparation hivernage 2026 · plan d'actions DPGI">
+        </div>
+        <div class="field">
+          <label class="field-label">Lieu</label>
+          <select class="select"><option>SG MHA · Salle Plénière</option><option>MHA · Salle SG</option><option>ONAS · Siège</option><option>DPGI · Bureau Direction</option><option>En visioconférence</option></select>
+        </div>
+        <div class="field">
+          <label class="field-label">Participants</label>
+          <div class="chips-input">
+            <span class="pill">DPGI <button type="button">×</button></span>
+            <span class="pill">ONAS <button type="button">×</button></span>
+            <span class="pill">CPCSP <button type="button">×</button></span>
+            <span class="pill">SG MHA <button type="button">×</button></span>
+            <input type="text" placeholder="Ajouter une direction ou personne…">
+          </div>
+          <p class="field-help">Séparer par tabulation ou entrée. Sélectionner depuis l'annuaire MHA.</p>
+        </div>
+        <div class="field">
+          <label class="field-label" for="r-ordre">Ordre du jour</label>
+          <textarea class="input" id="r-ordre" rows="4" placeholder="Point 1 :&#10;Point 2 :&#10;Point 3 :"></textarea>
+        </div>
+        <div class="field">
+          <label class="field-label">Décisions / suites attendues</label>
+          <textarea class="input" rows="3" placeholder="Décisions prises, actions à mener, échéances…"></textarea>
+        </div>
+      </div>
+
+      <!-- ===== Section 2b — Mission (hidden by default) ===== -->
+      <div class="form-section" id="sec-mission" style="display:none">
+        <h3><span class="num">2</span> Mission terrain</h3>
+        <div class="row-2">
+          <div class="field">
+            <label class="field-label req">Localité</label>
+            <input class="input" type="text" placeholder="ex. Keur Massar — Tivaoune Peulh">
+          </div>
+          <div class="field">
+            <label class="field-label">Région</label>
+            <select class="select"><option>Dakar</option><option>Thiès</option><option>Diourbel</option><option>Saint-Louis</option><option>Kaolack</option><option>Ziguinchor</option><option>Tambacounda</option><option>Kolda</option><option>Kaffrine</option><option>Kédougou</option><option>Sédhiou</option><option>Fatick</option><option>Louga</option><option>Matam</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Géolocalisation (clic sur la carte pour positionner)</label>
+          <div id="mini-map"></div>
+        </div>
+        <div class="field">
+          <label class="field-label">Ouvrages visités</label>
+          <div class="ouvrage-row">
+            <i data-lucide="construction" class="ow-ic icon-sm"></i>
+            <span class="ow-name">Bassin de rétention Keur Massar (BR-KM-04)</span>
+            <span class="ow-state badge realisee"><span class="dot"></span>Fonctionnel</span>
+            <button type="button"><i data-lucide="x" class="icon-sm"></i></button>
+          </div>
+          <div class="ouvrage-row">
+            <i data-lucide="construction" class="ow-ic icon-sm"></i>
+            <span class="ow-name">Station de pompage Tivaoune Peulh</span>
+            <span class="ow-state badge encours"><span class="dot"></span>Maintenance</span>
+            <button type="button"><i data-lucide="x" class="icon-sm"></i></button>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px"><i data-lucide="plus" class="icon-sm"></i> Ajouter un ouvrage</button>
+        </div>
+        <div class="field">
+          <label class="field-label">Constats & recommandations</label>
+          <textarea class="input" rows="4" placeholder="Observations sur l'état des ouvrages, anomalies, actions urgentes…"></textarea>
+        </div>
+      </div>
+
+      <!-- ===== Section 3 — Pièces jointes ===== -->
+      <div class="form-section">
+        <h3><span class="num">3</span> Pièces jointes & compte-rendu</h3>
+        <div class="file-drop">
+          <i data-lucide="upload-cloud"></i>
+          <div style="font-weight:500;color:var(--color-fg-2)">Glisser-déposer un fichier ici</div>
+          <div style="font-size:12px;margin-top:2px">PDF, Word, photos (max 20 Mo)</div>
+        </div>
+        <div class="file-list">
+          <div class="file-row"><i data-lucide="file-text" class="fr-icon"></i><span class="fr-name">CR_reunion_DPGI_20260512.pdf</span><span class="fr-size">412 Ko</span><button type="button" style="background:transparent;border:0;color:var(--color-fg-muted);cursor:pointer"><i data-lucide="x" class="icon-sm"></i></button></div>
+          <div class="file-row"><i data-lucide="image" class="fr-icon"></i><span class="fr-name">photo_site_keur_massar.jpg</span><span class="fr-size">2.1 Mo</span><button type="button" style="background:transparent;border:0;color:var(--color-fg-muted);cursor:pointer"><i data-lucide="x" class="icon-sm"></i></button></div>
+        </div>
+      </div>
+
+      <!-- ===== Section 4 — Lien avec directives ===== -->
+      <div class="form-section">
+        <h3><span class="num">4</span> Liens avec directives ministérielles</h3>
+        <div class="field">
+          <p class="field-help" style="margin-top:0;margin-bottom:8px">Associer cette entrée à des directives suivies par le BS pour mettre à jour leur avancement.</p>
+          <div class="chips-input">
+            <span class="pill">CM20250507-0042 <button type="button">×</button></span>
+            <span class="pill">CI20260424-0011 <button type="button">×</button></span>
+            <input type="text" placeholder="Rechercher une directive (code ou texte)…">
+          </div>
+        </div>
+      </div>
+
+      <!-- Sticky actions -->
+      <div class="sticky-actions">
+        <a class="btn btn-ghost" href="liste.html">Annuler</a>
+        <button class="btn btn-secondary" type="button"><i data-lucide="save" class="icon-sm"></i> Brouillon</button>
+        <button class="btn btn-primary" type="submit"><i data-lucide="check" class="icon-sm"></i> Enregistrer</button>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div>
+      <div class="side-card">
+        <h4>Type sélectionné</h4>
+        <div id="type-summary" style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--color-primary-100);border-radius:10px">
+          <i data-lucide="users" class="icon-lg" style="color:var(--color-primary)"></i>
+          <div>
+            <div style="font-weight:600;color:var(--color-primary-700);font-size:14px" id="ts-title">Réunion technique</div>
+            <div style="font-size:12px;color:var(--color-fg-muted)" id="ts-sub">Saisie : thème, lieu, participants, ordre du jour</div>
+          </div>
+        </div>
+      </div>
+      <div class="side-card">
+        <h4>Suggestions du système</h4>
+        <div style="font-size:12.5px;color:var(--color-fg-2);line-height:1.5">
+          <p style="margin:0 0 10px">Sur la base de la date et du sous-secteur sélectionnés, le système a identifié :</p>
+          <ul style="margin:0;padding-left:18px">
+            <li><b>2 directives</b> ouvertes liées au PASEA-RD pouvant être mises à jour</li>
+            <li><b>1 mission</b> programmée le même jour (peut être fusionnée)</li>
+            <li>Format <b>CR_reunion_AAAAMMJJ.pdf</b> recommandé pour la pièce jointe</li>
+          </ul>
+        </div>
+      </div>
+      <div class="side-card">
+        <h4>Visibilité</h4>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:8px 0"><input type="checkbox" checked> Visible au SG</label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:8px 0"><input type="checkbox"> Inclure dans le rapport hebdo</label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:8px 0"><input type="checkbox"> Notifier les participants</label>
+      </div>
+    </div>
+  </form>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  // Type toggle
+  document.querySelectorAll('.toggle-group button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.toggle-group button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const t = btn.dataset.type;
+      document.getElementById('sec-reunion').style.display = t === 'reunion' ? '' : 'none';
+      document.getElementById('sec-mission').style.display = t === 'mission' ? '' : 'none';
+      document.getElementById('ts-title').textContent = t === 'reunion' ? 'Réunion technique' : 'Mission terrain';
+      document.getElementById('ts-sub').textContent = t === 'reunion' ? 'Saisie : thème, lieu, participants, ordre du jour' : 'Saisie : localité, géolocalisation, ouvrages, constats';
+      const ic = document.querySelector('#type-summary [data-lucide]');
+      if (ic) { ic.dataset.lucide = t === 'reunion' ? 'users' : 'map-pin'; }
+      if (window.lucide) lucide.createIcons();
+      // Init map when mission is shown
+      if (t === 'mission' && !window._missionMap) {
+        setTimeout(() => {
+          window._missionMap = L.map('mini-map', { zoomControl: true, scrollWheelZoom: false }).setView([14.7167, -17.4677], 11);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(window._missionMap);
+          const icon = L.divIcon({ className: '', html: '<div style="background:#0284C7;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25)">●</div>', iconSize: [24,24], iconAnchor: [12,12] });
+          L.marker([14.7799, -17.3344], { icon }).addTo(window._missionMap).bindPopup('<b>Keur Massar</b><br>Position estimée');
+        }, 50);
+      }
+    });
+  });
+
+  if (window.lucide) lucide.createIcons();
+})();
+</script>
+</body>
+</html>

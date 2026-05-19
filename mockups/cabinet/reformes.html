@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Réformes · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .tabs-pills { display: inline-flex; gap: 4px; padding: 4px; background: var(--color-muted); border-radius: 10px; border: 1px solid var(--color-border); margin-bottom: 18px; }
+    .tabs-pills button { background: transparent; border: 0; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--color-fg-2); cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+    .tabs-pills button.active { background: var(--color-surface); color: var(--color-fg); box-shadow: var(--shadow-sm); }
+    .pane { display: none; }
+    .pane.active { display: block; animation: fade-up .2s ease-out both; }
+    .reco-list { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+    .reco-item { display: grid; grid-template-columns: 36px 1fr 130px 150px; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--color-border); align-items: center; }
+    .reco-item:last-child { border-bottom: 0; }
+    .reco-item:hover { background: var(--color-muted); }
+    .reco-num { width: 30px; height: 30px; border-radius: 8px; background: var(--color-primary-100); color: var(--color-primary); display: flex; align-items: center; justify-content: center; font-weight: 600; font-family: var(--font-mono); font-size: 13px; }
+    .reco-text { font-size: 13px; line-height: 1.5; color: var(--color-fg-2); }
+    .reco-meta { color: var(--color-fg-muted); font-size: 12px; }
+    .timeline-q { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .q-col { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 14px; min-height: 240px; }
+    .q-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 2px solid var(--color-primary); }
+    .q-head h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--color-fg); font-family: var(--font-mono); }
+    .q-activity { padding: 10px; background: var(--color-muted); border-radius: 6px; margin-bottom: 8px; font-size: 12.5px; line-height: 1.4; color: var(--color-fg-2); border-left: 3px solid var(--color-primary); }
+    .q-activity.urgent { border-left-color: var(--color-danger); background: var(--color-danger-bg); }
+    .q-activity.prioritaire { border-left-color: var(--color-warning); }
+    .q-activity .priority { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; color: var(--color-fg-muted); margin-bottom: 3px; }
+    .q-activity.urgent .priority { color: var(--color-danger); }
+    .q-activity.prioritaire .priority { color: var(--color-warning); }
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .summary-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 18px; }
+    .summary-card .lbl { font-size: 12px; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 500; }
+    .summary-card .val { font-family: var(--font-mono); font-size: 28px; font-weight: 600; color: var(--color-fg); margin-top: 4px; }
+    .stack-bar { height: 8px; background: var(--color-muted); border-radius: 999px; margin-top: 14px; display: flex; overflow: hidden; }
+    .stack-bar .s { height: 100%; }
+  </style>
+</head>
+<body data-page="reformes" data-role="cabinet">
+<div id="app-content">
+
+  <div style="display:inline-flex;align-items:center;gap:8px;padding:4px 10px;background:var(--color-primary-100);color:var(--color-primary-700);border-radius:6px;font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">
+    <i data-lucide="clipboard-list" style="width:14px;height:14px"></i> Recommandations MHA
+  </div>
+  <h1 class="page-title">Réformes</h1>
+  <p class="page-sub">Suivi des réformes du secteur Eau-Assainissement : Code de l'Assainissement et réforme institutionnelle (ARSE, DSP)</p>
+
+  <div class="tabs-pills" role="tablist">
+    <button class="active" data-tab="ref-ass"><i data-lucide="droplets" class="icon-sm"></i> Réforme Assainissement <span class="badge neutral" style="font-size:11px;margin-left:4px">8</span></button>
+    <button data-tab="ref-inst"><i data-lucide="landmark" class="icon-sm"></i> Réforme Institutionnelle <span class="badge neutral" style="font-size:11px;margin-left:4px">5</span></button>
+  </div>
+
+  <!-- PANE REF ASS -->
+  <div class="pane active" id="pane-ref-ass">
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="lbl">Recommandations</div>
+        <div class="val">8</div>
+        <div class="stack-bar"><div class="s" style="width:12%;background:var(--color-success)"></div><div class="s" style="width:38%;background:var(--color-warning)"></div><div class="s" style="width:50%;background:var(--color-primary)"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11.5px;color:var(--color-fg-muted)"><span>1 réalisée</span><span>3 en cours</span><span>4 en attente</span></div>
+      </div>
+      <div class="summary-card">
+        <div class="lbl">Cadre légal cible</div>
+        <div class="val" style="font-size:22px">Code de l'Assainissement</div>
+        <div style="font-size:12.5px;color:var(--color-fg-muted);margin-top:6px">Création d'un Fonds d'Assainissement</div>
+      </div>
+      <div class="summary-card">
+        <div class="lbl">Acteurs clés</div>
+        <div class="val">5</div>
+        <div style="font-size:12.5px;color:var(--color-fg-muted);margin-top:6px">ONAS · DA · DPGI · CPCSP · Min. Emploi</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Matrice de suivi · Réforme de l'assainissement</h2>
+          <p class="card-sub">8 recommandations stratégiques</p>
+        </div>
+        <div class="card-actions"><a class="btn btn-secondary btn-sm" href="../bs/matrice.html"><i data-lucide="edit-3" class="icon-sm"></i> Mettre à jour</a></div>
+      </div>
+      <div class="reco-list" id="ref-ass-list" style="border:0;border-radius:0"></div>
+    </div>
+  </div>
+
+  <!-- PANE REF INST -->
+  <div class="pane" id="pane-ref-inst">
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="lbl">Activités planifiées</div>
+        <div class="val">5</div>
+        <div style="font-size:12.5px;color:var(--color-fg-muted);margin-top:6px">Réparties sur 4 trimestres 2026</div>
+      </div>
+      <div class="summary-card">
+        <div class="lbl">Échéance finale</div>
+        <div class="val" style="font-size:22px;color:var(--color-primary)">T4 2026</div>
+        <div style="font-size:12.5px;color:var(--color-fg-muted);margin-top:6px">Déploiement opérationnel de l'ARSE</div>
+      </div>
+      <div class="summary-card">
+        <div class="lbl">Priorité dominante</div>
+        <div class="val" style="font-size:22px;color:var(--color-warning)">Prioritaire</div>
+        <div style="font-size:12.5px;color:var(--color-fg-muted);margin-top:6px">2 urgentes · 2 prioritaires · 1 obligatoire</div>
+      </div>
+    </div>
+
+    <h2 style="font-size:14px;font-weight:600;margin:24px 0 12px;color:var(--color-fg-muted);text-transform:uppercase;letter-spacing:.05em">Feuille de route trimestrielle · 2026</h2>
+    <div class="timeline-q" id="quarters"></div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  const D = window.MHA_DATA;
+
+  // Réforme assainissement
+  const refAssStates = ['En cours','En attente','En cours','En attente','En attente','Réalisée','En cours','En attente'];
+  document.getElementById('ref-ass-list').innerHTML = D.ref_assainissement.map((r, i) => `
+    <div class="reco-item">
+      <div class="reco-num">${i+1}</div>
+      <div><div class="reco-text">${esc(r.TEXTE).slice(0, 220)}${r.TEXTE.length > 220 ? '…' : ''}</div></div>
+      <div class="reco-meta">ONAS · DA · DPGI</div>
+      <div>${stateBadge(refAssStates[i])}</div>
+    </div>
+  `).join('');
+
+  // Réforme institutionnelle — group by quarter
+  const quarters = { T1: [], T2: [], T3: [], T4: [] };
+  D.ref_institutionnelle.forEach(a => {
+    const q = (a.ECHEANCE || '').replace(/\s/g, '');
+    if (quarters[q]) quarters[q].push(a);
+  });
+  const qTitles = { T1: 'Janvier–Mars', T2: 'Avril–Juin', T3: 'Juillet–Sept.', T4: 'Octobre–Déc.' };
+  const qStatuses = { T1: 'realisee', T2: 'encours', T3: 'attente', T4: 'attente' };
+  const qStatusLabels = { T1: 'Réalisé', T2: 'En cours', T3: 'À venir', T4: 'À venir' };
+  document.getElementById('quarters').innerHTML = Object.keys(quarters).map(q => {
+    const acts = quarters[q];
+    return `<div class="q-col">
+      <div class="q-head">
+        <h3>${q} <span style="color:var(--color-fg-muted);font-size:12px;font-weight:400">· ${qTitles[q]}</span></h3>
+        <span class="badge ${qStatuses[q]}"><span class="dot"></span>${qStatusLabels[q]}</span>
+      </div>
+      ${acts.map(a => `
+        <div class="q-activity ${(a.PRIORITE||'').toLowerCase()}">
+          <div class="priority">${esc(a.PRIORITE || 'Standard')}</div>
+          ${esc(a.ACTIVITE).slice(0, 140)}${a.ACTIVITE.length > 140 ? '…' : ''}
+        </div>
+      `).join('') || '<div style="color:var(--color-fg-muted);font-size:12px;padding:20px 0;text-align:center">Aucune activité</div>'}
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('.tabs-pills button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tabs-pills button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+      document.getElementById('pane-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  if (window.lucide) lucide.createIcons();
+  function stateBadge(s) { const map={'Réalisée':'realisee','En cours':'encours','En attente':'attente','Inéligible':'ineligible'}; return `<span class="badge ${map[s]||'neutral'}"><span class="dot"></span>${s}</span>`; }
+  function esc(s) { return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>File de travail · BS · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .tabs { display: flex; gap: 2px; padding: 4px; background: var(--color-muted); border-radius: 8px; border: 1px solid var(--color-border); }
+    .tabs button { background: transparent; border: 0; padding: 6px 12px; border-radius: 6px; font-size: 12.5px; font-weight: 500; color: var(--color-fg-2); cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+    .tabs button .count { background: var(--color-border); color: var(--color-fg-2); font-size: 11px; padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+    .tabs button.active { background: var(--color-surface); color: var(--color-fg); box-shadow: var(--shadow-sm); }
+    .tabs button.active .count { background: var(--color-primary); color: #fff; }
+    .table-wrap { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+    .row-actions { display: flex; gap: 4px; visibility: hidden; }
+    .tbl tbody tr:hover .row-actions { visibility: visible; }
+    .row-actions button { width: 28px; height: 28px; border: 1px solid var(--color-border); background: var(--color-surface); border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--color-fg-2); }
+    .row-actions button:hover { background: var(--color-muted); color: var(--color-primary); border-color: var(--color-primary); }
+    .inline-select { height: 28px; padding: 0 6px; font-size: 12px; border: 1px solid transparent; background: transparent; border-radius: 6px; color: inherit; cursor: pointer; font-family: inherit; }
+    .inline-select:hover { border-color: var(--color-border); background: var(--color-surface); }
+    .inline-date { height: 28px; padding: 0 8px; font-size: 12px; border: 1px solid transparent; background: transparent; border-radius: 6px; color: var(--color-fg-2); cursor: text; font-family: var(--font-mono); width: 110px; }
+    .inline-date:hover, .inline-date:focus { border-color: var(--color-border); background: var(--color-surface); outline: none; }
+    .ckb { width: 16px; height: 16px; accent-color: var(--color-primary); }
+    .bulk-bar { display: none; align-items: center; gap: 10px; padding: 10px 16px; background: var(--color-primary-100); border-bottom: 1px solid var(--color-primary); font-size: 13px; color: var(--color-primary-700); }
+    .bulk-bar.show { display: flex; }
+    .bulk-bar b { font-weight: 600; }
+    .directive-cell { max-width: 480px; }
+    .directive-text { font-size: 13px; line-height: 1.5; color: var(--color-fg); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .directive-meta { font-size: 11.5px; color: var(--color-fg-muted); margin-top: 4px; font-family: var(--font-mono); }
+    .late-row { background: rgba(220, 38, 38, .035); }
+    .late-row:hover { background: rgba(220, 38, 38, .07) !important; }
+    .late-indic { color: var(--color-danger); font-weight: 600; font-family: var(--font-mono); font-size: 12px; }
+    .empty { padding: 60px 20px; text-align: center; color: var(--color-fg-muted); }
+  </style>
+</head>
+<body data-page="bs-liste" data-role="bs">
+<div id="app-content">
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+    <div>
+      <h1 class="page-title">File de travail</h1>
+      <p class="page-sub">Directives ouvertes nécessitant une saisie ou une mise à jour de votre part</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn btn-secondary" type="button"><i data-lucide="filter" class="icon-sm"></i> Filtres avancés</button>
+      <button class="btn btn-secondary" type="button"><i data-lucide="upload" class="icon-sm"></i> Importer</button>
+      <a class="btn btn-primary" href="fiche.html"><i data-lucide="plus" class="icon-sm"></i> Nouvelle directive</a>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+    <div class="tabs" role="tablist">
+      <button class="active" data-tab="ouvertes"><i data-lucide="inbox" class="icon-sm"></i> À traiter <span class="count" id="cnt-ouv">—</span></button>
+      <button data-tab="retard"><i data-lucide="alert-triangle" class="icon-sm"></i> En retard <span class="count" id="cnt-ret">—</span></button>
+      <button data-tab="validation"><i data-lucide="check-circle-2" class="icon-sm"></i> À valider SG <span class="count">3</span></button>
+      <button data-tab="cloturees"><i data-lucide="archive" class="icon-sm"></i> Clôturées <span class="count" id="cnt-clo">—</span></button>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <input class="input" type="text" placeholder="Rechercher dans la file…" style="width:280px" id="f-search">
+      <select class="select" id="f-rencontre"><option value="">Toutes rencontres</option></select>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <div class="bulk-bar" id="bulk-bar">
+      <i data-lucide="check-square" class="icon-sm"></i>
+      <span><b id="bulk-count">0</b> sélectionnée(s)</span>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn btn-sm btn-secondary" type="button"><i data-lucide="check" class="icon-sm"></i> Marquer Réalisée</button>
+        <button class="btn btn-sm btn-secondary" type="button"><i data-lucide="user" class="icon-sm"></i> Assigner</button>
+        <button class="btn btn-sm btn-secondary" type="button"><i data-lucide="download" class="icon-sm"></i> Exporter sélection</button>
+      </div>
+    </div>
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th style="width:36px"><input type="checkbox" class="ckb" id="ckb-all" aria-label="Tout sélectionner"></th>
+          <th style="width:90px">Code</th>
+          <th>Directive</th>
+          <th style="width:130px">Échéance</th>
+          <th style="width:140px">État</th>
+          <th style="width:110px;text-align:right">Retard</th>
+          <th class="col-actions"></th>
+        </tr>
+      </thead>
+      <tbody id="tbl-body"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  const PLAN = window.MHA_DATA.plan;
+  const today = new Date('2026-05-14');
+
+  // Define "ouvertes" = En cours + En attente
+  const ouvertes = PLAN.filter(r => r.ETAT === 'En cours' || r.ETAT === 'En attente');
+  const cloturees = PLAN.filter(r => r.ETAT === 'Réalisée');
+  const retards = ouvertes.filter(r => r.ECHEANCE && parseDate(r.ECHEANCE) < today);
+
+  document.getElementById('cnt-ouv').textContent = ouvertes.length;
+  document.getElementById('cnt-ret').textContent = retards.length;
+  document.getElementById('cnt-clo').textContent = cloturees.length;
+
+  // Rencontre filter for "ouvertes"
+  const rencSet = [...new Set(ouvertes.map(r => r.RENCONTRE).filter(Boolean))].sort();
+  const fr = document.getElementById('f-rencontre');
+  rencSet.forEach(r => fr.insertAdjacentHTML('beforeend', `<option value="${esc(r)}">${esc(capitalize(r)).slice(0,80)}${r.length>80?'…':''}</option>`));
+
+  // State
+  const state = { tab: 'ouvertes', search: '', rencontre: '', selected: new Set() };
+
+  function dataset() {
+    if (state.tab === 'retard') return retards;
+    if (state.tab === 'cloturees') return cloturees;
+    if (state.tab === 'validation') return ouvertes.slice(0, 3);
+    return ouvertes;
+  }
+
+  function render() {
+    let rows = dataset();
+    if (state.search) {
+      const q = state.search.toLowerCase();
+      rows = rows.filter(r => (r.DIRECTIVES||'').toLowerCase().includes(q));
+    }
+    if (state.rencontre) rows = rows.filter(r => r.RENCONTRE === state.rencontre);
+
+    rows = rows.sort((a, b) => {
+      const da = parseDate(a.ECHEANCE || '01-01-2099'); const db = parseDate(b.ECHEANCE || '01-01-2099');
+      return da - db;
+    });
+
+    if (rows.length === 0) {
+      document.getElementById('tbl-body').innerHTML = `<tr><td colspan="7"><div class="empty"><i data-lucide="inbox" style="width:32px;height:32px;color:var(--color-fg-muted);margin-bottom:8px"></i><br>Aucune directive dans cette vue.</div></td></tr>`;
+      if (window.lucide) lucide.createIcons();
+      return;
+    }
+
+    const html = rows.map((r, i) => {
+      const isLate = r.ECHEANCE && parseDate(r.ECHEANCE) < today && (r.ETAT==='En cours' || r.ETAT==='En attente');
+      const retard = isLate ? Math.round((today - parseDate(r.ECHEANCE)) / 86400000) : null;
+      return `<tr class="${isLate?'late-row':''}" data-idx="${i}">
+        <td><input type="checkbox" class="ckb row-ckb" aria-label="Sélectionner"></td>
+        <td><span class="num">${esc(r.CODE_DIRECTIVE||'—')}</span></td>
+        <td class="directive-cell">
+          <div class="directive-text">${esc(r.DIRECTIVES||'')}</div>
+          <div class="directive-meta">${esc(capitalize(r.RENCONTRE||'')).slice(0,90)}${(r.RENCONTRE||'').length>90?'…':''} · ${esc(r.DATE_RENCONTRE||'')}</div>
+        </td>
+        <td><input type="text" class="inline-date" value="${esc(r.ECHEANCE||'')}" title="Modifier l'échéance"></td>
+        <td>${stateSelect(r.ETAT)}</td>
+        <td style="text-align:right">${retard !== null ? `<span class="late-indic">+${retard} j</span>` : `<span style="color:var(--color-fg-muted)">—</span>`}</td>
+        <td class="col-actions">
+          <div class="row-actions">
+            <a href="fiche.html" title="Ouvrir la fiche"><button type="button"><i data-lucide="external-link" class="icon-sm"></i></button></a>
+            <button type="button" title="Ajouter un commentaire"><i data-lucide="message-square" class="icon-sm"></i></button>
+            <button type="button" title="Marquer Réalisée"><i data-lucide="check" class="icon-sm"></i></button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+    document.getElementById('tbl-body').innerHTML = html;
+    if (window.lucide) lucide.createIcons();
+
+    // Wire inline state-select changes for live demo
+    document.querySelectorAll('.inline-select').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const tr = sel.closest('tr');
+        const newState = sel.value;
+        const lateCell = tr.querySelector('.late-indic');
+        // Apply badge color class
+        sel.className = 'inline-select badge-like ' + badgeClass(newState);
+      });
+    });
+
+    // Wire row checkboxes
+    document.querySelectorAll('.row-ckb').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const checkedCount = document.querySelectorAll('.row-ckb:checked').length;
+        document.getElementById('bulk-count').textContent = checkedCount;
+        document.getElementById('bulk-bar').classList.toggle('show', checkedCount > 0);
+      });
+    });
+  }
+
+  // Tabs
+  document.querySelectorAll('.tabs button[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tabs button[data-tab]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.tab = btn.dataset.tab;
+      render();
+    });
+  });
+  // Filters
+  document.getElementById('f-search').addEventListener('input', e => { state.search = e.target.value; render(); });
+  fr.addEventListener('change', e => { state.rencontre = e.target.value; render(); });
+  // Select all
+  document.getElementById('ckb-all').addEventListener('change', e => {
+    document.querySelectorAll('.row-ckb').forEach(cb => { cb.checked = e.target.checked; });
+    const n = document.querySelectorAll('.row-ckb:checked').length;
+    document.getElementById('bulk-count').textContent = n;
+    document.getElementById('bulk-bar').classList.toggle('show', n > 0);
+  });
+
+  render();
+
+  // === Helpers ===
+  function stateSelect(current) {
+    const opts = ['En attente','En cours','Réalisée','Inéligible'];
+    const cls = badgeClass(current);
+    return `<select class="inline-select badge-like ${cls}" aria-label="Modifier l'état">${opts.map(o => `<option ${o===current?'selected':''} value="${o}">${o}</option>`).join('')}</select>`;
+  }
+  function badgeClass(s) { return ({ 'Réalisée':'realisee', 'En cours':'encours', 'En attente':'attente', 'Inéligible':'ineligible' })[s] || 'neutral'; }
+  function parseDate(s) { if (!s) return new Date(0); const p = s.split('-'); if (p.length === 3 && p[0].length === 2) return new Date(`${p[2]}-${p[1]}-${p[0]}`); return new Date(s); }
+  function esc(s) { return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]); }
+  function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : ''; }
+})();
+</script>
+
+<style>
+  /* Style the inline state select to look like a badge */
+  .inline-select.badge-like { font-size: 12px; font-weight: 500; padding: 4px 22px 4px 10px; border-radius: 999px; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><polyline points='6 9 12 15 18 9'/></svg>"); background-repeat: no-repeat; background-position: right 6px center; background-size: 12px; }
+  .inline-select.badge-like.realisee { background-color: var(--color-success-bg); color: var(--color-success); }
+  .inline-select.badge-like.encours { background-color: var(--color-warning-bg); color: var(--color-warning); }
+  .inline-select.badge-like.attente { background-color: var(--color-info-bg); color: var(--color-info); }
+  .inline-select.badge-like.ineligible { background-color: var(--color-neutral-bg); color: var(--color-neutral); }
+</style>
+</body>
+</html>

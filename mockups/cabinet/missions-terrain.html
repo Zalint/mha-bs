@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Suivi missions terrain · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .grid-map { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 1100px) { .grid-map { grid-template-columns: 1fr; } }
+    #map { height: 520px; border-radius: var(--radius-lg); border: 1px solid var(--color-border); overflow: hidden; }
+    .site-list { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+    .site-head { padding: 14px 18px; border-bottom: 1px solid var(--color-border); display: flex; align-items: center; }
+    .site-head h2 { margin: 0; font-size: 14.5px; font-weight: 600; }
+    .site-head .meta { color: var(--color-fg-muted); font-size: 12.5px; margin-left: auto; }
+    .site-item { display: grid; grid-template-columns: 36px 1fr auto; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--color-border); align-items: center; cursor: pointer; transition: background .15s; }
+    .site-item:last-child { border-bottom: 0; }
+    .site-item:hover { background: var(--color-muted); }
+    .site-item .pin { width: 30px; height: 30px; border-radius: 50%; background: var(--color-primary); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; font-family: var(--font-mono); font-size: 12px; flex-shrink: 0; }
+    .site-item .name { font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
+    .site-item .meta { font-size: 11.5px; color: var(--color-fg-muted); margin-top: 2px; font-family: var(--font-mono); }
+    .site-item .desc { font-size: 12.5px; color: var(--color-fg-2); margin-top: 4px; }
+    .leaflet-popup-content { font-family: var(--font-sans); font-size: 12.5px; }
+    .leaflet-popup-content b { font-weight: 600; color: var(--color-primary); }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .photo { aspect-ratio: 4/3; background: linear-gradient(135deg, #94A3B8, #64748B); border-radius: 10px; position: relative; overflow: hidden; cursor: pointer; transition: transform .15s; }
+    .photo:hover { transform: scale(1.02); }
+    .photo::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 50%, rgba(0,0,0,.6) 100%); }
+    .photo .ph-meta { position: absolute; bottom: 0; left: 0; right: 0; padding: 10px; color: #fff; font-size: 12px; }
+    .photo .ph-meta b { display: block; font-weight: 600; font-size: 12.5px; }
+    .photo .ph-meta span { font-family: var(--font-mono); font-size: 10.5px; opacity: .85; }
+    .photo .ph-ic { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,.2); backdrop-filter: blur(6px); color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 10.5px; font-family: var(--font-mono); }
+  </style>
+</head>
+<body data-page="missions" data-role="cabinet">
+<div id="app-content">
+
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+    <div>
+      <h1 class="page-title">Suivi missions terrain</h1>
+      <p class="page-sub">Sites d'ouvrages visités par le MHA · cartographie nationale et observations</p>
+    </div>
+    <a class="btn btn-primary" href="../bs/reunion.html"><i data-lucide="plus" class="icon-sm"></i> Nouvelle mission</a>
+  </div>
+
+  <!-- KPI strip -->
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Missions effectuées</div><div class="kpi-value">4</div><div class="kpi-delta">depuis janvier 2026</div><div class="kpi-icon"><i data-lucide="map-pin"></i></div></div>
+    <div class="kpi"><div class="kpi-label">Sites visités</div><div class="kpi-value">6</div><div class="kpi-delta">ouvrages d'envergure</div><div class="kpi-icon"><i data-lucide="construction"></i></div></div>
+    <div class="kpi"><div class="kpi-label">Régions couvertes</div><div class="kpi-value">3</div><div class="kpi-delta">Dakar · Diourbel · Saint-Louis</div><div class="kpi-icon"><i data-lucide="globe"></i></div></div>
+    <div class="kpi"><div class="kpi-label">Prochaine mission</div><div class="kpi-value" style="font-size:18px">21-05-2026</div><div class="kpi-delta">PDBH · Baie de Hann</div><div class="kpi-icon"><i data-lucide="calendar-clock"></i></div></div>
+  </div>
+
+  <!-- Map + sites list -->
+  <div class="grid-map">
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">Carte nationale des missions</h2>
+          <p class="card-sub">Cliquez sur un site pour voir le détail</p>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-ghost btn-sm"><i data-lucide="layers" class="icon-sm"></i> Couches</button>
+          <button class="btn btn-ghost btn-sm"><i data-lucide="maximize" class="icon-sm"></i> Plein écran</button>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <div class="site-list">
+      <div class="site-head">
+        <h2>Sites visités</h2>
+        <span class="meta">6 sites</span>
+      </div>
+      <div id="sites-body"></div>
+    </div>
+  </div>
+
+  <!-- Galerie photos -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="card-title">Galerie photos · missions récentes</h2>
+        <p class="card-sub">Visite du 11 mai 2026 · Bassins versants Dakar</p>
+      </div>
+      <div class="card-actions">
+        <a class="btn btn-ghost btn-sm">Toutes les photos <i data-lucide="arrow-right" class="icon-sm"></i></a>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="gallery">
+        <div class="photo" style="background:linear-gradient(135deg,#0284C7,#0EA5E9)"><span class="ph-ic">DPGI</span><div class="ph-meta"><b>Keur Massar · PROGEP II</b><span>11-05-2026 · 09h22</span></div></div>
+        <div class="photo" style="background:linear-gradient(135deg,#0891B2,#22D3EE)"><span class="ph-ic">PISEA</span><div class="ph-meta"><b>Tivaoune Peulh</b><span>11-05-2026 · 11h05</span></div></div>
+        <div class="photo" style="background:linear-gradient(135deg,#0369A1,#0284C7)"><span class="ph-ic">ONAS</span><div class="ph-meta"><b>Thiaroye Sur Mer</b><span>11-05-2026 · 14h18</span></div></div>
+        <div class="photo" style="background:linear-gradient(135deg,#06B6D4,#0891B2)"><span class="ph-ic">DPGI</span><div class="ph-meta"><b>APIX Mbao</b><span>11-05-2026 · 16h40</span></div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="../assets/data.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  const sites = [
+    { code: 'KM', name: 'Keur Massar',     coords: [14.7799, -17.3344], project: 'PROGEP II',    date: '11-05-2026', region: 'Dakar',       desc: "Suivi des bassins versant de Mbao. Avancement satisfaisant. Curage à finaliser avant juin." },
+    { code: 'TP', name: 'Tivaouane Peulh', coords: [14.8167, -17.2667], project: 'PISEA / SFI',  date: '11-05-2026', region: 'Dakar',       desc: "Station d'épuration eaux usées (PPP). Études techniques en cours, restructuration BM à finaliser." },
+    { code: 'TS', name: 'Thiaroye Sur Mer',coords: [14.7461, -17.3192], project: 'ONAS',         date: '11-05-2026', region: 'Dakar',       desc: "Réseau d'assainissement. Travaux en cours, taux d'avancement physique à 68%." },
+    { code: 'MB', name: 'APIX Mbao',       coords: [14.7333, -17.3667], project: 'DPGI',         date: '11-05-2026', region: 'Dakar',       desc: "Ouvrages anti-inondations. Maintenance des stations de pompage avant hivernage." },
+    { code: 'TB', name: 'Touba',           coords: [14.85, -15.88],     project: 'ONAS',         date: 'À planifier',region: 'Diourbel',    desc: "Travaux drainage en cours. Plan d'actions à finaliser avant le 15 mai 2026." },
+    { code: 'RT', name: 'Richard-Toll',    coords: [16.4625, -15.7008], project: 'PISEA / OLAC', date: 'À planifier',region: 'Saint-Louis', desc: "Endiguements Lac de Guiers. Passation des marchés en cours." },
+  ];
+
+  // Map
+  const map = L.map('map', { zoomControl: true, scrollWheelZoom: true }).setView([15.5, -15.5], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 18 }).addTo(map);
+  const primaryIcon = L.divIcon({
+    className: '',
+    html: '<div style="background:#0284C7;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);font-family:Fira Mono,monospace">●</div>',
+    iconSize: [28,28], iconAnchor: [14,14]
+  });
+  sites.forEach(s => {
+    L.marker(s.coords, { icon: primaryIcon }).addTo(map).bindPopup(
+      `<b>${s.name}</b><br><span style="color:#64748B">${s.project}</span><br><span style="font-family:Fira Mono,monospace;font-size:11px">${s.date} · ${s.region}</span><br>${s.desc}`
+    );
+  });
+
+  // Sidebar list
+  document.getElementById('sites-body').innerHTML = sites.map(s => `
+    <div class="site-item" data-coords="${s.coords[0]},${s.coords[1]}">
+      <div class="pin">${s.code}</div>
+      <div>
+        <div class="name">${esc(s.name)}</div>
+        <div class="meta">${esc(s.project)} · ${esc(s.region)} · ${esc(s.date)}</div>
+        <div class="desc">${esc(s.desc).slice(0, 90)}${s.desc.length > 90 ? '…' : ''}</div>
+      </div>
+      <i data-lucide="chevron-right" style="color:var(--color-fg-muted)"></i>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.site-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const [lat, lng] = el.dataset.coords.split(',').map(Number);
+      map.setView([lat, lng], 13, { animate: true });
+    });
+  });
+
+  if (window.lucide) lucide.createIcons();
+  function esc(s) { return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]); }
+})();
+</script>
+</body>
+</html>

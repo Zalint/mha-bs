@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Fiche recommandation · BS · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .form-grid { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+    @media (max-width: 1100px) { .form-grid { grid-template-columns: 1fr; } }
+    .form-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+    .form-section { padding: 20px; border-bottom: 1px solid var(--color-border); }
+    .form-section:last-child { border-bottom: 0; }
+    .form-section h3 { margin: 0 0 16px; font-size: 13px; font-weight: 600; color: var(--color-fg); text-transform: uppercase; letter-spacing: .04em; display: flex; align-items: center; gap: 8px; }
+    .form-section h3 .num { background: var(--color-primary-100); color: var(--color-primary); width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    textarea.input, .input.textarea { width: 100%; min-height: 92px; padding: 10px 12px; font-family: inherit; font-size: 13.5px; line-height: 1.5; resize: vertical; }
+    .input, .select { width: 100%; }
+    .req::after { content: ' *'; color: var(--color-danger); }
+    .state-radios { display: flex; gap: 8px; flex-wrap: wrap; }
+    .state-radio { position: relative; }
+    .state-radio input { position: absolute; opacity: 0; pointer-events: none; }
+    .state-radio label { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--color-border); border-radius: 8px; font-size: 13px; cursor: pointer; background: var(--color-surface); transition: all .15s; }
+    .state-radio input:checked + label { background: var(--color-primary-100); border-color: var(--color-primary); color: var(--color-primary-700); font-weight: 500; }
+    .state-radio.success input:checked + label { background: var(--color-success-bg); border-color: var(--color-success); color: var(--color-success); }
+    .state-radio.warning input:checked + label { background: var(--color-warning-bg); border-color: var(--color-warning); color: var(--color-warning); }
+    .state-radio.danger input:checked + label { background: var(--color-danger-bg); border-color: var(--color-danger); color: var(--color-danger); }
+    .state-radio.neutral input:checked + label { background: var(--color-neutral-bg); border-color: var(--color-neutral); color: var(--color-neutral); }
+    .side-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 16px; }
+    .side-card h4 { margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .meta-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px dashed var(--color-border); }
+    .meta-row:last-child { border-bottom: 0; }
+    .meta-row .k { color: var(--color-fg-muted); }
+    .meta-row .v { font-weight: 500; color: var(--color-fg); }
+    .meta-row .num { font-family: var(--font-mono); }
+    .workflow-steps { display: flex; flex-direction: column; gap: 10px; }
+    .wf-step { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; align-items: flex-start; }
+    .wf-step .wf-num { width: 26px; height: 26px; border-radius: 50%; background: var(--color-muted); color: var(--color-fg-muted); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; font-family: var(--font-mono); flex-shrink: 0; }
+    .wf-step.done .wf-num { background: var(--color-success); color: #fff; }
+    .wf-step.current { border-color: var(--color-primary); background: rgba(2,132,199,.04); }
+    .wf-step.current .wf-num { background: var(--color-primary); color: #fff; }
+    .wf-step .wf-label { font-size: 13px; font-weight: 500; }
+    .wf-step .wf-meta { font-size: 11.5px; color: var(--color-fg-muted); margin-top: 2px; font-family: var(--font-mono); }
+    .timeline { position: relative; padding-left: 24px; }
+    .timeline::before { content: ''; position: absolute; left: 9px; top: 4px; bottom: 4px; width: 2px; background: var(--color-border); }
+    .tl-event { position: relative; padding-bottom: 16px; }
+    .tl-event::before { content: ''; position: absolute; left: -20px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--color-surface); border: 2px solid var(--color-primary); }
+    .tl-event .tl-when { font-size: 11.5px; color: var(--color-fg-muted); font-family: var(--font-mono); }
+    .tl-event .tl-what { font-size: 13px; color: var(--color-fg-2); margin-top: 2px; }
+    .tl-event .tl-who { font-size: 11.5px; color: var(--color-fg-muted); margin-top: 2px; }
+    .comment-box { background: var(--color-muted); border-radius: 8px; padding: 12px; margin-top: 12px; font-size: 13px; }
+    .comment-box .ch { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .comment-box .ch .avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--color-primary); color: #fff; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+    .comment-box .ch b { font-weight: 600; font-size: 12.5px; }
+    .comment-box .ch .when { color: var(--color-fg-muted); font-size: 11.5px; margin-left: auto; font-family: var(--font-mono); }
+    .sticky-actions { position: sticky; bottom: 0; background: var(--color-surface); border-top: 1px solid var(--color-border); padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 24px; border-radius: 0 0 var(--radius-lg) var(--radius-lg); }
+    .sticky-actions .status-info { font-size: 12.5px; color: var(--color-fg-muted); display: flex; align-items: center; gap: 6px; }
+    .header-strip { display: flex; gap: 12px; align-items: center; margin-bottom: 4px; }
+    .code-pill { background: var(--color-muted); padding: 4px 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--color-fg-2); }
+  </style>
+</head>
+<body data-page="bs-fiche" data-role="bs">
+<div id="app-content">
+
+  <a href="liste.html" style="display:inline-flex;align-items:center;gap:6px;color:var(--color-fg-muted);font-size:13px;margin-bottom:12px"><i data-lucide="arrow-left" class="icon-sm"></i> Retour à la file de travail</a>
+
+  <div class="header-strip">
+    <span class="code-pill">CM20250507-0042</span>
+    <span class="badge encours"><span class="dot"></span>En cours</span>
+    <span style="color:var(--color-fg-muted);font-size:12.5px">Modifié il y a <b style="color:var(--color-fg-2)">12 min</b> par <b style="color:var(--color-fg-2)">Aminata DIALLO</b></span>
+  </div>
+  <h1 class="page-title">Fiche recommandation</h1>
+  <p class="page-sub">Édition complète d'une directive · les modifications sont sauvegardées automatiquement</p>
+
+  <form class="form-grid" onsubmit="event.preventDefault(); alert('Maquette : enregistrement non câblé.')">
+    <!-- ========== Colonne principale ========== -->
+    <div class="form-card">
+
+      <div class="form-section">
+        <h3><span class="num">1</span> Rencontre source</h3>
+        <div class="row-3">
+          <div class="field">
+            <label class="field-label req" for="f-annee">Année</label>
+            <select id="f-annee" class="select">
+              <option>2026</option><option selected>2025</option><option>2024</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label req" for="f-type">Type de rencontre</label>
+            <select id="f-type" class="select">
+              <option>Conseil hebdomadaire des Ministres</option>
+              <option selected>Conseils / réunions interministériels</option>
+              <option>Coordination MSGG/SG</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label req" for="f-date">Date de la rencontre</label>
+            <input id="f-date" class="input" type="text" value="07-05-2025" style="font-family:var(--font-mono)">
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label req" for="f-renc">Intitulé de la rencontre</label>
+          <input id="f-renc" class="input" type="text" value="CONSEIL INTERMINISTERIEL SUR L'APPROVISIONNEMENT EN EAU POTABLE">
+          <p class="field-help">Sélectionnez une rencontre existante ou créez-en une nouvelle.</p>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3><span class="num">2</span> Directive</h3>
+        <div class="field">
+          <label class="field-label req" for="f-code">Code directive</label>
+          <input id="f-code" class="input" type="text" value="CM20250507-0042" style="font-family:var(--font-mono);max-width:240px">
+          <p class="field-help">Format : <code style="font-family:var(--font-mono)">CM{date}-{NNNN}</code>. Généré automatiquement à la création.</p>
+        </div>
+        <div class="field">
+          <label class="field-label req" for="f-text">Texte de la directive</label>
+          <textarea id="f-text" class="input textarea" rows="5">Accélérer significativement la mise en œuvre du programme d'approvisionnement en eau potable des zones rurales et urbaines, en lien avec la SONES et la SEN'EAU, et garantir un suivi mensuel des indicateurs d'accès. Un point d'étape sera présenté au Conseil avant la fin du troisième trimestre 2025.</textarea>
+        </div>
+        <div class="row-2">
+          <div class="field">
+            <label class="field-label req">Responsable</label>
+            <select class="select"><option selected>Ministère de l'Hydraulique et de l'Assainissement</option></select>
+          </div>
+          <div class="field">
+            <label class="field-label">Ministères associés</label>
+            <select class="select" multiple style="height:auto;min-height:36px" size="3">
+              <option selected>MHA</option><option>MEPC</option><option>MFB</option><option>MASAE</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3><span class="num">3</span> Suivi d'exécution</h3>
+        <div class="field">
+          <label class="field-label req">État</label>
+          <div class="state-radios" role="radiogroup" aria-label="État d'exécution">
+            <span class="state-radio"><input type="radio" name="etat" id="et-att"><label for="et-att"><i data-lucide="clock" class="icon-sm"></i> En attente</label></span>
+            <span class="state-radio warning"><input type="radio" name="etat" id="et-cou" checked><label for="et-cou"><i data-lucide="loader-2" class="icon-sm"></i> En cours</label></span>
+            <span class="state-radio success"><input type="radio" name="etat" id="et-rea"><label for="et-rea"><i data-lucide="check-circle-2" class="icon-sm"></i> Réalisée</label></span>
+            <span class="state-radio neutral"><input type="radio" name="etat" id="et-ine"><label for="et-ine"><i data-lucide="minus-circle" class="icon-sm"></i> Inéligible</label></span>
+          </div>
+        </div>
+        <div class="row-3">
+          <div class="field"><label class="field-label">Échéance</label><input class="input" type="text" value="30-09-2025" style="font-family:var(--font-mono)"></div>
+          <div class="field"><label class="field-label">Début d'exécution</label><input class="input" type="text" value="15-05-2025" style="font-family:var(--font-mono)"></div>
+          <div class="field"><label class="field-label">Fin d'exécution</label><input class="input" type="text" value="" placeholder="—" style="font-family:var(--font-mono)"></div>
+        </div>
+        <div class="row-2">
+          <div class="field"><label class="field-label">Type de cause (si retard)</label><select class="select"><option>—</option><option>Coordination interministérielle</option><option>Mobilisation des financements</option><option>Procédure passation des marchés</option><option>Étude technique</option><option>Autre</option></select></div>
+          <div class="field"><label class="field-label">Dernière date de traitement</label><input class="input" type="text" value="14-05-2026" style="font-family:var(--font-mono)" readonly></div>
+        </div>
+        <div class="field">
+          <label class="field-label" for="f-comm">Commentaires de suivi</label>
+          <textarea id="f-comm" class="input textarea" rows="3" placeholder="Décrivez l'avancement, les blocages, les prochaines étapes…">Coordination engagée avec la SONES. Convention de mise en œuvre signée le 28 avril 2025. Première tranche budgétaire mobilisée à 60%.</textarea>
+        </div>
+      </div>
+
+      <!-- Sticky actions -->
+      <div class="sticky-actions">
+        <div class="status-info"><i data-lucide="check" class="icon-sm" style="color:var(--color-success)"></i> Brouillon enregistré · <span class="num">12:42</span></div>
+        <div style="display:flex;gap:8px">
+          <a class="btn btn-ghost" href="liste.html">Annuler</a>
+          <button class="btn btn-secondary" type="button"><i data-lucide="save" class="icon-sm"></i> Enregistrer brouillon</button>
+          <button class="btn btn-primary" type="submit"><i data-lucide="send" class="icon-sm"></i> Soumettre à validation SG</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== Colonne latérale ========== -->
+    <div>
+
+      <!-- Workflow -->
+      <div class="side-card">
+        <h4>Workflow de validation</h4>
+        <div class="workflow-steps">
+          <div class="wf-step done"><div class="wf-num"><i data-lucide="check" class="icon-sm"></i></div><div><div class="wf-label">Création BS</div><div class="wf-meta">14-05-2026 · Saliou D.</div></div></div>
+          <div class="wf-step current"><div class="wf-num">2</div><div><div class="wf-label">Saisie en cours</div><div class="wf-meta">Modifié il y a 12 min</div></div></div>
+          <div class="wf-step"><div class="wf-num">3</div><div><div class="wf-label">Validation SG</div><div class="wf-meta">en attente</div></div></div>
+          <div class="wf-step"><div class="wf-num">4</div><div><div class="wf-label">Clôture</div><div class="wf-meta">—</div></div></div>
+        </div>
+      </div>
+
+      <!-- Métadonnées calculées -->
+      <div class="side-card">
+        <h4>Indicateurs calculés</h4>
+        <div class="meta-row"><span class="k">Jours de traitement prévus</span><span class="v num">138 j</span></div>
+        <div class="meta-row"><span class="k">Jours de traitement réels</span><span class="v num">365 j</span></div>
+        <div class="meta-row"><span class="k">Retard sur échéance</span><span class="v num" style="color:var(--color-danger)">+227 j</span></div>
+        <div class="meta-row"><span class="k">Jours retard démarrage</span><span class="v num">7 j</span></div>
+      </div>
+
+      <!-- Historique -->
+      <div class="side-card">
+        <h4>Historique de traitement</h4>
+        <div class="timeline">
+          <div class="tl-event">
+            <div class="tl-when">14-05-2026 · 12:42</div>
+            <div class="tl-what">Mise à jour des commentaires</div>
+            <div class="tl-who">Aminata DIALLO</div>
+          </div>
+          <div class="tl-event">
+            <div class="tl-when">02-04-2026 · 16:08</div>
+            <div class="tl-what">Statut passé à <b>En cours</b></div>
+            <div class="tl-who">Saliou D.</div>
+          </div>
+          <div class="tl-event">
+            <div class="tl-when">15-05-2025 · 09:14</div>
+            <div class="tl-what">Création de la directive</div>
+            <div class="tl-who">Aminata DIALLO</div>
+          </div>
+        </div>
+        <div class="comment-box">
+          <div class="ch"><div class="avatar">SD</div><b>Saliou D.</b><span class="when">il y a 2 j</span></div>
+          <div>Relance envoyée à la SONES pour le point d'étape. Réponse attendue avant le 20 mai.</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px;width:100%" type="button"><i data-lucide="plus" class="icon-sm"></i> Ajouter un commentaire</button>
+      </div>
+
+      <!-- Actions secondaires -->
+      <div class="side-card">
+        <h4>Actions</h4>
+        <button class="btn btn-secondary btn-sm" style="width:100%;justify-content:flex-start;margin-bottom:8px" type="button"><i data-lucide="paperclip" class="icon-sm"></i> Joindre un document</button>
+        <button class="btn btn-secondary btn-sm" style="width:100%;justify-content:flex-start;margin-bottom:8px" type="button"><i data-lucide="link" class="icon-sm"></i> Lier à un projet COPIL</button>
+        <button class="btn btn-secondary btn-sm" style="width:100%;justify-content:flex-start;margin-bottom:8px" type="button"><i data-lucide="copy" class="icon-sm"></i> Dupliquer</button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:flex-start;color:var(--color-danger)" type="button"><i data-lucide="trash-2" class="icon-sm"></i> Supprimer</button>
+      </div>
+
+    </div>
+  </form>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../assets/shell.js"></script>
+</body>
+</html>

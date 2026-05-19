@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Export & rapports · BS · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: start; }
+    @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; } }
+    .tpl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 22px; }
+    .tpl { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; cursor: pointer; transition: all .15s; display: flex; flex-direction: column; gap: 8px; position: relative; }
+    .tpl:hover { border-color: var(--color-primary); }
+    .tpl.active { border-color: var(--color-primary); background: rgba(2,132,199,.04); box-shadow: 0 0 0 3px rgba(2,132,199,.10); }
+    .tpl .tpl-ic { width: 36px; height: 36px; border-radius: 8px; background: var(--color-primary-100); color: var(--color-primary); display: flex; align-items: center; justify-content: center; }
+    .tpl .tpl-name { font-size: 13.5px; font-weight: 600; color: var(--color-fg); }
+    .tpl .tpl-desc { font-size: 12px; color: var(--color-fg-muted); line-height: 1.4; }
+    .tpl .tpl-meta { font-size: 11px; color: var(--color-fg-muted); font-family: var(--font-mono); margin-top: auto; padding-top: 6px; }
+    .tpl .tpl-badge { position: absolute; top: 10px; right: 10px; }
+
+    .builder { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+    .builder-section { padding: 18px 20px; border-bottom: 1px solid var(--color-border); }
+    .builder-section:last-child { border-bottom: 0; }
+    .builder-section h3 { margin: 0 0 12px; font-size: 13px; font-weight: 600; color: var(--color-fg); text-transform: uppercase; letter-spacing: .04em; }
+    .check-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+    .check-list label { display: flex; gap: 8px; align-items: center; padding: 7px 10px; background: var(--color-muted); border-radius: 6px; font-size: 13px; cursor: pointer; transition: background .15s; }
+    .check-list label:hover { background: var(--color-primary-100); }
+    .check-list label input { accent-color: var(--color-primary); }
+
+    .preview-pane { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 22px; position: sticky; top: calc(var(--header-h) + 16px); }
+    .preview-pane h4 { margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .doc-thumb { background: #fff; border: 1px solid var(--color-border); border-radius: 8px; padding: 22px; box-shadow: var(--shadow-sm); margin-bottom: 14px; min-height: 320px; position: relative; }
+    .doc-thumb::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--color-primary); border-radius: 8px 8px 0 0; }
+    .doc-thumb h5 { font-size: 14px; font-weight: 700; color: var(--color-fg); margin: 0 0 4px; }
+    .doc-thumb .doc-sub { font-size: 11px; color: var(--color-fg-muted); margin-bottom: 14px; font-family: var(--font-mono); }
+    .doc-thumb .doc-section { margin-bottom: 14px; }
+    .doc-thumb .doc-section h6 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--color-primary); margin: 0 0 4px; }
+    .doc-thumb .doc-section .line { height: 4px; background: var(--color-muted); border-radius: 2px; margin-bottom: 4px; }
+    .doc-thumb .doc-section .line.short { width: 60%; }
+    .doc-thumb .doc-section .line.med { width: 80%; }
+    .doc-thumb .kpi-block { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+    .doc-thumb .kpi-block .b { background: var(--color-muted); border-radius: 4px; padding: 6px; text-align: center; }
+    .doc-thumb .kpi-block .b .v { font-family: var(--font-mono); font-weight: 600; font-size: 14px; color: var(--color-fg); }
+    .doc-thumb .kpi-block .b .k { font-size: 8px; color: var(--color-fg-muted); text-transform: uppercase; }
+    .doc-thumb .chart-block { background: var(--color-muted); border-radius: 4px; padding: 12px; height: 60px; display: flex; align-items: flex-end; gap: 4px; }
+    .doc-thumb .chart-block .bar { width: 8px; background: var(--color-primary); border-radius: 2px 2px 0 0; }
+
+    .schedule-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .schedule-table th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--color-fg-muted); border-bottom: 1px solid var(--color-border); background: var(--color-surface-2); }
+    .schedule-table td { padding: 10px; border-bottom: 1px solid var(--color-border); }
+    .schedule-table tr:last-child td { border-bottom: 0; }
+
+    .history-row { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--color-border); align-items: center; }
+    .history-row:last-child { border-bottom: 0; }
+    .history-row .h-ic { color: var(--color-primary); }
+    .history-row .h-name { font-size: 13px; font-weight: 500; color: var(--color-fg); }
+    .history-row .h-meta { font-size: 11.5px; color: var(--color-fg-muted); font-family: var(--font-mono); margin-top: 2px; }
+  </style>
+</head>
+<body data-page="bs-export" data-role="bs">
+<div id="app-content">
+
+  <h1 class="page-title">Export & rapports</h1>
+  <p class="page-sub">Générer des rapports formatés pour le SG ou exporter les données brutes (Excel, PDF, CSV).</p>
+
+  <!-- Templates -->
+  <h2 style="font-size:14px;font-weight:600;margin:0 0 8px;color:var(--color-fg-muted);text-transform:uppercase;letter-spacing:.05em">Modèles de rapport</h2>
+  <div class="tpl-grid">
+    <div class="tpl active">
+      <div class="tpl-ic"><i data-lucide="calendar-clock"></i></div>
+      <div class="tpl-name">Rapport hebdomadaire</div>
+      <div class="tpl-desc">Synthèse 7 jours : nouvelles directives, avancement, retards, points d'attention</div>
+      <div class="tpl-meta">Word · ≈ 4 pages</div>
+      <span class="badge realisee tpl-badge"><span class="dot"></span>Auto le lundi</span>
+    </div>
+    <div class="tpl">
+      <div class="tpl-ic"><i data-lucide="calendar"></i></div>
+      <div class="tpl-name">Rapport mensuel</div>
+      <div class="tpl-desc">Bilan complet du mois écoulé avec KPIs, graphiques, recommandations clôturées</div>
+      <div class="tpl-meta">Word · ≈ 12 pages</div>
+      <span class="badge realisee tpl-badge"><span class="dot"></span>Auto le 1er</span>
+    </div>
+    <div class="tpl">
+      <div class="tpl-ic"><i data-lucide="file-text"></i></div>
+      <div class="tpl-name">Note au SG</div>
+      <div class="tpl-desc">Note d'information ad-hoc sur un module ou un point précis</div>
+      <div class="tpl-meta">Word · 2 pages</div>
+    </div>
+    <div class="tpl">
+      <div class="tpl-ic"><i data-lucide="file-spreadsheet"></i></div>
+      <div class="tpl-name">Export Excel complet</div>
+      <div class="tpl-desc">L'ensemble des données reproduites au format Excel d'origine</div>
+      <div class="tpl-meta">Excel · 6 feuilles</div>
+    </div>
+    <div class="tpl">
+      <div class="tpl-ic"><i data-lucide="presentation"></i></div>
+      <div class="tpl-name">Présentation SG</div>
+      <div class="tpl-desc">Slides de synthèse pour réunion de cabinet ou Conseil</div>
+      <div class="tpl-meta">PowerPoint · 8 slides</div>
+    </div>
+    <div class="tpl">
+      <div class="tpl-ic"><i data-lucide="database"></i></div>
+      <div class="tpl-name">Export CSV brut</div>
+      <div class="tpl-desc">Données techniques pour analyse externe (BI, Excel, Python)</div>
+      <div class="tpl-meta">CSV / UTF-8</div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- Builder -->
+    <div class="builder">
+      <div class="builder-section">
+        <h3>Modèle sélectionné</h3>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px;background:var(--color-primary-100);border-radius:10px;border:1px solid var(--color-primary)">
+          <i data-lucide="calendar-clock" class="icon-lg" style="color:var(--color-primary)"></i>
+          <div style="flex:1">
+            <div style="font-weight:600;color:var(--color-primary-700);font-size:14px">Rapport hebdomadaire</div>
+            <div style="font-size:12.5px;color:var(--color-fg-muted)">Synthèse 7 jours · Word ≈ 4 pages · auto le lundi 8h00</div>
+          </div>
+          <button class="btn btn-ghost btn-sm"><i data-lucide="settings" class="icon-sm"></i></button>
+        </div>
+      </div>
+
+      <div class="builder-section">
+        <h3>Période</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <div><label class="field-label">Du</label><input class="input" type="text" value="08-05-2026" style="font-family:var(--font-mono);width:140px"></div>
+          <div><label class="field-label">Au</label><input class="input" type="text" value="14-05-2026" style="font-family:var(--font-mono);width:140px"></div>
+          <div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="filter-chip active">7 derniers jours</button>
+            <button class="filter-chip">30 jours</button>
+            <button class="filter-chip">Mois en cours</button>
+            <button class="filter-chip">Trimestre</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="builder-section">
+        <h3>Modules à inclure</h3>
+        <div class="check-list">
+          <label><input type="checkbox" checked> Recommandations CM/CI/SG</label>
+          <label><input type="checkbox" checked> COPIL (5 comités)</label>
+          <label><input type="checkbox" checked> CNGI Inondations 2026</label>
+          <label><input type="checkbox" checked> Réformes (Assainissement + Institutionnelle)</label>
+          <label><input type="checkbox"> Réunions techniques</label>
+          <label><input type="checkbox"> Missions terrain</label>
+        </div>
+      </div>
+
+      <div class="builder-section">
+        <h3>Sections du document</h3>
+        <div class="check-list">
+          <label><input type="checkbox" checked> Page de couverture</label>
+          <label><input type="checkbox" checked> Synthèse exécutive</label>
+          <label><input type="checkbox" checked> KPIs et indicateurs</label>
+          <label><input type="checkbox" checked> Graphiques (Chart.js → PNG)</label>
+          <label><input type="checkbox" checked> Top retards</label>
+          <label><input type="checkbox" checked> Recommandations clôturées</label>
+          <label><input type="checkbox" checked> Recommandations à venir</label>
+          <label><input type="checkbox"> Annexes (détails par direction)</label>
+        </div>
+      </div>
+
+      <div class="builder-section">
+        <h3>Destinataires</h3>
+        <div style="margin-bottom:10px"><div class="chips-input" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;min-height:38px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface)">
+          <span class="pill">SG du Ministre <button type="button" style="background:transparent;border:0;color:inherit;cursor:pointer">×</button></span>
+          <span class="pill">SG MHA <button type="button" style="background:transparent;border:0;color:inherit;cursor:pointer">×</button></span>
+          <span class="pill">Directeurs (cc) <button type="button" style="background:transparent;border:0;color:inherit;cursor:pointer">×</button></span>
+          <input type="text" placeholder="Ajouter un destinataire…" style="border:0;outline:0;flex:1;min-width:120px;font-family:inherit;font-size:13px;background:transparent">
+        </div></div>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:6px 0"><input type="checkbox" checked> Envoyer par email à la génération</label>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:6px 0"><input type="checkbox"> Verrouiller le document (PDF protégé)</label>
+      </div>
+
+      <div class="builder-section" style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-secondary"><i data-lucide="save" class="icon-sm"></i> Enregistrer le modèle</button>
+        <button class="btn btn-secondary"><i data-lucide="eye" class="icon-sm"></i> Aperçu complet</button>
+        <button class="btn btn-primary"><i data-lucide="download" class="icon-sm"></i> Générer & télécharger</button>
+      </div>
+    </div>
+
+    <!-- Preview -->
+    <div>
+      <div class="preview-pane">
+        <h4>Aperçu du document</h4>
+        <div class="doc-thumb">
+          <h5>Rapport hebdomadaire</h5>
+          <div class="doc-sub">Semaine du 08-05 au 14-05-2026 · MHA / Bureau de Suivi</div>
+          <div class="doc-section">
+            <h6>Synthèse</h6>
+            <div class="line med"></div><div class="line"></div><div class="line short"></div>
+          </div>
+          <div class="kpi-block">
+            <div class="b"><div class="v">86.9%</div><div class="k">Exécution</div></div>
+            <div class="b"><div class="v">198</div><div class="k">Directives</div></div>
+            <div class="b"><div class="v">+2.4</div><div class="k">vs mois -1</div></div>
+          </div>
+          <div class="doc-section">
+            <h6>Évolution</h6>
+            <div class="chart-block"><span class="bar" style="height:30%"></span><span class="bar" style="height:55%"></span><span class="bar" style="height:42%"></span><span class="bar" style="height:70%"></span><span class="bar" style="height:60%"></span><span class="bar" style="height:85%"></span><span class="bar" style="height:75%"></span></div>
+          </div>
+          <div class="doc-section">
+            <h6>Top 3 retards</h6>
+            <div class="line"></div><div class="line med"></div><div class="line short"></div>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" style="width:100%"><i data-lucide="maximize" class="icon-sm"></i> Aperçu plein écran</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Schedule + history -->
+  <div class="grid-2" style="margin-top:24px">
+    <div class="card">
+      <div class="card-header"><div><h2 class="card-title">Programmations actives</h2><p class="card-sub">Rapports générés automatiquement</p></div><div class="card-actions"><button class="btn btn-ghost btn-sm"><i data-lucide="plus" class="icon-sm"></i> Nouvelle</button></div></div>
+      <div class="card-body" style="padding:0">
+        <table class="schedule-table">
+          <thead><tr><th>Modèle</th><th>Fréquence</th><th>Prochain</th><th>État</th></tr></thead>
+          <tbody>
+            <tr><td><b>Rapport hebdomadaire</b><div style="font-size:11.5px;color:var(--color-fg-muted)">SG · Directeurs</div></td><td>Lundi 8h00</td><td class="num">19-05-2026</td><td><span class="badge realisee"><span class="dot"></span>Active</span></td></tr>
+            <tr><td><b>Rapport mensuel</b><div style="font-size:11.5px;color:var(--color-fg-muted)">SG · Ministre</div></td><td>1er du mois 7h00</td><td class="num">01-06-2026</td><td><span class="badge realisee"><span class="dot"></span>Active</span></td></tr>
+            <tr><td><b>Alerte critique</b><div style="font-size:11.5px;color:var(--color-fg-muted)">BS uniquement</div></td><td>Quotidien 8h00</td><td class="num">15-05-2026</td><td><span class="badge realisee"><span class="dot"></span>Active</span></td></tr>
+            <tr><td><b>Note SG · CNGI</b><div style="font-size:11.5px;color:var(--color-fg-muted)">SG · DPGI</div></td><td>Hebdomadaire</td><td class="num">17-05-2026</td><td><span class="badge attente"><span class="dot"></span>Suspendue</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div><h2 class="card-title">Derniers exports</h2><p class="card-sub">Historique des 5 dernières générations</p></div><div class="card-actions"><a class="btn btn-ghost btn-sm">Tout voir <i data-lucide="arrow-right" class="icon-sm"></i></a></div></div>
+      <div class="card-body">
+        <div class="history-row"><i data-lucide="file-text" class="h-ic"></i><div><div class="h-name">Rapport hebdomadaire · S19</div><div class="h-meta">12-05-2026 · 8h02 · 412 Ko</div></div><button class="btn btn-ghost btn-sm"><i data-lucide="download" class="icon-sm"></i></button></div>
+        <div class="history-row"><i data-lucide="file-spreadsheet" class="h-ic"></i><div><div class="h-name">Export Excel complet</div><div class="h-meta">11-05-2026 · 16h44 · Saliou D. · 1.2 Mo</div></div><button class="btn btn-ghost btn-sm"><i data-lucide="download" class="icon-sm"></i></button></div>
+        <div class="history-row"><i data-lucide="file-text" class="h-ic"></i><div><div class="h-name">Note SG · CNGI Avril 2026</div><div class="h-meta">08-05-2026 · 10h12 · 218 Ko</div></div><button class="btn btn-ghost btn-sm"><i data-lucide="download" class="icon-sm"></i></button></div>
+        <div class="history-row"><i data-lucide="file-text" class="h-ic"></i><div><div class="h-name">Rapport hebdomadaire · S18</div><div class="h-meta">05-05-2026 · 8h01 · 398 Ko</div></div><button class="btn btn-ghost btn-sm"><i data-lucide="download" class="icon-sm"></i></button></div>
+        <div class="history-row"><i data-lucide="presentation" class="h-ic"></i><div><div class="h-name">Présentation SG · Conseil 30-04</div><div class="h-meta">29-04-2026 · 14h22 · Aminata D. · 2.4 Mo</div></div><button class="btn btn-ghost btn-sm"><i data-lucide="download" class="icon-sm"></i></button></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../assets/shell.js"></script>
+<script>
+(function () {
+  document.querySelectorAll('.tpl').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tpl').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.filter-chip').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('.filter-chip').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+    });
+  });
+})();
+</script>
+</body>
+</html>

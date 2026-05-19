@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MHA · Bureau de Suivi — Maquettes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css">
+  <style>
+    .hero { background: linear-gradient(135deg, #0284C7 0%, #06B6D4 100%); color: #fff; padding: 56px 32px; border-radius: 16px; margin-bottom: 32px; }
+    .hero h1 { font-size: 32px; font-weight: 700; margin: 0 0 8px; letter-spacing: -.015em; }
+    .hero p { font-size: 15px; opacity: .92; max-width: 720px; margin: 0; }
+    .deck { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .tile { background: #fff; border: 1px solid var(--color-border); border-radius: 14px; padding: 20px; transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease; display: block; color: inherit; }
+    .tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: var(--color-primary); }
+    .tile .icon-wrap { width: 40px; height: 40px; border-radius: 10px; background: var(--color-primary-100); color: var(--color-primary); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+    .tile h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: var(--color-fg); }
+    .tile p { margin: 0; font-size: 13px; color: var(--color-fg-muted); }
+    .section-title { font-size: 12px; font-weight: 600; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .08em; margin: 28px 0 12px; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+    .badge-soft { background: rgba(255,255,255,.18); padding: 4px 10px; font-size: 12px; border-radius: 999px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px">
+        <span class="badge-soft">Maquettes</span>
+        <span class="badge-soft">13 écrans</span>
+        <span class="badge-soft">POC</span>
+      </div>
+      <h1>Outil de suivi du Bureau de Suivi · MHA</h1>
+      <p>Sommaire des maquettes cliquables. 13 écrans navigables couvrant la vue SG (lecture, dashboards) et la vue BS (saisie, gestion). Données réelles extraites de la base actuelle (198 directives, 5 COPIL, 11 recommandations CNGI, 13 recommandations réformes).</p>
+    </div>
+
+    <div class="section-title">Vue SG · Lecture & dashboards</div>
+    <div class="deck">
+      <a class="tile" href="cabinet/dashboard.html">
+        <div class="icon-wrap"><i data-lucide="layout-dashboard"></i></div>
+        <h3>Dashboard global</h3>
+        <p>KPIs, taux d'exécution, retards, répartition par module.</p>
+      </a>
+      <a class="tile" href="cabinet/conseil-ministres.html">
+        <div class="icon-wrap"><i data-lucide="landmark"></i></div>
+        <h3>Directive présidentielle</h3>
+        <p>3 sources : Conseil des ministres (123), Conseil inter-ministériel (65), Coordination SG (10).</p>
+      </a>
+    </div>
+
+    <div class="section-title">Vue Bureau de Suivi · Saisie & gestion</div>
+    <div class="deck">
+      <a class="tile" href="bs/liste.html">
+        <div class="icon-wrap"><i data-lucide="inbox"></i></div>
+        <h3>File de travail</h3>
+        <p>Liste dense des recommandations à traiter, édition inline.</p>
+      </a>
+      <a class="tile" href="bs/fiche.html">
+        <div class="icon-wrap"><i data-lucide="file-plus"></i></div>
+        <h3>Fiche recommandation</h3>
+        <p>Formulaire complet de saisie/édition avec workflow validation.</p>
+      </a>
+    </div>
+
+    <div class="section-title">Vue SG · Modules thématiques</div>
+    <div class="deck">
+      <a class="tile" href="cabinet/copil.html"><div class="icon-wrap"><i data-lucide="folder-kanban"></i></div><h3>COPIL</h3><p>5 comités de pilotage : PROMOREN, PISEA, PASEA-RD, PDBH, PROGEP II.</p></a>
+      <a class="tile" href="cabinet/reformes.html"><div class="icon-wrap"><i data-lucide="scale"></i></div><h3>Réformes</h3><p>Réforme de l'Assainissement (Code, Fonds) + Réforme institutionnelle (ARSE).</p></a>
+      <a class="tile" href="cabinet/cngi.html"><div class="icon-wrap"><i data-lucide="cloud-rain"></i></div><h3>CNGI</h3><p>Recommandations CNGI Avril 2026 · préparation hivernage 2026.</p></a>
+      <a class="tile" href="cabinet/reunions-techniques.html"><div class="icon-wrap"><i data-lucide="calendar"></i></div><h3>Suivi Réunions techniques</h3><p>Calendrier, agenda et répartition par sous-secteur.</p></a>
+      <a class="tile" href="cabinet/missions-terrain.html"><div class="icon-wrap"><i data-lucide="map-pin"></i></div><h3>Suivi missions terrain</h3><p>Carte du Sénégal, sites visités, galerie photos.</p></a>
+      <a class="tile" href="cabinet/interpellations.html"><div class="icon-wrap"><i data-lucide="mic"></i></div><h3>Interpellations parlementaires</h3><p>Questions des députés à la Commission technique de l'Assemblée Nationale.</p></a>
+      <a class="tile" href="cabinet/par-direction.html"><div class="icon-wrap"><i data-lucide="building-2"></i></div><h3>Répartition par direction</h3><p>ONAS, DPGI, DGPRE, OFOR, DA, OLAC, CPCSP, ADM…</p></a>
+    </div>
+
+    <div class="section-title">Vue Bureau de Suivi · Outils opérationnels</div>
+    <div class="deck">
+      <a class="tile" href="bs/matrice.html"><div class="icon-wrap"><i data-lucide="grid-3x3"></i></div><h3>Saisie matrices</h3><p>Mise à jour rapide COPIL / CNGI / Réformes en mode grille.</p></a>
+      <a class="tile" href="bs/reunion.html"><div class="icon-wrap"><i data-lucide="calendar-plus"></i></div><h3>Réunion / mission</h3><p>Enregistrer une réunion technique ou une mission terrain.</p></a>
+      <a class="tile" href="bs/alertes.html"><div class="icon-wrap"><i data-lucide="bell"></i></div><h3>Mes alertes</h3><p>Retards, échéances proches, relances à effectuer.</p></a>
+      <a class="tile" href="bs/import.html"><div class="icon-wrap"><i data-lucide="upload"></i></div><h3>Import Excel</h3><p>Reprise de la base existante en lot.</p></a>
+      <a class="tile" href="bs/export.html"><div class="icon-wrap"><i data-lucide="download"></i></div><h3>Export & rapports</h3><p>Générer rapport hebdomadaire ou mensuel pour le SG.</p></a>
+    </div>
+
+    <p style="margin-top:48px;color:var(--color-fg-muted);font-size:12.5px;text-align:center">
+      Maquettes statiques · données réelles extraites de <code style="font-family:var(--font-mono)">SUIVIACTION MINISTERIELLE MHA.xlsx</code>
+    </p>
+  </div>
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>lucide.createIcons();</script>
+</body>
+</html>

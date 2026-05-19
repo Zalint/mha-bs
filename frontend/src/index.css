@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+   Reset doux et tokens MHA
+   Charte alignee sur les maquettes : Fira Sans + Fira Mono, bleu institutionnel
+   ============================================================================= */
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-primary-50 text-fg font-sans text-base antialiased;
+  }
+  *:focus-visible {
+    @apply outline-2 outline-primary outline-offset-2 rounded-sm;
+    outline-style: solid;
+  }
+  /* Numerique tabulaire par defaut dans les tableaux */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* =============================================================================
+   Composants utilitaires recurrents (classes a appliquer manuellement)
+   ============================================================================= */
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-md border border-transparent
+           cursor-pointer transition-colors active:scale-[.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-primary-700;
+  }
+  .btn-secondary {
+    @apply bg-surface text-fg border-border hover:bg-muted;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-fg-2 hover:bg-muted;
+  }
+  .btn-danger {
+    @apply bg-danger text-white hover:opacity-90;
+  }
+  .btn-sm {
+    @apply px-2.5 py-1 text-xs;
+  }
+
+  .input,
+  .select {
+    @apply h-9 px-3 border border-border rounded-md bg-surface text-fg text-sm w-full
+           focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20;
+  }
+  .field-label {
+    @apply block text-sm font-medium text-fg-2 mb-1.5;
+  }
+  .field-help {
+    @apply text-xs text-fg-muted mt-1;
+  }
+
+  .card {
+    @apply bg-surface border border-border rounded-lg shadow-sm;
+  }
+  .card-header {
+    @apply px-5 py-4 border-b border-border flex items-center gap-3;
+  }
+  .card-body {
+    @apply p-5;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-medium rounded-full;
+  }
+  .badge-realisee {
+    @apply bg-success-bg text-success;
+  }
+  .badge-encours {
+    @apply bg-warning-bg text-warning;
+  }
+  .badge-attente {
+    @apply bg-info-bg text-info;
+  }
+  .badge-ineligible {
+    @apply bg-neutral-bg text-neutral;
+  }
+  .badge-retard {
+    @apply bg-danger-bg text-danger;
+  }
+}

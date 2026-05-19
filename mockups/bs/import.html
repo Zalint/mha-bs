@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Import Excel · BS · MHA Suivi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/styles.css">
+  <style>
+    .stepper { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; padding: 16px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+    .step { display: flex; align-items: center; gap: 10px; padding: 0 14px; }
+    .step .n { width: 28px; height: 28px; border-radius: 50%; background: var(--color-muted); color: var(--color-fg-muted); display: flex; align-items: center; justify-content: center; font-weight: 600; font-family: var(--font-mono); font-size: 12.5px; }
+    .step.done .n { background: var(--color-success); color: #fff; }
+    .step.current .n { background: var(--color-primary); color: #fff; box-shadow: 0 0 0 4px rgba(2,132,199,.15); }
+    .step .lbl { font-size: 13px; font-weight: 500; color: var(--color-fg-2); }
+    .step.current .lbl { color: var(--color-fg); font-weight: 600; }
+    .step-sep { flex: 1; height: 2px; background: var(--color-border); }
+    .step.done + .step-sep { background: var(--color-success); }
+
+    .drop { border: 2px dashed var(--color-border); border-radius: var(--radius-lg); padding: 56px 24px; text-align: center; background: var(--color-surface); margin-bottom: 16px; transition: all .15s; cursor: pointer; }
+    .drop:hover, .drop.over { border-color: var(--color-primary); background: var(--color-primary-100); }
+    .drop .lucide { width: 48px; height: 48px; color: var(--color-primary); margin-bottom: 10px; }
+    .drop .ttl { font-size: 17px; font-weight: 600; color: var(--color-fg); margin-bottom: 6px; }
+    .drop .sub { font-size: 13px; color: var(--color-fg-muted); margin-bottom: 14px; }
+    .drop button { margin-top: 6px; }
+
+    .file-summary { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 16px; display: grid; grid-template-columns: 48px 1fr auto; gap: 14px; align-items: center; }
+    .file-summary .fi { width: 48px; height: 48px; border-radius: 10px; background: var(--color-success-bg); color: var(--color-success); display: flex; align-items: center; justify-content: center; }
+    .file-summary .fn { font-size: 14.5px; font-weight: 600; color: var(--color-fg); }
+    .file-summary .fm { font-size: 12.5px; color: var(--color-fg-muted); font-family: var(--font-mono); margin-top: 4px; }
+
+    .sheets-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 14px 0 20px; }
+    .sheet-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 12px; display: flex; gap: 10px; align-items: flex-start; cursor: pointer; transition: border-color .15s; }
+    .sheet-card:hover { border-color: var(--color-primary); }
+    .sheet-card input { margin-top: 2px; accent-color: var(--color-primary); }
+    .sheet-card .sname { font-size: 13px; font-weight: 600; color: var(--color-fg); }
+    .sheet-card .ssub { font-size: 11.5px; color: var(--color-fg-muted); margin-top: 2px; font-family: var(--font-mono); }
+
+    .mapping-table { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); overflow: hidden; }
+    .mapping-table table { width: 100%; border-collapse: collapse; }
+    .mapping-table th { background: var(--color-surface-2); padding: 10px 14px; text-align: left; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--color-fg-muted); border-bottom: 1px solid var(--color-border); }
+    .mapping-table td { padding: 12px 14px; border-bottom: 1px solid var(--color-border); font-size: 13px; vertical-align: middle; }
+    .mapping-table tr:last-child td { border-bottom: 0; }
+    .mapping-table .col-src { font-family: var(--font-mono); color: var(--color-fg-2); }
+    .mapping-table .arrow { color: var(--color-fg-muted); text-align: center; }
+    .mapping-table .map-select { width: 100%; }
+    .mapping-table .status-ok { color: var(--color-success); font-weight: 500; font-size: 12px; }
+    .mapping-table .status-warn { color: var(--color-warning); font-weight: 500; font-size: 12px; }
+
+    .preview-block { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 16px; }
+    .preview-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; }
+    .ps { background: var(--color-muted); border-radius: 8px; padding: 12px 14px; }
+    .ps .pv { font-family: var(--font-mono); font-size: 22px; font-weight: 600; color: var(--color-fg); }
+    .ps .pk { font-size: 11.5px; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+    .ps.success .pv { color: var(--color-success); }
+    .ps.warning .pv { color: var(--color-warning); }
+    .ps.danger .pv { color: var(--color-danger); }
+
+    .actions-bar { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; }
+  </style>
+</head>
+<body data-page="bs-import" data-role="bs">
+<div id="app-content">
+
+  <h1 class="page-title">Import Excel</h1>
+  <p class="page-sub">Reprendre des données depuis la base Excel existante ou un fichier fournisseur, avec contrôle des doublons et mapping des colonnes.</p>
+
+  <!-- Stepper -->
+  <div class="stepper">
+    <div class="step done"><span class="n"><i data-lucide="check" class="icon-sm"></i></span><span class="lbl">Charger le fichier</span></div>
+    <div class="step-sep"></div>
+    <div class="step done"><span class="n"><i data-lucide="check" class="icon-sm"></i></span><span class="lbl">Choisir les feuilles</span></div>
+    <div class="step-sep"></div>
+    <div class="step current"><span class="n">3</span><span class="lbl">Mapper les colonnes</span></div>
+    <div class="step-sep"></div>
+    <div class="step"><span class="n">4</span><span class="lbl">Prévisualiser</span></div>
+    <div class="step-sep"></div>
+    <div class="step"><span class="n">5</span><span class="lbl">Importer</span></div>
+  </div>
+
+  <!-- File summary -->
+  <div class="file-summary">
+    <div class="fi"><i data-lucide="file-spreadsheet" class="icon-lg"></i></div>
+    <div>
+      <div class="fn">SUIVIACTION MINISTERIELLE MHA.xlsx</div>
+      <div class="fm">237 Ko · 6 feuilles · chargé il y a 12 s · MD5 a3f9c…</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm"><i data-lucide="refresh-cw" class="icon-sm"></i> Recharger</button>
+      <button class="btn btn-ghost btn-sm"><i data-lucide="x" class="icon-sm"></i></button>
+    </div>
+  </div>
+
+  <!-- Drop zone alt -->
+  <details style="margin-bottom:18px">
+    <summary style="cursor:pointer;color:var(--color-fg-muted);font-size:13px;padding:6px 0">Charger un autre fichier</summary>
+    <div class="drop" style="margin-top:10px">
+      <i data-lucide="upload-cloud"></i>
+      <div class="ttl">Glissez-déposez un fichier Excel ici</div>
+      <div class="sub">Formats supportés : <code style="font-family:var(--font-mono)">.xlsx</code>, <code style="font-family:var(--font-mono)">.xls</code>, <code style="font-family:var(--font-mono)">.csv</code> · taille max 20 Mo</div>
+      <button class="btn btn-primary"><i data-lucide="folder-open" class="icon-sm"></i> Parcourir</button>
+    </div>
+  </details>
+
+  <!-- Sheet selection -->
+  <h2 style="font-size:14px;font-weight:600;margin:0 0 8px;color:var(--color-fg-muted);text-transform:uppercase;letter-spacing:.05em">Feuilles détectées · 6</h2>
+  <div class="sheets-list">
+    <label class="sheet-card"><input type="checkbox" checked><div><div class="sname">PLAN</div><div class="ssub">198 lignes · 21 colonnes</div></div></label>
+    <label class="sheet-card"><input type="checkbox" checked><div><div class="sname">Réf sur l'ASS</div><div class="ssub">8 lignes · 6 colonnes</div></div></label>
+    <label class="sheet-card"><input type="checkbox" checked><div><div class="sname">Sui FeuilleR Ref Inst</div><div class="ssub">5 lignes · 3 colonnes</div></div></label>
+    <label class="sheet-card"><input type="checkbox" checked><div><div class="sname">Suivi Rtechnique</div><div class="ssub">19 lignes · 3 colonnes</div></div></label>
+    <label class="sheet-card"><input type="checkbox" checked><div><div class="sname">Suivi Recom Copil</div><div class="ssub">40 lignes · 6 colonnes</div></div></label>
+    <label class="sheet-card"><input type="checkbox" checked><div><div class="sname">Suivi Recom CNGI</div><div class="ssub">11 lignes · 6 colonnes</div></div></label>
+  </div>
+
+  <!-- Mapping -->
+  <h2 style="font-size:14px;font-weight:600;margin:8px 0 8px;color:var(--color-fg-muted);text-transform:uppercase;letter-spacing:.05em">Mapping des colonnes · feuille « PLAN »</h2>
+  <div class="mapping-table" style="margin-bottom:18px">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:36%">Colonne source (Excel)</th>
+          <th class="arrow" style="width:40px"></th>
+          <th style="width:36%">Champ application</th>
+          <th>Détection</th>
+          <th style="width:60px">Inclure</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="col-src">ANNEE</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Année</option><option>Ignorer</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">DATE RENCONTRE</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Date de rencontre</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">TYPE RENCONTRE</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Type de rencontre</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">CODE RENCONTRE</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Code rencontre</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">RENCONTRE</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Intitulé de la rencontre</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">CODE DIRECTIVE</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Code directive</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">DIRECTIVES</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Texte de la directive</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">RESPONSABLE</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Responsable</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">ECHEANCE</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Échéance</option></select></td><td class="status-warn"><i data-lucide="alert-circle" class="icon-sm" style="vertical-align:middle"></i> Format à vérifier</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">ETAT</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>État</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+        <tr><td class="col-src">TYPE CAUSE</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Type de cause</option><option>Ignorer</option></select></td><td class="status-warn"><i data-lucide="alert-circle" class="icon-sm" style="vertical-align:middle"></i> 100 % vide</td><td><input type="checkbox"></td></tr>
+        <tr><td class="col-src">Commentaires</td><td class="arrow"><i data-lucide="arrow-right" class="icon-sm"></i></td><td><select class="select map-select"><option selected>Commentaires</option></select></td><td class="status-ok"><i data-lucide="check-circle-2" class="icon-sm" style="vertical-align:middle"></i> Auto</td><td><input type="checkbox" checked></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Preview -->
+  <div class="preview-block">
+    <h2 style="font-size:14.5px;font-weight:600;margin:0 0 14px">Aperçu de l'import</h2>
+    <div class="preview-stats">
+      <div class="ps success"><div class="pv">281</div><div class="pk">Lignes valides</div></div>
+      <div class="ps warning"><div class="pv">12</div><div class="pk">À vérifier</div></div>
+      <div class="ps danger"><div class="pv">0</div><div class="pk">En erreur</div></div>
+      <div class="ps"><div class="pv">198</div><div class="pk">Doublons détectés</div></div>
+      <div class="ps"><div class="pv">83</div><div class="pk">Nouveautés</div></div>
+    </div>
+    <div style="background:var(--color-warning-bg);border:1px solid var(--color-warning);border-radius:8px;padding:12px 14px;color:var(--color-warning);font-size:13px;display:flex;gap:10px;align-items:flex-start">
+      <i data-lucide="alert-triangle" style="flex-shrink:0;margin-top:1px"></i>
+      <div>
+        <b>198 doublons détectés</b> sur la base du code directive. Choisissez la stratégie :
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--color-fg-2);background:var(--color-surface);padding:6px 12px;border-radius:6px;border:1px solid var(--color-warning);cursor:pointer"><input type="radio" name="dup" checked> Mettre à jour les existants</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--color-fg-2);background:var(--color-surface);padding:6px 12px;border-radius:6px;cursor:pointer"><input type="radio" name="dup"> Ignorer les doublons</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--color-fg-2);background:var(--color-surface);padding:6px 12px;border-radius:6px;cursor:pointer"><input type="radio" name="dup"> Créer en double</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions-bar">
+    <button class="btn btn-secondary"><i data-lucide="arrow-left" class="icon-sm"></i> Retour</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost"><i data-lucide="eye" class="icon-sm"></i> Aperçu détaillé</button>
+      <button class="btn btn-primary"><i data-lucide="upload" class="icon-sm"></i> Lancer l'import (281 lignes)</button>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../assets/shell.js"></script>
+</body>
+</html>
