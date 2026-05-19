@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute.js';
 import { AppShell } from '../components/layout/AppShell.js';
 import { DashboardView } from '../views/DashboardView.js';
+import { GuideView } from '../views/GuideView.js';
 import { DirectiveFicheView } from '../views/DirectiveFicheView.js';
 import { ConseilInterMinisterielView } from '../views/directives/ConseilInterMinisterielView.js';
 import { ConseilMinistresView } from '../views/directives/ConseilMinistresView.js';
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { index: true, element: <DashboardView /> },
+          { path: 'guide', element: <GuideView /> },
           { path: 'directives/conseil-ministres', element: <ConseilMinistresView /> },
           { path: 'directives/conseil-interministeriel', element: <ConseilInterMinisterielView /> },
           { path: 'directives/coordination-sg', element: <CoordinationSgView /> },

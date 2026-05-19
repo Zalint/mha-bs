@@ -1,5 +1,6 @@
 import {
   Bell,
+  BookOpen,
   Building2,
   Calendar,
   CalendarPlus,
@@ -84,6 +85,7 @@ function buildNavSg(counts: NavCounts | null): NavItem[] {
     { id: 'missions', label: 'Suivi missions terrain', icon: MapPin, to: '/missions-terrain', badge: counts?.missionsTerrain },
     { id: 'interpellations', label: 'Interpellations parlementaires', icon: Mic, to: '/interpellations', badge: counts?.interpellations },
     { id: 'par-direction', label: 'Répartition par direction', icon: Building2, to: '/par-direction' },
+    { id: 'guide', label: "Guide d'utilisation", icon: BookOpen, to: '/guide' },
   ];
 }
 
@@ -98,6 +100,7 @@ const NAV_BS: NavItem[] = [
   { id: 'bs-export', label: 'Export & rapports', icon: Download, to: '/bs/export' },
   { id: 'bs-users', label: 'Utilisateurs', icon: Users, to: '/admin/users' },
   { id: 'bs-config', label: 'Configuration', icon: Settings, to: '/bs/config' },
+  { id: 'bs-guide', label: "Guide d'utilisation", icon: BookOpen, to: '/guide' },
 ];
 
 interface SidebarProps {
