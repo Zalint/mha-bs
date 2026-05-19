@@ -9,7 +9,10 @@ interface State<T> {
 }
 
 /**
- * Hook generique pour fetch declaratif. Refetch automatique quand `deps` change.
+ * Hook generique pour fetch declaratif. Refetch automatique :
+ *  - quand `deps` change
+ *  - au retour de focus sur l'onglet (apres modif dans un autre tab)
+ *  - au "back" navigateur (bfcache restore via event pageshow)
  *
  * Usage :
  *   const { data, isLoading, error, refetch } = useApi(() => api.get<Foo>('/foo'), [id]);
@@ -40,6 +43,21 @@ export function useApi<T>(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, refreshCount]);
+
+  useEffect(() => {
+    const handleVisibility = (): void => {
+      if (document.visibilityState === 'visible') refetch();
+    };
+    const handlePageShow = (e: PageTransitionEvent): void => {
+      if (e.persisted) refetch();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pageshow', handlePageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [refetch]);
 
   return { ...state, refetch };
 }
