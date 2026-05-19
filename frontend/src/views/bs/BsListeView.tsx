@@ -1,8 +1,10 @@
 import {
   AlertTriangle,
   Archive,
+  Ban,
   CheckCircle2,
   CheckSquare,
+  Clock,
   Filter,
   Inbox,
   Plus,
@@ -22,21 +24,27 @@ import { ApiClientError, api } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
 import { daysBetween, todayYmd } from '../../lib/formatDate.js';
 
-type Tab = 'ouvertes' | 'retard' | 'validation' | 'cloturees';
+type Tab = 'ouvertes' | 'attente' | 'retard' | 'validation' | 'cloturees' | 'ineligible';
 
 const TAB_LABELS: Record<Tab, string> = {
   ouvertes: 'À traiter',
+  attente: 'En attente',
   retard: 'En retard',
   validation: 'À valider SG',
   cloturees: 'Clôturées',
+  ineligible: 'Inéligibles',
 };
 
 const TAB_ICONS = {
   ouvertes: Inbox,
+  attente: Clock,
   retard: AlertTriangle,
   validation: CheckCircle2,
   cloturees: Archive,
+  ineligible: Ban,
 };
+
+const TAB_ORDER: Tab[] = ['ouvertes', 'attente', 'retard', 'validation', 'cloturees', 'ineligible'];
 
 const PAGE_SIZE = 50;
 
@@ -69,8 +77,11 @@ export function BsListeView() {
       search: search || undefined,
     };
     if (tab === 'ouvertes') base.etat = 'enCours';
+    if (tab === 'attente') base.etat = 'attente';
     if (tab === 'retard') base.etat = 'enCours'; // filtre côté client via échéance
     if (tab === 'cloturees') base.etat = 'realisee';
+    if (tab === 'ineligible') base.etat = 'ineligible';
+    // tab === 'validation' : pas de filtre etat, filtre client sur statutValidation
     return base;
   }, [tab, search, page]);
 
@@ -178,7 +189,7 @@ export function BsListeView() {
       {/* Tabs */}
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <div className="inline-flex gap-0.5 p-1 bg-muted border border-border rounded-lg">
-          {(['ouvertes', 'retard', 'validation', 'cloturees'] as Tab[]).map((t) => {
+          {TAB_ORDER.map((t) => {
             const Icon = TAB_ICONS[t];
             const isActive = tab === t;
             const count =
