@@ -29,12 +29,14 @@ interface AppUser {
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Administrateur',
+  sg: 'Secrétaire général',
   bs: 'Bureau de Suivi',
   reader: 'Lecteur',
 };
 
 const ROLE_STYLES: Record<UserRole, string> = {
   admin: 'bg-danger-bg text-danger',
+  sg: 'bg-success-bg text-success',
   bs: 'bg-primary-100 text-primary-700',
   reader: 'bg-muted text-fg-2',
 };

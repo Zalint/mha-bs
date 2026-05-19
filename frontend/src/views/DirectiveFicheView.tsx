@@ -34,6 +34,7 @@ import { useApi } from '../hooks/useApi.js';
 import { useReferentiel } from '../hooks/useReferentiel.js';
 import { ApiClientError, api } from '../lib/apiClient.js';
 import { daysBetween, formatShort, todayYmd } from '../lib/formatDate.js';
+import { useAuthStore } from '../stores/authStore.js';
 
 interface FormValues {
   rencontreId: string;
@@ -70,6 +71,8 @@ export function DirectiveFicheView() {
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const isEdit = Boolean(id);
+  const userRole = useAuthStore((s) => s.user?.role);
+  const canValidate = userRole === 'sg' || userRole === 'admin';
 
   const directiveQuery = useApi(
     () => (id ? api.get<Directive>(`/directives/${id}`) : Promise.resolve(null)),
@@ -449,7 +452,7 @@ export function DirectiveFicheView() {
                 <Send className="w-3.5 h-3.5" /> Soumettre
               </button>
             )}
-            {isEdit && directive?.statutValidation === 'soumis' && (
+            {isEdit && directive?.statutValidation === 'soumis' && canValidate && (
               <button
                 type="button"
                 onClick={() => void handleValider()}

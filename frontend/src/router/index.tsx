@@ -18,6 +18,7 @@ import { CngiView } from '../views/recommandations/CngiView.js';
 import { CopilView } from '../views/recommandations/CopilView.js';
 import { ReformesView } from '../views/recommandations/ReformesView.js';
 import { ReunionsTechniquesView } from '../views/ReunionsTechniquesView.js';
+import { SgValidationView } from '../views/sg/SgValidationView.js';
 import { UsersView } from '../views/UsersView.js';
 
 export const router = createBrowserRouter([
@@ -58,6 +59,11 @@ export const router = createBrowserRouter([
             path: 'admin/users',
             element: <ProtectedRoute roles={['admin']} />,
             children: [{ index: true, element: <UsersView /> }],
+          },
+          {
+            path: 'sg/validation',
+            element: <ProtectedRoute roles={['sg', 'admin']} />,
+            children: [{ index: true, element: <SgValidationView /> }],
           },
           { path: '*', element: <Navigate to="/" replace /> },
         ],

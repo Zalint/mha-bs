@@ -98,7 +98,7 @@ directiveRoutes.post('/:id/soumettre', authJwt, requireRole('bs', 'admin'), asyn
   }
 });
 
-directiveRoutes.post('/:id/valider', authJwt, requireRole('bs', 'admin'), async (req, res, next) => {
+directiveRoutes.post('/:id/valider', authJwt, requireRole('sg', 'admin'), async (req, res, next) => {
   try {
     if (!req.user) throw new UnauthorizedError();
     const updated = await validateDirective(req.params.id, req.user.userId);

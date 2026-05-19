@@ -16,6 +16,7 @@ import {
   MapPin,
   Mic,
   Settings,
+  ShieldCheck,
   Upload,
   Users,
 } from 'lucide-react';
@@ -58,6 +59,7 @@ type NavItem = NavLeaf | NavGroupItem;
 function buildNavSg(counts: NavCounts | null): NavItem[] {
   return [
     { id: 'dashboard', label: 'Dashboard global', icon: LayoutDashboard, to: '/' },
+    { id: 'sg-validation', label: 'Validation', icon: ShieldCheck, to: '/sg/validation' },
     {
       id: 'directive-pres',
       label: 'Directive présidentielle',
@@ -107,9 +109,12 @@ export function Sidebar({ mode, onModeChange }: SidebarProps) {
   const userRole = useAuthStore((s) => s.user?.role);
   const counts = useApi(() => api.get<NavCounts>('/dashboard/nav-counts'), []);
   const baseItems = mode === 'sg' ? buildNavSg(counts.data) : NAV_BS;
-  // Les items "Configuration" et "Utilisateurs" ne sont visibles que pour le role admin
+  // Filtres role-based des entrees de menu :
+  //  - bs-config, bs-users   -> admin uniquement
+  //  - sg-validation         -> admin + sg (action sg)
   const navItems = baseItems.filter((it) => {
     if ('id' in it && (it.id === 'bs-config' || it.id === 'bs-users')) return userRole === 'admin';
+    if ('id' in it && it.id === 'sg-validation') return userRole === 'admin' || userRole === 'sg';
     return true;
   });
   const groupLabel = mode === 'sg' ? 'VUE SG' : 'ESPACE BUREAU DE SUIVI';
@@ -215,31 +220,40 @@ function NavGroup({ item }: { item: NavGroupItem }) {
 
 function RoleSwitch({ mode, onModeChange }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
+  // Seuls admin et bs peuvent basculer entre SG et BS. Les autres (sg, reader)
+  // sont figes sur leur vue par defaut.
+  const canSwitch = user?.role === 'admin' || user?.role === 'bs';
   return (
     <div className="mt-auto mx-2 mb-3.5">
       <div className="text-xs text-sidebar-muted px-2 mb-1">{user?.fullName ?? 'Utilisateur'}</div>
-      <div className="bg-white/5 rounded-lg p-1 flex gap-0.5">
-        <button
-          type="button"
-          onClick={() => onModeChange('sg')}
-          className={cn(
-            'flex-1 py-1.5 px-2.5 text-xs font-medium rounded-md transition-colors',
-            mode === 'sg' ? 'bg-primary text-white' : 'text-sidebar-muted hover:text-white',
-          )}
-        >
-          SG
-        </button>
-        <button
-          type="button"
-          onClick={() => onModeChange('bs')}
-          className={cn(
-            'flex-1 py-1.5 px-2.5 text-xs font-medium rounded-md transition-colors',
-            mode === 'bs' ? 'bg-primary text-white' : 'text-sidebar-muted hover:text-white',
-          )}
-        >
-          Bureau Suivi
-        </button>
-      </div>
+      {canSwitch ? (
+        <div className="bg-white/5 rounded-lg p-1 flex gap-0.5">
+          <button
+            type="button"
+            onClick={() => onModeChange('sg')}
+            className={cn(
+              'flex-1 py-1.5 px-2.5 text-xs font-medium rounded-md transition-colors',
+              mode === 'sg' ? 'bg-primary text-white' : 'text-sidebar-muted hover:text-white',
+            )}
+          >
+            SG
+          </button>
+          <button
+            type="button"
+            onClick={() => onModeChange('bs')}
+            className={cn(
+              'flex-1 py-1.5 px-2.5 text-xs font-medium rounded-md transition-colors',
+              mode === 'bs' ? 'bg-primary text-white' : 'text-sidebar-muted hover:text-white',
+            )}
+          >
+            Bureau Suivi
+          </button>
+        </div>
+      ) : (
+        <div className="text-[11px] text-sidebar-muted px-2 italic">
+          {user?.role === 'sg' ? 'Profil Secrétaire général' : 'Profil lecture seule'}
+        </div>
+      )}
     </div>
   );
 }

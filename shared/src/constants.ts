@@ -6,7 +6,7 @@
 export const DATE_FORMAT = 'YYYY-MM-DD' as const;
 export const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-export const USER_ROLES = ['admin', 'bs', 'reader'] as const;
+export const USER_ROLES = ['admin', 'sg', 'bs', 'reader'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export const DIRECTIVE_ETATS = ['attente', 'enCours', 'realisee', 'ineligible'] as const;

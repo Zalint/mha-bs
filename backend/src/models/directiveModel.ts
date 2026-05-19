@@ -99,6 +99,10 @@ export async function listDirectives(
     params.push(filters.etat);
     conditions.push(`d."etat" = $${params.length}`);
   }
+  if (filters.statutValidation) {
+    params.push(filters.statutValidation);
+    conditions.push(`d."statutValidation" = $${params.length}`);
+  }
   if (filters.annee) {
     params.push(filters.annee);
     conditions.push(`r."annee" = $${params.length}`);

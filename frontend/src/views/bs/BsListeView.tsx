@@ -24,13 +24,13 @@ import { ApiClientError, api } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
 import { daysBetween, todayYmd } from '../../lib/formatDate.js';
 
-type Tab = 'ouvertes' | 'attente' | 'retard' | 'validation' | 'cloturees' | 'ineligible';
+type Tab = 'ouvertes' | 'attente' | 'retard' | 'soumises' | 'cloturees' | 'ineligible';
 
 const TAB_LABELS: Record<Tab, string> = {
   ouvertes: 'À traiter',
   attente: 'En attente',
   retard: 'En retard',
-  validation: 'À valider SG',
+  soumises: 'Soumises au SG',
   cloturees: 'Clôturées',
   ineligible: 'Inéligibles',
 };
@@ -39,12 +39,12 @@ const TAB_ICONS = {
   ouvertes: Inbox,
   attente: Clock,
   retard: AlertTriangle,
-  validation: CheckCircle2,
+  soumises: CheckCircle2,
   cloturees: Archive,
   ineligible: Ban,
 };
 
-const TAB_ORDER: Tab[] = ['ouvertes', 'attente', 'retard', 'validation', 'cloturees', 'ineligible'];
+const TAB_ORDER: Tab[] = ['ouvertes', 'attente', 'retard', 'soumises', 'cloturees', 'ineligible'];
 
 const PAGE_SIZE = 50;
 
@@ -81,7 +81,7 @@ export function BsListeView() {
     if (tab === 'retard') base.etat = 'enCours'; // filtre côté client via échéance
     if (tab === 'cloturees') base.etat = 'realisee';
     if (tab === 'ineligible') base.etat = 'ineligible';
-    // tab === 'validation' : pas de filtre etat, filtre client sur statutValidation
+    if (tab === 'soumises') base.statutValidation = 'soumis';
     return base;
   }, [tab, search, page]);
 
@@ -97,9 +97,6 @@ export function BsListeView() {
     if (tab === 'retard') {
       return all.filter((d) => d.echeance !== null && d.echeance < today);
     }
-    if (tab === 'validation') {
-      return all.filter((d) => d.statutValidation === 'soumis');
-    }
     return all;
   }, [query.data, tab, today]);
 
@@ -107,9 +104,9 @@ export function BsListeView() {
     const all = query.data?.items ?? [];
     return {
       retard: all.filter((d) => d.echeance !== null && d.echeance < today && d.etat !== 'realisee').length,
-      validation: all.filter((d) => d.statutValidation === 'soumis').length,
+      soumises: tab === 'soumises' ? all.length : 0,
     };
-  }, [query.data, today]);
+  }, [query.data, today, tab]);
 
   const handleStateChange = async (directive: Directive, newEtat: DirectiveEtat): Promise<void> => {
     try {
@@ -193,7 +190,7 @@ export function BsListeView() {
             const Icon = TAB_ICONS[t];
             const isActive = tab === t;
             const count =
-              t === 'retard' ? counts.retard : t === 'validation' ? counts.validation : null;
+              t === 'retard' ? counts.retard : t === 'soumises' ? counts.soumises : null;
             return (
               <button
                 key={t}

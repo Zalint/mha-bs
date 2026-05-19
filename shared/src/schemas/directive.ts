@@ -53,6 +53,7 @@ export type UpdateDirectiveInput = z.infer<typeof updateDirectiveSchema>;
 export const directiveFiltersSchema = z.object({
   typeRencontre: z.string().optional(),
   etat: z.enum(DIRECTIVE_ETATS).optional(),
+  statutValidation: z.enum(STATUTS_VALIDATION).optional(),
   annee: z.coerce.number().int().optional(),
   rencontreId: z.string().uuid().optional(),
   responsableId: z.coerce.number().int().optional(),
