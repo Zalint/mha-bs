@@ -30,9 +30,9 @@ services:
     # --include=dev pour avoir tsc, vite, etc. (Render met NODE_ENV=production par defaut)
     buildCommand: npm install --include=dev && npm run build:shared && npm run build:backend && npm run build:frontend
     startCommand: node backend/dist/server.js
-    # Applique le schema PostgreSQL via le script Node (pas de psql dispo sur Render Node).
-    # Idempotent : CREATE IF NOT EXISTS partout, ALTER DROP CONSTRAINT IF EXISTS, etc.
-    preDeployCommand: node backend/dist/scripts/applySchema.js
+    # Applique le schema PostgreSQL puis cree/seed l'utilisateur admin.
+    # Les deux scripts sont idempotents (CREATE IF NOT EXISTS / skip si admin existe).
+    preDeployCommand: node backend/dist/scripts/applySchema.js && node backend/dist/scripts/bootstrapAdmin.js
     healthCheckPath: /api/healthz
     disk:
       name: uploads
