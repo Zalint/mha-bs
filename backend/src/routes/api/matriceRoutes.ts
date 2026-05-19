@@ -4,7 +4,6 @@ import { z } from 'zod';
 import {
   DIRECTIVE_ETATS,
   updateRecommandationMatriceSchema,
-  type TypeMatrice,
 } from '@mha-bs/shared';
 
 import { UnauthorizedError } from '../../lib/errors.js';
@@ -42,7 +41,7 @@ const typeParamSchema = z.object({ typeMatrice: z.string().min(1).max(50) });
 
 matriceRoutes.get('/:typeMatrice', authJwt, validate(typeParamSchema, 'params'), async (req, res, next) => {
   try {
-    const items = await listByType(req.params.typeMatrice as TypeMatrice);
+    const items = await listByType(req.params.typeMatrice);
     res.json({ items });
   } catch (err) {
     next(err);

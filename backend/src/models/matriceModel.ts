@@ -1,10 +1,10 @@
-import type { DirectiveEtat, RecommandationMatrice, TypeMatrice } from '@mha-bs/shared';
+import type { DirectiveEtat, RecommandationMatrice } from '@mha-bs/shared';
 
 import { query, queryAll, queryOne } from '../db/query.js';
 
 interface MatriceRow {
   id: string;
-  typeMatrice: TypeMatrice;
+  typeMatrice: string;
   numOrdre: number;
   texteRecommandation: string;
   etat: DirectiveEtat;
@@ -42,7 +42,7 @@ const SELECT_COLS = `
   "createdBy", "updatedBy", "createdAt", "updatedAt"
 `;
 
-export async function listByType(typeMatrice: TypeMatrice): Promise<RecommandationMatrice[]> {
+export async function listByType(typeMatrice: string): Promise<RecommandationMatrice[]> {
   const rows = await queryAll<MatriceRow>(
     `SELECT ${SELECT_COLS} FROM "recommandationsMatrice"
      WHERE "typeMatrice" = $1
@@ -61,7 +61,7 @@ export async function listAll(): Promise<RecommandationMatrice[]> {
 }
 
 export async function updateByOrder(
-  typeMatrice: TypeMatrice,
+  typeMatrice: string,
   numOrdre: number,
   input: Partial<Pick<RecommandationMatrice, 'etat' | 'observations' | 'echeanceTrimestre' | 'priorite'>>,
   updatedBy: string,
@@ -96,7 +96,7 @@ export async function updateByOrder(
 }
 
 export interface MatriceStats {
-  typeMatrice: TypeMatrice;
+  typeMatrice: string;
   total: number;
   nbAttente: number;
   nbEnCours: number;
@@ -107,7 +107,7 @@ export interface MatriceStats {
 
 export async function getStatsByType(): Promise<MatriceStats[]> {
   const rows = await queryAll<{
-    typeMatrice: TypeMatrice;
+    typeMatrice: string;
     total: string;
     nbAttente: string;
     nbEnCours: string;
@@ -138,7 +138,7 @@ export async function getStatsByType(): Promise<MatriceStats[]> {
   });
 }
 
-export async function deleteByTypeAndOrder(typeMatrice: TypeMatrice, numOrdre: number): Promise<void> {
+export async function deleteByTypeAndOrder(typeMatrice: string, numOrdre: number): Promise<void> {
   await query(
     `DELETE FROM "recommandationsMatrice"
      WHERE "typeMatrice" = $1 AND "numOrdre" = $2`,

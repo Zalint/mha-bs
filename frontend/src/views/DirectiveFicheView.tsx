@@ -19,7 +19,6 @@ import {
   type Directive,
   type DirectiveEtat,
   type Rencontre,
-  type TypeRencontre,
 } from '@mha-bs/shared';
 
 import { CommentSection } from '../components/directives/CommentSection.js';
@@ -57,7 +56,7 @@ const ETAT_OPTIONS = [
   { value: 'ineligible' as const, label: 'Inéligible', icon: MinusCircle, variant: 'neutral' as const },
 ];
 
-const TYPE_RENCONTRE_LABELS: Record<TypeRencontre, string> = {
+const TYPE_RENCONTRE_LABELS: Record<string, string> = {
   conseilMinistres: 'Conseil des ministres',
   conseilInterMinisteriel: 'Conseil inter-ministériel',
   coordinationSggSg: 'Coordination SGG/SG',

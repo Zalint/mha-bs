@@ -1,10 +1,10 @@
-import type { CreateRencontreInput, Rencontre, TypeRencontre } from '@mha-bs/shared';
+import type { CreateRencontreInput, Rencontre } from '@mha-bs/shared';
 
 import { queryAll, queryOne } from '../db/query.js';
 
 interface RencontreRow {
   id: string;
-  typeRencontre: TypeRencontre;
+  typeRencontre: string;
   codeRencontre: string;
   intitule: string;
   dateRencontre: Date;
@@ -35,7 +35,7 @@ function toRencontre(row: RencontreRow): Rencontre {
 }
 
 export interface RencontreFilters {
-  typeRencontre?: TypeRencontre;
+  typeRencontre?: string;
   annee?: number;
   copilName?: string;
 }

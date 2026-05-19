@@ -10,7 +10,7 @@ import { useApi } from '../../hooks/useApi.js';
 import { api } from '../../lib/apiClient.js';
 import { formatShort } from '../../lib/formatDate.js';
 
-const TYPE_LABELS: Record<TypeRencontre, string> = {
+const TYPE_LABELS: Record<string, string> = {
   conseilMinistres: 'Conseil des ministres',
   conseilInterMinisteriel: 'Conseil inter-ministériel',
   coordinationSggSg: 'Coordination SGG/SG',
@@ -20,7 +20,7 @@ const TYPE_LABELS: Record<TypeRencontre, string> = {
   commissionAn: 'Commission AN',
 };
 
-const TYPE_BADGE_STYLES: Record<TypeRencontre, string> = {
+const TYPE_BADGE_STYLES: Record<string, string> = {
   conseilMinistres: 'bg-info-bg text-info',
   conseilInterMinisteriel: 'bg-success-bg text-success',
   coordinationSggSg: 'bg-warning-bg text-warning',

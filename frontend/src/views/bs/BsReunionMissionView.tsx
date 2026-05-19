@@ -2,10 +2,10 @@ import 'leaflet/dist/leaflet.css';
 
 import L from 'leaflet';
 import { ArrowLeft, Construction, MapPin, Plus, Save, Trash2, Users, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import {
@@ -67,7 +67,6 @@ const PIN_ICON = L.divIcon({
 });
 
 export function BsReunionMissionView() {
-  const navigate = useNavigate();
   const [mode, setMode] = useState<Mode>('reunion');
   const [submitting, setSubmitting] = useState(false);
   const [ouvrages, setOuvrages] = useState<Ouvrage[]>([]);

@@ -3,7 +3,7 @@ import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { CalendarClock, ChevronRight, Construction, Globe, Layers, MapPin, Maximize, Plus } from 'lucide-react';
 import { useMemo, useRef } from 'react';
-import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
+import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 
 import type { MissionTerrain } from '@mha-bs/shared';

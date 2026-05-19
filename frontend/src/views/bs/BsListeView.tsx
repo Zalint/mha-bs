@@ -20,7 +20,7 @@ import { Spinner } from '../../components/ui/Spinner.js';
 import { useApi } from '../../hooks/useApi.js';
 import { ApiClientError, api } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
-import { daysBetween, formatShort, todayYmd } from '../../lib/formatDate.js';
+import { daysBetween, todayYmd } from '../../lib/formatDate.js';
 
 type Tab = 'ouvertes' | 'retard' | 'validation' | 'cloturees';
 

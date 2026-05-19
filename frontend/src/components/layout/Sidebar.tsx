@@ -8,7 +8,6 @@ import {
   CloudRain,
   Download,
   FilePlus,
-  FolderKanban,
   Grid3x3,
   Inbox,
   Landmark,
@@ -16,7 +15,6 @@ import {
   type LucideIcon,
   MapPin,
   Mic,
-  Scale,
   Settings,
   Upload,
 } from 'lucide-react';

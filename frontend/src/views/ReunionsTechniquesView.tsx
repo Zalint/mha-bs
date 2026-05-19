@@ -21,7 +21,6 @@ import { KpiCard } from '../components/ui/KpiCard.js';
 import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
 import { api } from '../lib/apiClient.js';
-import { cn } from '../lib/cn.js';
 import { formatShort } from '../lib/formatDate.js';
 
 const SOUS_SECTEUR_DEF: { key: SousSecteur; label: string; color: string; icon: typeof Calendar }[] = [
