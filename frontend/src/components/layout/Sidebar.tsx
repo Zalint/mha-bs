@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Upload,
   Users,
+  X,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -106,9 +107,11 @@ const NAV_BS: NavItem[] = [
 interface SidebarProps {
   mode: 'sg' | 'bs';
   onModeChange: (mode: 'sg' | 'bs') => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export function Sidebar({ mode, onModeChange }: SidebarProps) {
+export function Sidebar({ mode, onModeChange, isOpen = false, onClose }: SidebarProps) {
   const userRole = useAuthStore((s) => s.user?.role);
   const counts = useApi(() => api.get<NavCounts>('/dashboard/nav-counts'), []);
   const baseItems = mode === 'sg' ? buildNavSg(counts.data) : NAV_BS;
@@ -123,7 +126,20 @@ export function Sidebar({ mode, onModeChange }: SidebarProps) {
   const groupLabel = mode === 'sg' ? 'VUE SG' : 'ESPACE BUREAU DE SUIVI';
 
   return (
-    <aside className="bg-sidebar text-sidebar-fg flex flex-col sticky top-0 h-screen overflow-y-auto w-[248px] flex-shrink-0">
+    <aside
+      className={cn(
+        // Drawer mobile : positionne en absolu, sort de la gauche en translate
+        'fixed inset-y-0 left-0 z-50 w-[248px]',
+        'transform transition-transform duration-300 ease-in-out',
+        isOpen ? 'translate-x-0' : '-translate-x-full',
+        // Desktop : reprend une place dans le flex parent, slide ou cache via lg:hidden
+        'lg:static lg:translate-x-0 lg:transition-none lg:z-auto lg:flex-shrink-0',
+        !isOpen && 'lg:hidden',
+        // Style commun
+        'bg-sidebar text-sidebar-fg flex flex-col h-screen overflow-y-auto',
+      )}
+      aria-label="Navigation principale"
+    >
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-4 py-4 border-b border-white/10">
         <img
@@ -131,10 +147,21 @@ export function Sidebar({ mode, onModeChange }: SidebarProps) {
           alt="Focus MHA"
           className="w-10 h-10 rounded-lg bg-white object-contain p-0.5"
         />
-        <div className="text-sm leading-tight">
+        <div className="text-sm leading-tight flex-1 min-w-0">
           <div className="text-white font-semibold">MHA · Suivi</div>
           <div className="text-sidebar-muted text-xs">Bureau de Suivi</div>
         </div>
+        {/* Close button (mobile uniquement — sur desktop on utilise le hamburger Topbar) */}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer le menu"
+            className="lg:hidden p-1.5 text-sidebar-muted hover:text-white hover:bg-white/10 rounded transition-colors"
+          >
+            <X className="w-4 h-4" strokeWidth={1.8} />
+          </button>
+        )}
       </div>
 
       {/* Nav */}
