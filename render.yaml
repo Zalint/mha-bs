@@ -14,7 +14,9 @@ databases:
   - name: mha-sg-bs-db
     databaseName: mha_sg_bs
     user: mha_sg_bs
-    plan: starter
+    # Plan Postgres : 'free' pour demarrer (suspendu apres 30j d'inactivite),
+    # passer a 'basic-256mb' (~6$/mois) pour la prod ou si tu veux de la stabilite.
+    plan: free
     region: frankfurt
     postgresMajorVersion: '15'
     ipAllowList: [] # accessible uniquement depuis les services Render
