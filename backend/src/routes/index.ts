@@ -13,6 +13,7 @@ import { missionRoutes } from './api/missionRoutes.js';
 import { referentielRoutes } from './api/referentielRoutes.js';
 import { rencontreRoutes } from './api/rencontreRoutes.js';
 import { reunionRoutes } from './api/reunionRoutes.js';
+import { userRoutes } from './api/userRoutes.js';
 import { externalDirectiveRoutes } from './external/directiveRoutes.js';
 import { externalHealthRoutes } from './external/healthRoutes.js';
 
@@ -29,6 +30,7 @@ apiRouter.use('/reunions', reunionRoutes);
 apiRouter.use('/missions', missionRoutes);
 apiRouter.use('/referentiels', referentielRoutes);
 apiRouter.use('/dashboard', dashboardRoutes);
+apiRouter.use('/users', userRoutes);
 
 // --- API externe (x-api-key) ---
 if (appConfig.externalApi.enabled) {

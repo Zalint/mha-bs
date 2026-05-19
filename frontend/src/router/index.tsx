@@ -18,6 +18,7 @@ import { CngiView } from '../views/recommandations/CngiView.js';
 import { CopilView } from '../views/recommandations/CopilView.js';
 import { ReformesView } from '../views/recommandations/ReformesView.js';
 import { ReunionsTechniquesView } from '../views/ReunionsTechniquesView.js';
+import { UsersView } from '../views/UsersView.js';
 
 export const router = createBrowserRouter([
   {
@@ -52,6 +53,11 @@ export const router = createBrowserRouter([
             // Route reservee aux administrateurs : ProtectedRoute imbrique avec roles=['admin']
             element: <ProtectedRoute roles={['admin']} />,
             children: [{ index: true, element: <ConfigView /> }],
+          },
+          {
+            path: 'admin/users',
+            element: <ProtectedRoute roles={['admin']} />,
+            children: [{ index: true, element: <UsersView /> }],
           },
           { path: '*', element: <Navigate to="/" replace /> },
         ],

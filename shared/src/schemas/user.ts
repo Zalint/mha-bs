@@ -24,10 +24,15 @@ export const createUserSchema = z.object({
 });
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 
-export const updateUserSchema = createUserSchema.partial().omit({ password: true }).extend({
+export const updateUserSchema = createUserSchema.partial().omit({ password: true, username: true }).extend({
   isActive: z.boolean().optional(),
 });
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
+export const resetPasswordSchema = z.object({
+  password: z.string().min(8).max(128),
+});
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
 export const loginSchema = z.object({
   username: z.string().min(1),

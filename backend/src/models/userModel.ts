@@ -95,4 +95,42 @@ export async function touchLastLogin(id: string): Promise<void> {
   await queryOne(`UPDATE "users" SET "lastLoginAt" = NOW() WHERE "id" = $1 RETURNING "id"`, [id]);
 }
 
+export async function updateUserBasics(
+  id: string,
+  patch: { email?: string; fullName?: string; role?: UserRole; isActive?: boolean },
+): Promise<PublicUser | null> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  const push = (col: string, value: unknown): void => {
+    params.push(value);
+    sets.push(`"${col}" = $${params.length}`);
+  };
+  if (patch.email !== undefined) push('email', patch.email);
+  if (patch.fullName !== undefined) push('fullName', patch.fullName);
+  if (patch.role !== undefined) push('role', patch.role);
+  if (patch.isActive !== undefined) push('isActive', patch.isActive);
+
+  if (sets.length === 0) {
+    const existing = await findUserById(id);
+    return existing ? toPublicUser(existing) : null;
+  }
+
+  params.push(id);
+  const row = await queryOne<UserRow>(
+    `UPDATE "users" SET ${sets.join(', ')} WHERE "id" = $${params.length}
+     RETURNING "id", "username", "email", "passwordHash", "fullName", "role", "isActive",
+               "lastLoginAt", "createdAt", "updatedAt"`,
+    params,
+  );
+  return row ? toPublicUser(row) : null;
+}
+
+export async function updateUserPassword(id: string, passwordHash: string): Promise<boolean> {
+  const row = await queryOne<{ id: string }>(
+    `UPDATE "users" SET "passwordHash" = $1 WHERE "id" = $2 RETURNING "id"`,
+    [passwordHash, id],
+  );
+  return row !== null;
+}
+
 export { toPublicUser };

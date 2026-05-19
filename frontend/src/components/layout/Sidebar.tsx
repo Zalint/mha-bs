@@ -17,6 +17,7 @@ import {
   Mic,
   Settings,
   Upload,
+  Users,
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -77,6 +78,7 @@ const NAV_BS: NavItem[] = [
   { id: 'bs-reunion', label: 'Réunion / mission', icon: CloudRain, to: '/bs/reunion' },
   { id: 'bs-import', label: 'Import Excel', icon: Upload, to: '/bs/import' },
   { id: 'bs-export', label: 'Export & rapports', icon: Download, to: '/bs/export' },
+  { id: 'bs-users', label: 'Utilisateurs', icon: Users, to: '/admin/users' },
   { id: 'bs-config', label: 'Configuration', icon: Settings, to: '/bs/config' },
 ];
 
@@ -88,9 +90,9 @@ interface SidebarProps {
 export function Sidebar({ mode, onModeChange }: SidebarProps) {
   const userRole = useAuthStore((s) => s.user?.role);
   const baseItems = mode === 'sg' ? NAV_SG : NAV_BS;
-  // L'item "Configuration" n'est visible que pour le role admin
+  // Les items "Configuration" et "Utilisateurs" ne sont visibles que pour le role admin
   const navItems = baseItems.filter((it) => {
-    if ('id' in it && it.id === 'bs-config') return userRole === 'admin';
+    if ('id' in it && (it.id === 'bs-config' || it.id === 'bs-users')) return userRole === 'admin';
     return true;
   });
   const groupLabel = mode === 'sg' ? 'VUE SG' : 'ESPACE BUREAU DE SUIVI';
