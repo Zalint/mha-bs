@@ -1,20 +1,19 @@
 # =============================================================================
-# Render Blueprint — MHA · Bureau de Suivi
+# Render Blueprint - MHA Bureau de Suivi (SG)
 #
-# Provisionne :
+# Architecture single-service :
 #   - 1 PostgreSQL (managed)
-#   - 1 Web Service Node.js (backend API)
-#   - 1 Static Site (frontend PWA React)
-#   - 2 Cron Jobs (rapport hebdo + calcul alertes)
+#   - 1 Web Service Node.js qui sert l'API Express + le build du frontend React
+#   - 2 Cron Jobs (rapport hebdo + calcul alertes nocturnes)
 #
-# Usage : depuis le dashboard Render → "New +" → "Blueprint" → pointer ce fichier.
+# Usage : depuis le dashboard Render -> "New +" -> "Blueprint" -> pointer ce fichier.
 # Documentation : https://render.com/docs/blueprint-spec
 # =============================================================================
 
 databases:
-  - name: mha-bs-db
-    databaseName: mha_bs
-    user: mha_bs
+  - name: mha-sg-bs-db
+    databaseName: mha_sg_bs
+    user: mha_sg_bs
     plan: starter
     region: frankfurt
     postgresMajorVersion: '15'
@@ -22,15 +21,17 @@ databases:
 
 services:
   # ---------------------------------------------------------------------------
-  # Backend API (Express + TypeScript)
+  # App principale (Express + TypeScript) qui sert
+  #   /api/*  -> backend
+  #   /*      -> build Vite du frontend (SPA catch-all)
   # ---------------------------------------------------------------------------
   - type: web
-    name: mha-bs-api
+    name: mha-sg-bs
     runtime: node
     plan: starter
     region: frankfurt
     branch: main
-    buildCommand: npm install && npm run build:shared && npm run build:backend
+    buildCommand: npm install && npm run build:shared && npm run build:backend && npm run build:frontend
     startCommand: node backend/dist/server.js
     preDeployCommand: psql "$DATABASE_URL" -f database/schema.sql
     healthCheckPath: /api/healthz
@@ -46,12 +47,12 @@ services:
         value: '10000'
       - key: DATABASE_URL
         fromDatabase:
-          name: mha-bs-db
+          name: mha-sg-bs-db
           property: connectionString
       - key: PUBLIC_URL
-        value: https://mha-bs.onrender.com
+        value: https://mha-sg-bs.onrender.com
       - key: CORS_ALLOWED_ORIGINS
-        value: https://mha-bs.onrender.com
+        value: https://mha-sg-bs.onrender.com
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -67,11 +68,11 @@ services:
       - key: BOOTSTRAP_ADMIN_EMAIL
         value: admin@mha.sn
       - key: BOOTSTRAP_ADMIN_PASSWORD
-        sync: false # à renseigner manuellement dans le dashboard
+        sync: false # a renseigner manuellement dans le dashboard
       - key: BOOTSTRAP_ADMIN_FULLNAME
         value: Administrateur MHA
       - key: RESEND_API_KEY
-        sync: false # à renseigner manuellement
+        sync: false # a renseigner manuellement (optionnel)
       - key: MAIL_FROM
         value: Bureau de Suivi MHA <noreply@mha.sn>
       - key: UPLOADS_DIR
@@ -82,46 +83,15 @@ services:
         value: info
       - key: PGSSLMODE
         value: require
-
-  # ---------------------------------------------------------------------------
-  # Frontend PWA (React + Vite)
-  # ---------------------------------------------------------------------------
-  - type: web
-    name: mha-bs
-    runtime: static
-    plan: starter
-    region: frankfurt
-    branch: main
-    buildCommand: npm install && npm run build:shared && npm run build:frontend
-    staticPublishPath: ./frontend/dist
-    autoDeploy: true
-    headers:
-      - path: /*
-        name: Strict-Transport-Security
-        value: max-age=31536000; includeSubDomains
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /service-worker.js
-        name: Cache-Control
-        value: no-store
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
-    routes:
-      # SPA fallback : toutes les routes non-fichier vers index.html
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
+      # En prod l'app et l'API sont sur la meme origine : VITE_API_BASE_URL relatif
       - key: VITE_API_BASE_URL
-        value: https://mha-bs-api.onrender.com/api
+        value: /api
 
   # ---------------------------------------------------------------------------
   # Cron Job : envoi du rapport hebdomadaire chaque lundi 08:00 (UTC)
   # ---------------------------------------------------------------------------
   - type: cron
-    name: mha-bs-rapport-hebdo
+    name: mha-sg-bs-rapport-hebdo
     runtime: node
     plan: starter
     region: frankfurt
@@ -133,7 +103,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: mha-bs-db
+          name: mha-sg-bs-db
           property: connectionString
       - key: RESEND_API_KEY
         sync: false
@@ -141,10 +111,10 @@ services:
         value: require
 
   # ---------------------------------------------------------------------------
-  # Cron Job : calcul nocturne des alertes (échéances dépassées, etc.)
+  # Cron Job : calcul nocturne des alertes (echeances depassees, etc.)
   # ---------------------------------------------------------------------------
   - type: cron
-    name: mha-bs-alertes-nightly
+    name: mha-sg-bs-alertes-nightly
     runtime: node
     plan: starter
     region: frankfurt
@@ -156,7 +126,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: mha-bs-db
+          name: mha-sg-bs-db
           property: connectionString
       - key: PGSSLMODE
         value: require
