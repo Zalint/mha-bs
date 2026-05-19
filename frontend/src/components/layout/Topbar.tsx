@@ -1,7 +1,9 @@
-import { Bell, LogOut, Search } from 'lucide-react';
+import { Bell, KeyRound, LogOut, Search } from 'lucide-react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '../../stores/authStore.js';
+import { ChangeMyPasswordModal } from './ChangeMyPasswordModal.js';
 
 interface TopbarProps {
   crumbs?: string[];
@@ -11,6 +13,7 @@ export function Topbar({ crumbs = [] }: TopbarProps) {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const [pwdOpen, setPwdOpen] = useState(false);
 
   const handleLogout = (): void => {
     logout();
@@ -63,6 +66,15 @@ export function Topbar({ crumbs = [] }: TopbarProps) {
         </div>
         <button
           type="button"
+          onClick={() => setPwdOpen(true)}
+          aria-label="Changer mon mot de passe"
+          className="ml-1 text-fg-muted hover:text-primary transition-colors"
+          title="Changer mon mot de passe"
+        >
+          <KeyRound className="w-4 h-4" strokeWidth={1.8} />
+        </button>
+        <button
+          type="button"
           onClick={handleLogout}
           aria-label="Deconnexion"
           className="ml-1 text-fg-muted hover:text-danger transition-colors"
@@ -71,6 +83,7 @@ export function Topbar({ crumbs = [] }: TopbarProps) {
           <LogOut className="w-4 h-4" strokeWidth={1.8} />
         </button>
       </div>
+      <ChangeMyPasswordModal open={pwdOpen} onOpenChange={setPwdOpen} />
     </header>
   );
 }

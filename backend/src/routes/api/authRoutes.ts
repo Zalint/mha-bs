@@ -1,14 +1,15 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 
-import { loginSchema } from '@mha-bs/shared';
+import { changePasswordSchema, loginSchema } from '@mha-bs/shared';
 
 import { appConfig } from '../../config/index.js';
 import { UnauthorizedError } from '../../lib/errors.js';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../lib/jwt.js';
+import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { authJwt } from '../../middlewares/authJwt.js';
 import { validate } from '../../middlewares/validate.js';
-import { findUserById, toPublicUser } from '../../models/userModel.js';
+import { findUserById, toPublicUser, updateUserPassword } from '../../models/userModel.js';
 import { loginWithCredentials } from '../../services/authService.js';
 
 export const authRoutes = Router();
@@ -56,6 +57,27 @@ authRoutes.get('/me', authJwt, async (req, res, next) => {
     const user = await findUserById(req.user.userId);
     if (!user) throw new UnauthorizedError('Utilisateur introuvable');
     res.json(toPublicUser(user));
+  } catch (err) {
+    next(err);
+  }
+});
+
+authRoutes.post('/change-password', authJwt, validate(changePasswordSchema), async (req, res, next) => {
+  try {
+    if (!req.user) throw new UnauthorizedError();
+    const { currentPassword, newPassword } = req.body as {
+      currentPassword: string;
+      newPassword: string;
+    };
+    const user = await findUserById(req.user.userId);
+    if (!user) throw new UnauthorizedError('Utilisateur introuvable');
+
+    const ok = await verifyPassword(currentPassword, user.passwordHash);
+    if (!ok) throw new UnauthorizedError('Mot de passe actuel incorrect');
+
+    const hash = await hashPassword(newPassword);
+    await updateUserPassword(user.id, hash);
+    res.status(204).end();
   } catch (err) {
     next(err);
   }
