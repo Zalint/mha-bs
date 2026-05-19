@@ -391,14 +391,20 @@ async function main(): Promise<void> {
   const candidates = [
     arg,
     process.env.EXCEL_PATH,
+    // Fichier embarque dans le repo (utilise par le preDeploy Render)
+    path.resolve(process.cwd(), 'backend/data/seed.xlsx'),
+    path.resolve(__dirname, '../../../data/seed.xlsx'),
+    // Fallbacks dev local
     path.resolve(__dirname, '../../../../Downloads/SUIVIACTION MINISTERIELLE MHA.xlsx'),
     path.resolve(process.env.USERPROFILE ?? process.env.HOME ?? '', 'Downloads/SUIVIACTION MINISTERIELLE MHA.xlsx'),
   ].filter((p): p is string => typeof p === 'string' && p.length > 0);
 
   const excelPath = candidates.find((p) => existsSync(p));
   if (!excelPath) {
-    logger.fatal({ candidates }, "Fichier Excel introuvable. Passez le chemin en argument ou via EXCEL_PATH.");
-    process.exit(1);
+    // En preDeploy Render on ne veut pas bloquer le deploiement si le seed est
+    // volontairement absent. On log un warn et on sort proprement.
+    logger.warn({ candidates }, "Fichier Excel introuvable, skip migration");
+    return;
   }
   logger.info({ excelPath }, 'Chargement du fichier Excel');
 

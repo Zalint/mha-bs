@@ -30,9 +30,10 @@ services:
     # --include=dev pour avoir tsc, vite, etc. (Render met NODE_ENV=production par defaut)
     buildCommand: npm install --include=dev && npm run build:shared && npm run build:backend && npm run build:frontend
     startCommand: node backend/dist/server.js
-    # Applique le schema PostgreSQL puis cree/seed l'utilisateur admin.
-    # Les deux scripts sont idempotents (CREATE IF NOT EXISTS / skip si admin existe).
-    preDeployCommand: node backend/dist/scripts/applySchema.js && node backend/dist/scripts/bootstrapAdmin.js
+    # Applique le schema PostgreSQL, cree l'admin, puis importe le seed Excel.
+    # Les trois scripts sont idempotents (CREATE IF NOT EXISTS, skip si admin existe,
+    # ne reinsere pas les lignes existantes dans la migration Excel).
+    preDeployCommand: node backend/dist/scripts/applySchema.js && node backend/dist/scripts/bootstrapAdmin.js && node backend/dist/scripts/migrateExcelToDb.js
     healthCheckPath: /api/healthz
     disk:
       name: uploads
