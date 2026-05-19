@@ -43,9 +43,7 @@ export function LoginView() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-primary-100 to-primary-50 p-6">
       <div className="w-full max-w-md">
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary to-secondary text-white text-2xl font-bold flex items-center justify-center">
-            M
-          </div>
+          <img src="/logo.png" alt="Focus MHA" className="w-16 h-16 rounded-xl object-contain bg-white shadow-sm" />
           <div>
             <h1 className="text-lg font-bold text-fg">MHA · Bureau de Suivi</h1>
             <p className="text-xs text-fg-muted">Ministère de l'Hydraulique et de l'Assainissement</p>

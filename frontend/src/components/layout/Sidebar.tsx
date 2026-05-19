@@ -101,9 +101,11 @@ export function Sidebar({ mode, onModeChange }: SidebarProps) {
     <aside className="bg-sidebar text-sidebar-fg flex flex-col sticky top-0 h-screen overflow-y-auto w-[248px] flex-shrink-0">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-4 py-4 border-b border-white/10">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-primary to-secondary text-white font-bold flex items-center justify-center">
-          M
-        </div>
+        <img
+          src="/logo.png"
+          alt="Focus MHA"
+          className="w-10 h-10 rounded-lg bg-white object-contain p-0.5"
+        />
         <div className="text-sm leading-tight">
           <div className="text-white font-semibold">MHA · Suivi</div>
           <div className="text-sidebar-muted text-xs">Bureau de Suivi</div>
