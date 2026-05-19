@@ -35,7 +35,7 @@
     "db:migrate-excel": "npm run migrate:excel --workspace=backend",
     "db:bootstrap-admin": "npm run bootstrap:admin --workspace=backend",
     "db:reset-and-seed": "npm run db:create && npm run db:schema && npm run db:bootstrap-admin && npm run db:migrate-excel",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.13.0",
