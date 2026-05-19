@@ -21,8 +21,22 @@ import {
 } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 
+import { useApi } from '../../hooks/useApi.js';
+import { api } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
 import { useAuthStore } from '../../stores/authStore.js';
+
+interface NavCounts {
+  directives: {
+    conseilInterMinisteriel: number;
+    conseilMinistres: number;
+    coordinationSggSg: number;
+  };
+  recommandations: { copil: number; reformes: number; cngi: number };
+  reunionsTechniques: number;
+  missionsTerrain: number;
+  interpellations: number;
+}
 
 interface NavLeaf {
   id: string;
@@ -41,36 +55,38 @@ interface NavGroupItem {
 
 type NavItem = NavLeaf | NavGroupItem;
 
-const NAV_SG: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard global', icon: LayoutDashboard, to: '/' },
-  {
-    id: 'directive-pres',
-    label: 'Directive présidentielle',
-    icon: Landmark,
-    children: [
-      { id: 'ci', label: 'Conseil inter-ministériel', to: '/directives/conseil-interministeriel', badge: 65 },
-      { id: 'cm', label: 'Conseil des ministres', to: '/directives/conseil-ministres', badge: 123 },
-      { id: 'sgg', label: 'Coordination SGG/SG', to: '/directives/coordination-sg', badge: 10 },
-    ],
-  },
-  {
-    id: 'reco-mha',
-    label: 'Recommandations MHA',
-    icon: ClipboardList,
-    children: [
-      { id: 'copil', label: 'COPIL', to: '/recommandations/copil', badge: 40 },
-      { id: 'reformes', label: 'Réformes', to: '/recommandations/reformes', badge: 13 },
-      { id: 'cngi', label: 'CNGI', to: '/recommandations/cngi', badge: 11 },
-    ],
-  },
-  { id: 'reunions-tech', label: 'Suivi Réunions techniques', icon: Calendar, to: '/reunions-techniques', badge: 19 },
-  { id: 'missions', label: 'Suivi missions terrain', icon: MapPin, to: '/missions-terrain', badge: 4 },
-  { id: 'interpellations', label: 'Interpellations parlementaires', icon: Mic, to: '/interpellations', badge: 12 },
-  { id: 'par-direction', label: 'Répartition par direction', icon: Building2, to: '/par-direction' },
-];
+function buildNavSg(counts: NavCounts | null): NavItem[] {
+  return [
+    { id: 'dashboard', label: 'Dashboard global', icon: LayoutDashboard, to: '/' },
+    {
+      id: 'directive-pres',
+      label: 'Directive présidentielle',
+      icon: Landmark,
+      children: [
+        { id: 'ci', label: 'Conseil inter-ministériel', to: '/directives/conseil-interministeriel', badge: counts?.directives.conseilInterMinisteriel },
+        { id: 'cm', label: 'Conseil des ministres', to: '/directives/conseil-ministres', badge: counts?.directives.conseilMinistres },
+        { id: 'sgg', label: 'Coordination SGG/SG', to: '/directives/coordination-sg', badge: counts?.directives.coordinationSggSg },
+      ],
+    },
+    {
+      id: 'reco-mha',
+      label: 'Recommandations MHA',
+      icon: ClipboardList,
+      children: [
+        { id: 'copil', label: 'COPIL', to: '/recommandations/copil', badge: counts?.recommandations.copil },
+        { id: 'reformes', label: 'Réformes', to: '/recommandations/reformes', badge: counts?.recommandations.reformes },
+        { id: 'cngi', label: 'CNGI', to: '/recommandations/cngi', badge: counts?.recommandations.cngi },
+      ],
+    },
+    { id: 'reunions-tech', label: 'Suivi Réunions techniques', icon: Calendar, to: '/reunions-techniques', badge: counts?.reunionsTechniques },
+    { id: 'missions', label: 'Suivi missions terrain', icon: MapPin, to: '/missions-terrain', badge: counts?.missionsTerrain },
+    { id: 'interpellations', label: 'Interpellations parlementaires', icon: Mic, to: '/interpellations', badge: counts?.interpellations },
+    { id: 'par-direction', label: 'Répartition par direction', icon: Building2, to: '/par-direction' },
+  ];
+}
 
 const NAV_BS: NavItem[] = [
-  { id: 'bs-liste', label: 'File de travail', icon: Inbox, to: '/bs/liste', badge: 16 },
+  { id: 'bs-liste', label: 'File de travail', icon: Inbox, to: '/bs/liste' },
   { id: 'bs-alertes', label: 'Mes alertes', icon: Bell, to: '/bs/alertes' },
   { id: 'bs-fiche', label: 'Nouvelle recommandation', icon: FilePlus, to: '/bs/fiche' },
   { id: 'bs-rencontre', label: 'Nouvelle rencontre', icon: CalendarPlus, to: '/bs/rencontre' },
@@ -89,7 +105,8 @@ interface SidebarProps {
 
 export function Sidebar({ mode, onModeChange }: SidebarProps) {
   const userRole = useAuthStore((s) => s.user?.role);
-  const baseItems = mode === 'sg' ? NAV_SG : NAV_BS;
+  const counts = useApi(() => api.get<NavCounts>('/dashboard/nav-counts'), []);
+  const baseItems = mode === 'sg' ? buildNavSg(counts.data) : NAV_BS;
   // Les items "Configuration" et "Utilisateurs" ne sont visibles que pour le role admin
   const navItems = baseItems.filter((it) => {
     if ('id' in it && (it.id === 'bs-config' || it.id === 'bs-users')) return userRole === 'admin';
@@ -143,7 +160,7 @@ function NavLeafItem({ item }: { item: NavLeaf }) {
     >
       {Icon && <Icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={1.8} />}
       <span className="flex-1">{item.label}</span>
-      {item.badge !== undefined && (
+      {item.badge !== undefined && item.badge !== 0 && (
         <span className="bg-white/15 text-white text-[11px] px-1.5 py-0.5 rounded-full font-mono">
           {item.badge}
         </span>
