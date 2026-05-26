@@ -32,6 +32,7 @@ interface ReunionFormValues {
   lieu: string;
   sousSecteur: SousSecteur | '';
   copilLie: string;
+  typeReunion: string;
   ordreDuJour: string;
   decisions: string;
   participantsRaw: string;
@@ -74,6 +75,7 @@ export function BsReunionMissionView() {
   // Referentiels charges depuis l'API (gerables via /bs/config)
   const sousSecteursRef = useReferentiel('sousSecteur');
   const copilProjetRef = useReferentiel('copilProjet');
+  const typeReunionRef = useReferentiel('typeReunion');
   const etatOuvrageRef = useReferentiel('etatOuvrage');
   const regionRef = useReferentiel('regionSenegal');
   const typeOuvrageRef = useReferentiel('typeOuvrage');
@@ -87,6 +89,7 @@ export function BsReunionMissionView() {
       lieu: 'SG MHA · Salle Plénière',
       sousSecteur: '',
       copilLie: '—',
+      typeReunion: 'technique',
       ordreDuJour: '',
       decisions: '',
       participantsRaw: 'Cabinet MHA, DPGI, ONAS',
@@ -119,6 +122,7 @@ export function BsReunionMissionView() {
         lieu: v.lieu || null,
         sousSecteur: v.sousSecteur || null,
         copilLie: v.copilLie === '—' ? null : v.copilLie || null,
+        typeReunion: v.typeReunion || null,
         ordreDuJour: v.ordreDuJour || null,
         decisions: v.decisions || null,
         participants: v.participantsRaw.split(',').map((s) => s.trim()).filter(Boolean),
@@ -229,7 +233,24 @@ export function BsReunionMissionView() {
                 <input type="text" className="input font-mono" {...reunionForm.register('dureeEstimee')} />
               </FormField>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              <FormField
+                label="Type de réunion"
+                help={
+                  typeReunionRef.items.length === 0 && !typeReunionRef.isLoading
+                    ? 'Aucun type défini. Ajoutez-en via Configuration.'
+                    : undefined
+                }
+              >
+                <select className="select" {...reunionForm.register('typeReunion')}>
+                  <option value="">—</option>
+                  {typeReunionRef.items.map((t) => (
+                    <option key={t.id} value={t.code}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
               <FormField
                 label="Sous-secteur principal"
                 help={

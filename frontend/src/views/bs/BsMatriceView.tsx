@@ -1,4 +1,4 @@
-import { Cloud, CloudRain, Droplets, FolderKanban, History, Landmark, Plus, Send, X } from 'lucide-react';
+import { ArrowRight, Cloud, CloudRain, Droplets, FolderKanban, History, Landmark, Move, Plus, Send, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -49,6 +49,7 @@ const ETAT_RADIO_STYLES: Record<DirectiveEtat, string> = {
 
 export function BsMatriceView() {
   const typeMatriceRef = useReferentiel('typeMatrice');
+  const categoriesRef = useReferentiel('matriceCategorie');
   const [current, setCurrent] = useState<string>('cngi');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string>('—');
@@ -69,9 +70,61 @@ export function BsMatriceView() {
   const [creating, setCreating] = useState(false);
   const [newText, setNewText] = useState('');
 
+  // Modale réassignation
+  const [reassignTarget, setReassignTarget] = useState<RecommandationMatrice | null>(null);
+  const [reassignDest, setReassignDest] = useState<string>('');
+  const [reassigning, setReassigning] = useState(false);
+
   useEffect(() => {
     setObsDraft({});
   }, [current]);
+
+  const openReassign = (item: RecommandationMatrice): void => {
+    setReassignTarget(item);
+    setReassignDest('');
+  };
+  const closeReassign = (): void => {
+    if (reassigning) return;
+    setReassignTarget(null);
+    setReassignDest('');
+  };
+  // Catégorie courante de la matrice active (lue depuis le référentiel)
+  const currentMatriceRef = typeMatriceRef.items.find((t) => t.code === current);
+  const currentCategorie = currentMatriceRef?.parentCode ?? '';
+
+  const handleCategorieChange = async (newCategorie: string): Promise<void> => {
+    if (!currentMatriceRef) return;
+    try {
+      await api.put(`/referentiels/${currentMatriceRef.id}`, {
+        parentCode: newCategorie || null,
+      });
+      const catLabel = categoriesRef.items.find((c) => c.code === newCategorie)?.label ?? 'Autres';
+      toast.success(`${currentMatriceRef.label} → ${catLabel}`);
+      typeMatriceRef.refetch();
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : "Échec de la mise à jour");
+    }
+  };
+
+  const handleReassign = async (): Promise<void> => {
+    if (!reassignTarget || !reassignDest || reassignDest === reassignTarget.typeMatrice) return;
+    setReassigning(true);
+    try {
+      await api.put(
+        `/matrices/${reassignTarget.typeMatrice}/${reassignTarget.numOrdre}/reassign`,
+        { newTypeMatrice: reassignDest },
+      );
+      const destLabel = typeMatriceRef.items.find((t) => t.code === reassignDest)?.label ?? reassignDest;
+      toast.success(`Recommandation déplacée vers ${destLabel}`);
+      setReassignTarget(null);
+      setReassignDest('');
+      allQuery.refetch();
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Échec de la réassignation');
+    } finally {
+      setReassigning(false);
+    }
+  };
 
   const handleCreate = async (): Promise<void> => {
     const text = newText.trim();
@@ -199,7 +252,7 @@ export function BsMatriceView() {
       {/* Matrix table */}
       {current && (
         <div className="bg-surface border border-border rounded-lg overflow-hidden">
-          <div className="bg-surface2 border-b border-border px-4 py-3 flex items-center gap-3">
+          <div className="bg-surface2 border-b border-border px-4 py-3 flex items-center gap-3 flex-wrap">
             <div className="w-8 h-8 rounded bg-primary text-white flex items-center justify-center font-mono font-semibold text-xs">
               {currentMetaVisual.ic}
             </div>
@@ -207,6 +260,23 @@ export function BsMatriceView() {
               <div className="text-sm font-semibold text-fg">{currentTypeLabel}</div>
               <div className="text-xs text-fg-muted">{currentMetaVisual.sub} · {currentItems.length} recommandations</div>
             </div>
+            <label className="flex items-center gap-1.5 text-xs text-fg-muted">
+              <span>Catégorie</span>
+              <select
+                value={currentCategorie}
+                onChange={(e) => void handleCategorieChange(e.target.value)}
+                className="rounded border border-border bg-surface px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">Autres</option>
+                {categoriesRef.items
+                  .filter((c) => c.code !== 'autres')
+                  .map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.label}
+                    </option>
+                  ))}
+              </select>
+            </label>
             <div className="w-36 h-1.5 bg-muted rounded-full overflow-hidden">
               <div className="h-full bg-success rounded-full" style={{ width: `${pctCurrent}%` }} />
             </div>
@@ -235,12 +305,15 @@ export function BsMatriceView() {
                 <th className="text-left px-3 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-[240px]">
                   Observations
                 </th>
+                <th className="text-center px-3 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-[100px]">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="text-center text-fg-muted py-12 text-sm">
+                  <td colSpan={5} className="text-center text-fg-muted py-12 text-sm">
                     Aucune recommandation dans cette matrice.
                   </td>
                 </tr>
@@ -287,6 +360,16 @@ export function BsMatriceView() {
                         placeholder="Observations…"
                         className="w-full px-2.5 py-1.5 text-xs border border-transparent hover:border-border focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 rounded bg-transparent resize-y"
                       />
+                    </td>
+                    <td className="px-3 py-3.5 align-top text-center">
+                      <button
+                        type="button"
+                        onClick={() => openReassign(r)}
+                        title="Réassigner à une autre matrice"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-fg-muted hover:text-primary hover:bg-primary-100 rounded transition-colors"
+                      >
+                        <Move className="w-3.5 h-3.5" /> Réassigner
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -355,6 +438,97 @@ export function BsMatriceView() {
                 disabled={creating || newText.trim().length < 3}
               >
                 {creating ? 'Création…' : 'Créer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reassignTarget && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={closeReassign}
+        >
+          <div
+            className="bg-surface rounded-xl border border-border w-full max-w-lg shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center flex-shrink-0">
+                  <Move className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Réassigner la recommandation</h2>
+                  <p className="text-xs text-fg-muted mt-1">
+                    La recommandation <b>{reassignTarget.typeMatrice} #{reassignTarget.numOrdre}</b>{' '}
+                    sera déplacée et recevra un nouveau numéro d&apos;ordre dans la matrice cible.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeReassign}
+                disabled={reassigning}
+                className="p-1 text-fg-muted hover:text-fg rounded hover:bg-muted"
+                aria-label="Fermer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div className="bg-muted rounded p-3 text-sm text-fg-2 leading-relaxed">
+                <div className="text-[11px] uppercase tracking-wider text-fg-muted font-medium mb-1">
+                  Texte
+                </div>
+                {reassignTarget.texteRecommandation}
+              </div>
+              <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
+                <div>
+                  <label className="block text-xs font-medium mb-1 text-fg-muted">Matrice actuelle</label>
+                  <div className="px-3 py-2 border border-border rounded text-sm bg-muted font-mono">
+                    {typeMatriceRef.items.find((t) => t.code === reassignTarget.typeMatrice)?.label ?? reassignTarget.typeMatrice}
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-fg-muted mb-3" />
+                <div>
+                  <label className="block text-xs font-medium mb-1">
+                    Nouvelle matrice <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    value={reassignDest}
+                    onChange={(e) => setReassignDest(e.target.value)}
+                    disabled={reassigning}
+                    className="w-full px-3 py-2 border border-border rounded text-sm bg-surface focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                  >
+                    <option value="">— Sélectionner —</option>
+                    {typeMatriceRef.items
+                      .filter((t) => t.code !== reassignTarget.typeMatrice)
+                      .map((t) => (
+                        <option key={t.code} value={t.code}>
+                          {t.label}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={closeReassign}
+                disabled={reassigning}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void handleReassign()}
+                disabled={reassigning || !reassignDest}
+              >
+                {reassigning ? 'Réassignation…' : 'Confirmer'}
               </button>
             </div>
           </div>

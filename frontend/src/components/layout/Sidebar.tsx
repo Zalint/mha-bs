@@ -63,16 +63,7 @@ function buildNavSg(counts: NavCounts | null): NavItem[] {
     { id: 'dashboard', label: 'Dashboard global', icon: LayoutDashboard, to: '/' },
     { id: 'sg-validation', label: 'Validation', icon: ShieldCheck, to: '/sg/validation' },
     { id: 'directive-pres', label: 'Directives présidentielles', icon: Landmark, to: '/directives' },
-    {
-      id: 'reco-mha',
-      label: 'Recommandations MHA',
-      icon: ClipboardList,
-      children: [
-        { id: 'copil', label: 'COPIL', to: '/recommandations/copil', badge: counts?.recommandations.copil },
-        { id: 'reformes', label: 'Réformes', to: '/recommandations/reformes', badge: counts?.recommandations.reformes },
-        { id: 'cngi', label: 'CNGI', to: '/recommandations/cngi', badge: counts?.recommandations.cngi },
-      ],
-    },
+    { id: 'reco-mha', label: 'Recommandations MHA', icon: ClipboardList, to: '/recommandations' },
     { id: 'reunions-tech', label: 'Suivi Réunions techniques', icon: Calendar, to: '/reunions-techniques', badge: counts?.reunionsTechniques },
     { id: 'missions', label: 'Suivi missions terrain', icon: MapPin, to: '/missions-terrain', badge: counts?.missionsTerrain },
     { id: 'interpellations', label: 'Interpellations parlementaires', icon: Mic, to: '/interpellations', badge: counts?.interpellations },
@@ -89,6 +80,7 @@ const NAV_BS: NavItem[] = [
   { id: 'bs-rencontre', label: 'Nouvelle rencontre', icon: CalendarPlus, to: '/bs/rencontre' },
   { id: 'bs-matrice', label: 'Saisie matrices', icon: Grid3x3, to: '/bs/matrice' },
   { id: 'bs-reunion', label: 'Réunion / mission', icon: CloudRain, to: '/bs/reunion' },
+  { id: 'bs-interpellation', label: 'Nouvelle interpellation', icon: Mic, to: '/bs/interpellation/new' },
   { id: 'bs-import', label: 'Importer Excel', icon: Upload, to: '/bs/import' },
   { id: 'bs-export', label: 'Export & rapports', icon: Download, to: '/bs/export' },
   { id: 'bs-users', label: 'Utilisateurs', icon: Users, to: '/admin/users' },
@@ -126,8 +118,8 @@ export function Sidebar({ mode, onModeChange, isOpen = false, onClose }: Sidebar
         'fixed inset-y-0 left-0 z-50 w-[248px]',
         'transform transition-transform duration-300 ease-in-out',
         isOpen ? 'translate-x-0' : '-translate-x-full',
-        // Desktop : reprend une place dans le flex parent, slide ou cache via lg:hidden
-        'lg:static lg:translate-x-0 lg:transition-none lg:z-auto lg:flex-shrink-0',
+        // Desktop : sticky en haut → reste visible quand on scrolle le contenu principal
+        'lg:sticky lg:top-0 lg:translate-x-0 lg:transition-none lg:z-auto lg:flex-shrink-0 lg:self-start',
         !isOpen && 'lg:hidden',
         // Style commun
         'bg-sidebar text-sidebar-fg flex flex-col h-screen overflow-y-auto',

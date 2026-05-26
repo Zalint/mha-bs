@@ -229,6 +229,16 @@ export interface MissionsTerrainSummary {
   prochaineLocalite: string | null;
 }
 
+export interface CategorieRecommandationSummary {
+  code: string;          // code de la catégorie (copil/reformes/cngi/autres/...)
+  label: string;         // label de la catégorie
+  nbMatrices: number;    // nombre de matrices dans cette catégorie
+  recommandations: number;
+  nbRealisees: number;
+  nbEnCours: number;
+  nbAttente: number;
+}
+
 export interface SgSummary {
   annee: number | null;
   availableYears: number[];
@@ -238,6 +248,8 @@ export interface SgSummary {
     coordinationSggSg: GlobalKpis;
   };
   copil: CopilSummary;
+  // Stats par catégorie de matrice (driven by matriceCategorie + parentCode)
+  recommandationsParCategorie: CategorieRecommandationSummary[];
   reunionsTechniques: ReunionsTechniquesSummary;
   missionsTerrain: MissionsTerrainSummary;
 }
@@ -270,6 +282,50 @@ export async function getCopilSummary(): Promise<CopilSummary> {
     nbEnCours: row ? Number(row.nbEnCours) : 0,
     nbAttente: row ? Number(row.nbAttente) : 0,
   };
+}
+
+/**
+ * Stats par catégorie de matrice (driven by parentCode du référentiel typeMatrice).
+ * Renvoie une entrée par catégorie active du référentiel matriceCategorie, y compris
+ * celles qui n'ont aucune matrice rattachée (pour exposer la catégorie dans l'UI).
+ */
+export async function getRecommandationsByCategorie(): Promise<CategorieRecommandationSummary[]> {
+  const rows = await queryAll<{
+    code: string;
+    label: string;
+    nbMatrices: string;
+    recommandations: string;
+    nbRealisees: string;
+    nbEnCours: string;
+    nbAttente: string;
+  }>(
+    `SELECT
+       cat."code",
+       cat."label",
+       COUNT(DISTINCT mr."code") FILTER (WHERE mr."code" IS NOT NULL)::TEXT AS "nbMatrices",
+       COUNT(rm.*)::TEXT                                                   AS "recommandations",
+       COUNT(rm.*) FILTER (WHERE rm."etat" = 'realisee')::TEXT              AS "nbRealisees",
+       COUNT(rm.*) FILTER (WHERE rm."etat" = 'enCours')::TEXT               AS "nbEnCours",
+       COUNT(rm.*) FILTER (WHERE rm."etat" = 'attente')::TEXT               AS "nbAttente"
+     FROM "referentiels" cat
+     LEFT JOIN "referentiels" mr
+       ON mr."codeType" = 'typeMatrice'
+       AND COALESCE(mr."parentCode", 'autres') = cat."code"
+     LEFT JOIN "recommandationsMatrice" rm
+       ON rm."typeMatrice" = mr."code"
+     WHERE cat."codeType" = 'matriceCategorie' AND cat."isActive" = TRUE
+     GROUP BY cat."code", cat."label", cat."ordreAffichage"
+     ORDER BY cat."ordreAffichage" ASC, cat."label" ASC`,
+  );
+  return rows.map((r) => ({
+    code: r.code,
+    label: r.label,
+    nbMatrices: Number(r.nbMatrices),
+    recommandations: Number(r.recommandations),
+    nbRealisees: Number(r.nbRealisees),
+    nbEnCours: Number(r.nbEnCours),
+    nbAttente: Number(r.nbAttente),
+  }));
 }
 
 export async function getReunionsTechniquesSummary(
@@ -393,6 +449,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     conseilInterMinisteriel,
     coordinationSggSg,
     copil,
+    recommandationsParCategorie,
     reunionsTechniques,
     missionsTerrain,
   ] = await Promise.all([
@@ -401,6 +458,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     getKpisByTypeRencontre('conseilInterMinisteriel', annee),
     getKpisByTypeRencontre('coordinationSggSg', annee),
     getCopilSummary(),
+    getRecommandationsByCategorie(),
     getReunionsTechniquesSummary(annee),
     getMissionsTerrainSummary(annee),
   ]);
@@ -409,6 +467,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     availableYears,
     directives: { conseilMinistres, conseilInterMinisteriel, coordinationSggSg },
     copil,
+    recommandationsParCategorie,
     reunionsTechniques,
     missionsTerrain,
   };

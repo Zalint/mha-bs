@@ -6,9 +6,14 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { FormField } from '../components/ui/FormField.js';
 import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
-import { type Referentiel } from '../hooks/useReferentiel.js';
+import { type Referentiel, useReferentiel } from '../hooks/useReferentiel.js';
 import { ApiClientError, api } from '../lib/apiClient.js';
 import { cn } from '../lib/cn.js';
+
+// Mapping codeType -> codeType de son parent référentiel (pour exposer un select Catégorie)
+const PARENT_REF: Record<string, string> = {
+  typeMatrice: 'matriceCategorie',
+};
 
 interface RefType {
   codeType: string;
@@ -59,9 +64,19 @@ const REF_TYPES: RefType[] = [
     description: 'Conseils, COPIL, CNGI, reunions techniques, commissions AN',
   },
   {
+    codeType: 'typeReunion',
+    label: 'Types de reunion (BsReunionMission)',
+    description: 'Nature des reunions techniques saisies au BS (COPIL, technique, ...).',
+  },
+  {
     codeType: 'typeMatrice',
     label: 'Types de matrice',
-    description: '8 matrices initiales : 5 COPIL + 2 reformes + CNGI. Extensible.',
+    description: '8 matrices initiales (5 COPIL + 2 reformes + CNGI). Categorie editable par ligne.',
+  },
+  {
+    codeType: 'matriceCategorie',
+    label: 'Categories de matrice',
+    description: 'Regroupement des matrices pour les onglets de la page Recommandations (COPIL, Reformes, CNGI, Autres, ...).',
   },
   {
     codeType: 'typeInterpellation',
@@ -91,6 +106,10 @@ export function ConfigView() {
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const activeMeta = REF_TYPES.find((t) => t.codeType === activeType);
+
+  // Charge les options parent (catégories) si la codeType active en a un référent
+  const parentCodeType = PARENT_REF[activeType];
+  const parentOptions = useReferentiel(parentCodeType ?? '');
 
   const handleDelete = async (): Promise<void> => {
     if (!confirmDeleteId) return;
@@ -138,7 +157,12 @@ export function ConfigView() {
       </div>
 
       {/* Add form */}
-      <AddReferentielForm codeType={activeType} onCreated={() => query.refetch()} />
+      <AddReferentielForm
+        codeType={activeType}
+        parentOptions={parentCodeType ? parentOptions.items : []}
+        defaultParentCode={parentCodeType ? 'autres' : null}
+        onCreated={() => query.refetch()}
+      />
 
       {/* List */}
       <div className="bg-surface border border-border rounded-lg overflow-hidden mt-4">
@@ -162,6 +186,11 @@ export function ConfigView() {
                 <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border">
                   Libelle
                 </th>
+                {parentCodeType && (
+                  <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-44">
+                    Categorie
+                  </th>
+                )}
                 <th className="text-center px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-20">
                   Ordre
                 </th>
@@ -173,7 +202,13 @@ export function ConfigView() {
             </thead>
             <tbody>
               {items.map((it) => (
-                <RefRow key={it.id} item={it} onChange={() => query.refetch()} onDelete={() => setConfirmDeleteId(it.id)} />
+                <RefRow
+                  key={it.id}
+                  item={it}
+                  parentOptions={parentCodeType ? parentOptions.items : null}
+                  onChange={() => query.refetch()}
+                  onDelete={() => setConfirmDeleteId(it.id)}
+                />
               ))}
             </tbody>
           </table>
@@ -195,16 +230,20 @@ export function ConfigView() {
 
 interface RefRowProps {
   item: Referentiel;
+  parentOptions: Referentiel[] | null;
   onChange: () => void;
   onDelete: () => void;
 }
 
-function RefRow({ item, onChange, onDelete }: RefRowProps) {
+function RefRow({ item, parentOptions, onChange, onDelete }: RefRowProps) {
   const [label, setLabel] = useState(item.label);
   const [ordre, setOrdre] = useState(item.ordreAffichage);
   const [isActive, setIsActive] = useState(item.isActive);
+  const [parentCode, setParentCode] = useState<string>(item.parentCode ?? '');
 
-  const persist = async (patch: Partial<{ label: string; ordreAffichage: number; isActive: boolean }>): Promise<void> => {
+  const persist = async (
+    patch: Partial<{ label: string; ordreAffichage: number; isActive: boolean; parentCode: string | null }>,
+  ): Promise<void> => {
     try {
       await api.put(`/referentiels/${item.id}`, patch);
       onChange();
@@ -225,6 +264,26 @@ function RefRow({ item, onChange, onDelete }: RefRowProps) {
           className="w-full px-2 py-1 text-sm border border-transparent hover:border-border focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 rounded bg-transparent"
         />
       </td>
+      {parentOptions && (
+        <td className="px-4 py-2.5">
+          <select
+            value={parentCode}
+            onChange={(e) => {
+              const next = e.target.value;
+              setParentCode(next);
+              void persist({ parentCode: next || null });
+            }}
+            className="w-full px-2 py-1 text-sm border border-transparent hover:border-border focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 rounded bg-transparent"
+          >
+            <option value="">— Autres —</option>
+            {parentOptions.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </td>
+      )}
       <td className="px-4 py-2.5 text-center">
         <input
           type="number"
@@ -260,10 +319,23 @@ function RefRow({ item, onChange, onDelete }: RefRowProps) {
   );
 }
 
-function AddReferentielForm({ codeType, onCreated }: { codeType: string; onCreated: () => void }) {
+function AddReferentielForm({
+  codeType,
+  parentOptions,
+  defaultParentCode,
+  onCreated,
+}: {
+  codeType: string;
+  parentOptions: Referentiel[];
+  defaultParentCode: string | null;
+  onCreated: () => void;
+}) {
   const [code, setCode] = useState('');
   const [label, setLabel] = useState('');
+  const [parentCode, setParentCode] = useState<string>(defaultParentCode ?? '');
   const [submitting, setSubmitting] = useState(false);
+
+  const showParentSelect = parentOptions.length > 0;
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -273,10 +345,17 @@ function AddReferentielForm({ codeType, onCreated }: { codeType: string; onCreat
     }
     setSubmitting(true);
     try {
-      await api.post('/referentiels', { codeType, code: code.trim(), label: label.trim() });
+      const payload: Record<string, unknown> = {
+        codeType,
+        code: code.trim(),
+        label: label.trim(),
+      };
+      if (showParentSelect) payload.parentCode = parentCode || null;
+      await api.post('/referentiels', payload);
       toast.success('Entree creee');
       setCode('');
       setLabel('');
+      setParentCode(defaultParentCode ?? '');
       onCreated();
     } catch (err) {
       toast.error(err instanceof ApiClientError ? err.message : 'Erreur');
@@ -310,6 +389,23 @@ function AddReferentielForm({ codeType, onCreated }: { codeType: string; onCreat
           className="input"
         />
       </FormField>
+      {showParentSelect && (
+        <FormField label="Categorie" htmlFor="parent" className="w-52">
+          <select
+            id="parent"
+            value={parentCode}
+            onChange={(e) => setParentCode(e.target.value)}
+            className="input"
+          >
+            <option value="">— Autres —</option>
+            {parentOptions.map((p) => (
+              <option key={p.code} value={p.code}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </FormField>
+      )}
       <button type="submit" disabled={submitting} className="btn btn-primary">
         <Plus className="w-3.5 h-3.5" />
         {submitting ? 'Creation...' : 'Ajouter'}

@@ -11,6 +11,7 @@ interface ReunionRow {
   lieu: string | null;
   sousSecteur: SousSecteur | null;
   copilLie: string | null;
+  typeReunion: string | null;
   ordreDuJour: string | null;
   decisions: string | null;
   participants: string[];
@@ -35,6 +36,7 @@ function toReunion(row: ReunionRow): ReunionTechnique {
     lieu: row.lieu,
     sousSecteur: row.sousSecteur,
     copilLie: row.copilLie,
+    typeReunion: row.typeReunion,
     ordreDuJour: row.ordreDuJour,
     decisions: row.decisions,
     participants: Array.isArray(row.participants) ? row.participants : [],
@@ -48,7 +50,7 @@ function toReunion(row: ReunionRow): ReunionTechnique {
 
 const SELECT_COLS = `
   "id", "dateReunion", "heureDebut", "dureeEstimee", "theme", "lieu",
-  "sousSecteur", "copilLie", "ordreDuJour", "decisions", "participants",
+  "sousSecteur", "copilLie", "typeReunion", "ordreDuJour", "decisions", "participants",
   "visibleSg", "inclusRapportHebdo",
   "createdBy", "createdAt", "updatedAt"
 `;
@@ -84,10 +86,10 @@ export async function createReunion(
   const row = await queryOne<ReunionRow>(
     `INSERT INTO "reunionsTechniques" (
        "dateReunion", "heureDebut", "dureeEstimee", "theme", "lieu",
-       "sousSecteur", "copilLie", "ordreDuJour", "decisions", "participants",
+       "sousSecteur", "copilLie", "typeReunion", "ordreDuJour", "decisions", "participants",
        "visibleSg", "inclusRapportHebdo", "createdBy"
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14)
      RETURNING ${SELECT_COLS}`,
     [
       input.dateReunion,
@@ -97,6 +99,7 @@ export async function createReunion(
       input.lieu,
       input.sousSecteur,
       input.copilLie,
+      input.typeReunion ?? null,
       input.ordreDuJour,
       input.decisions,
       JSON.stringify(input.participants ?? []),
@@ -127,6 +130,7 @@ export async function updateReunion(
   if (input.lieu !== undefined) push('lieu', input.lieu);
   if (input.sousSecteur !== undefined) push('sousSecteur', input.sousSecteur);
   if (input.copilLie !== undefined) push('copilLie', input.copilLie);
+  if (input.typeReunion !== undefined) push('typeReunion', input.typeReunion);
   if (input.ordreDuJour !== undefined) push('ordreDuJour', input.ordreDuJour);
   if (input.decisions !== undefined) push('decisions', input.decisions);
   if (input.participants !== undefined) push('participants', input.participants, true);

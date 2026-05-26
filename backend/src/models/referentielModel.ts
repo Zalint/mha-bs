@@ -6,6 +6,7 @@ export interface ReferentielRow {
   code: string;
   label: string;
   description: string | null;
+  parentCode: string | null;
   ordreAffichage: number;
   isActive: boolean;
   createdBy: string | null;
@@ -19,6 +20,7 @@ export interface PublicReferentiel {
   code: string;
   label: string;
   description: string | null;
+  parentCode: string | null;
   ordreAffichage: number;
   isActive: boolean;
   createdBy: string | null;
@@ -33,6 +35,7 @@ function toPublic(row: ReferentielRow): PublicReferentiel {
     code: row.code,
     label: row.label,
     description: row.description,
+    parentCode: row.parentCode,
     ordreAffichage: row.ordreAffichage,
     isActive: row.isActive,
     createdBy: row.createdBy,
@@ -42,7 +45,7 @@ function toPublic(row: ReferentielRow): PublicReferentiel {
 }
 
 const SELECT_COLS = `
-  "id", "codeType", "code", "label", "description",
+  "id", "codeType", "code", "label", "description", "parentCode",
   "ordreAffichage", "isActive", "createdBy", "createdAt", "updatedAt"
 `;
 
@@ -76,6 +79,7 @@ export interface CreateReferentielInput {
   code: string;
   label: string;
   description?: string | null;
+  parentCode?: string | null;
   ordreAffichage?: number;
 }
 
@@ -84,10 +88,18 @@ export async function createReferentiel(
   createdBy: string,
 ): Promise<PublicReferentiel> {
   const row = await queryOne<ReferentielRow>(
-    `INSERT INTO "referentiels" ("codeType", "code", "label", "description", "ordreAffichage", "createdBy")
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO "referentiels" ("codeType", "code", "label", "description", "parentCode", "ordreAffichage", "createdBy")
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING ${SELECT_COLS}`,
-    [input.codeType, input.code, input.label, input.description ?? null, input.ordreAffichage ?? 100, createdBy],
+    [
+      input.codeType,
+      input.code,
+      input.label,
+      input.description ?? null,
+      input.parentCode ?? null,
+      input.ordreAffichage ?? 100,
+      createdBy,
+    ],
   );
   if (!row) throw new Error('Echec creation referentiel');
   return toPublic(row);
@@ -96,6 +108,7 @@ export async function createReferentiel(
 export interface UpdateReferentielInput {
   label?: string;
   description?: string | null;
+  parentCode?: string | null;
   ordreAffichage?: number;
   isActive?: boolean;
 }
@@ -109,6 +122,7 @@ export async function updateReferentiel(id: string, input: UpdateReferentielInpu
   };
   if (input.label !== undefined) push('label', input.label);
   if (input.description !== undefined) push('description', input.description);
+  if (input.parentCode !== undefined) push('parentCode', input.parentCode);
   if (input.ordreAffichage !== undefined) push('ordreAffichage', input.ordreAffichage);
   if (input.isActive !== undefined) push('isActive', input.isActive);
   if (sets.length === 0) throw new Error('Aucun champ a mettre a jour');

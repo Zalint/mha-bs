@@ -9,6 +9,7 @@ export interface Referentiel {
   code: string;
   label: string;
   description: string | null;
+  parentCode: string | null;
   ordreAffichage: number;
   isActive: boolean;
   createdAt: string;

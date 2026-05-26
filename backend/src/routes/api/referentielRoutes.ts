@@ -50,13 +50,14 @@ const createSchema = z.object({
     .regex(/^[a-zA-Z0-9_-]+$/, 'code alphanumerique uniquement (lettres, chiffres, - et _)'),
   label: z.string().min(1).max(255),
   description: z.string().nullable().optional(),
+  parentCode: z.string().min(1).max(100).nullable().optional(),
   ordreAffichage: z.number().int().optional(),
 });
 
 referentielRoutes.post(
   '/',
   authJwt,
-  requireRole('admin'),
+  requireRole('admin', 'bs'),
   validate(createSchema),
   async (req, res, next) => {
     try {
@@ -72,6 +73,7 @@ referentielRoutes.post(
 const updateSchema = z.object({
   label: z.string().min(1).max(255).optional(),
   description: z.string().nullable().optional(),
+  parentCode: z.string().min(1).max(100).nullable().optional(),
   ordreAffichage: z.number().int().optional(),
   isActive: z.boolean().optional(),
 });
@@ -79,7 +81,7 @@ const updateSchema = z.object({
 referentielRoutes.put(
   '/:id',
   authJwt,
-  requireRole('admin'),
+  requireRole('admin', 'bs'),
   validate(updateSchema),
   async (req, res, next) => {
     try {

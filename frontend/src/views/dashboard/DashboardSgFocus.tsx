@@ -9,47 +9,62 @@ import { StatStrip, type StatCell } from '../../components/ui/StatStrip.js';
 import { cn } from '../../lib/cn.js';
 import { formatShort } from '../../lib/formatDate.js';
 import {
+  computeAggregate,
+  computeRecommandationsAggregate,
   formatMonthLabel,
   pct,
   type DashboardViewProps,
   type GlobalKpis,
 } from './types.js';
 
-type CategoryKey =
-  | 'conseilMinistres'
-  | 'conseilInterMinisteriel'
-  | 'coordinationSggSg'
-  | 'copil'
-  | 'reunions'
-  | 'missions';
+const DIRECTIVE_TARGET = 90;
+const RECO_TARGET = 60;
+
+// Clé d'onglet préfixée pour éviter les collisions :
+//   dir:<typeRencontre>  pour les 3 directives
+//   reco:<categoryCode>  pour chaque catégorie de matrices (dynamique)
+//   reunions / missions  pour l'activité
+type ActiveKey = string;
 
 interface ChipDef {
-  key: CategoryKey;
+  key: ActiveKey;
   label: string;
   badge: number;
 }
 
 export function DashboardSgFocus({ data, missions, anneeLabel }: DashboardViewProps) {
   const navigate = useNavigate();
-  const [active, setActive] = useState<CategoryKey>('conseilMinistres');
+  const [active, setActive] = useState<ActiveKey>('dir:conseilMinistres');
 
-  const chips: ChipDef[] = [
+  const directiveAggregate = computeAggregate(data.directives);
+  const recoAggregate = computeRecommandationsAggregate(data.recommandationsParCategorie);
+
+  const directiveChips: ChipDef[] = [
     {
-      key: 'conseilMinistres',
+      key: 'dir:conseilMinistres',
       label: 'Conseil ministres',
       badge: data.directives.conseilMinistres.totalDirectives,
     },
     {
-      key: 'conseilInterMinisteriel',
+      key: 'dir:conseilInterMinisteriel',
       label: 'Conseil inter',
       badge: data.directives.conseilInterMinisteriel.totalDirectives,
     },
     {
-      key: 'coordinationSggSg',
+      key: 'dir:coordinationSggSg',
       label: 'SGG/SG',
       badge: data.directives.coordinationSggSg.totalDirectives,
     },
-    { key: 'copil', label: 'COPIL', badge: data.copil.recommandations },
+  ];
+
+  // Une chip par catégorie de recommandations (driven by referentiel)
+  const recoChips: ChipDef[] = data.recommandationsParCategorie.map((c) => ({
+    key: `reco:${c.code}`,
+    label: c.label,
+    badge: c.recommandations,
+  }));
+
+  const activityChips: ChipDef[] = [
     {
       key: 'reunions',
       label: 'Réunions',
@@ -58,36 +73,47 @@ export function DashboardSgFocus({ data, missions, anneeLabel }: DashboardViewPr
     { key: 'missions', label: 'Missions', badge: data.missionsTerrain.missionsEffectuees },
   ];
 
+  const activeRecoCategorie = active.startsWith('reco:')
+    ? data.recommandationsParCategorie.find((c) => `reco:${c.code}` === active)
+    : null;
+
   return (
     <div>
-      <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 sticky top-0 bg-bg/95 backdrop-blur z-10">
-        {chips.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            onClick={() => setActive(c.key)}
-            className={cn(
-              'shrink-0 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors',
-              active === c.key
-                ? 'bg-primary text-white'
-                : 'bg-surface border border-border hover:bg-muted',
-            )}
-          >
-            {c.label}
-            <span
-              className={cn(
-                'font-mono px-1.5 py-0.5 rounded text-[10.5px]',
-                active === c.key ? 'bg-white/20' : 'bg-muted',
-              )}
-            >
-              {c.badge}
-            </span>
-          </button>
-        ))}
+      <div className="sticky top-0 bg-bg/95 backdrop-blur z-10 pb-2 space-y-2">
+        <ChipGroup
+          label="Directives présidentielles"
+          total={{
+            realisees: directiveAggregate.nbRealisees,
+            total: directiveAggregate.totalDirectives,
+            percent: directiveAggregate.tauxExecution,
+            target: DIRECTIVE_TARGET,
+          }}
+          chips={directiveChips}
+          active={active}
+          onSelect={setActive}
+        />
+        <ChipGroup
+          label="Recommandations MHA"
+          total={{
+            realisees: recoAggregate.nbRealisees,
+            total: recoAggregate.total,
+            percent: recoAggregate.tauxExecution,
+            target: RECO_TARGET,
+          }}
+          chips={recoChips}
+          active={active}
+          onSelect={setActive}
+        />
+        <ChipGroup
+          label="Activité du MHA"
+          chips={activityChips}
+          active={active}
+          onSelect={setActive}
+        />
       </div>
 
       <div className="mt-4">
-        {active === 'conseilMinistres' && (
+        {active === 'dir:conseilMinistres' && (
           <DirectivePanel
             title="Conseil des ministres"
             subtitle={`Directives issues des Conseils des ministres · ${anneeLabel}`}
@@ -95,7 +121,7 @@ export function DashboardSgFocus({ data, missions, anneeLabel }: DashboardViewPr
             onNavigate={() => navigate('/directives/conseil-ministres')}
           />
         )}
-        {active === 'conseilInterMinisteriel' && (
+        {active === 'dir:conseilInterMinisteriel' && (
           <DirectivePanel
             title="Conseil inter-ministériel"
             subtitle={`Directives issues des Conseils et réunions interministériels · ${anneeLabel}`}
@@ -103,7 +129,7 @@ export function DashboardSgFocus({ data, missions, anneeLabel }: DashboardViewPr
             onNavigate={() => navigate('/directives/conseil-interministeriel')}
           />
         )}
-        {active === 'coordinationSggSg' && (
+        {active === 'dir:coordinationSggSg' && (
           <DirectivePanel
             title="Coordination SGG/SG"
             subtitle={`Directives issues des réunions de coordination avec les Secrétaires généraux · ${anneeLabel}`}
@@ -111,28 +137,32 @@ export function DashboardSgFocus({ data, missions, anneeLabel }: DashboardViewPr
             onNavigate={() => navigate('/directives/coordination-sg')}
           />
         )}
-        {active === 'copil' && (
+        {activeRecoCategorie && (
           <Panel
-            title="COPIL · portefeuille MHA"
-            subtitle="Recommandations issues des comités de pilotage · tous COPIL confondus"
-            onNavigate={() => navigate('/recommandations/copil')}
+            title={`${activeRecoCategorie.label} · recommandations`}
+            subtitle={`${activeRecoCategorie.nbMatrices} matrice${activeRecoCategorie.nbMatrices > 1 ? 's' : ''} dans cette catégorie · indépendant de l'année`}
+            onNavigate={() => navigate(`/recommandations/${activeRecoCategorie.code}`)}
           >
             <StatStrip
               cells={[
-                { label: 'COPIL suivis', value: data.copil.copilSuivis, subtitle: 'Portefeuille MHA' },
+                {
+                  label: 'Matrices',
+                  value: activeRecoCategorie.nbMatrices,
+                  subtitle: 'dans la catégorie',
+                },
                 {
                   label: 'Recommandations',
-                  value: data.copil.recommandations,
-                  subtitle: 'tous COPIL',
+                  value: activeRecoCategorie.recommandations,
+                  subtitle: 'au total',
                 },
                 {
                   label: 'Réalisées',
-                  value: data.copil.nbRealisees,
-                  subtitle: `${pct(data.copil.nbRealisees, data.copil.recommandations)} %`,
+                  value: activeRecoCategorie.nbRealisees,
+                  subtitle: `${pct(activeRecoCategorie.nbRealisees, activeRecoCategorie.recommandations)} %`,
                   variant: 'success',
                 },
-                { label: 'En cours', value: data.copil.nbEnCours, variant: 'warning' },
-                { label: 'En attente', value: data.copil.nbAttente, variant: 'info' },
+                { label: 'En cours', value: activeRecoCategorie.nbEnCours, variant: 'warning' },
+                { label: 'En attente', value: activeRecoCategorie.nbAttente, variant: 'info' },
               ]}
             />
           </Panel>
@@ -274,6 +304,59 @@ function DirectivePanel({ title, subtitle, kpis, onNavigate }: DirectivePanelPro
     <Panel title={title} subtitle={subtitle} onNavigate={onNavigate}>
       <StatStrip cells={cells} />
     </Panel>
+  );
+}
+
+interface ChipGroupProps {
+  label: string;
+  total?: { realisees: number; total: number; percent: number; target?: number };
+  chips: ChipDef[];
+  active: ActiveKey;
+  onSelect: (key: ActiveKey) => void;
+}
+
+function ChipGroup({ label, total, chips, active, onSelect }: ChipGroupProps) {
+  if (chips.length === 0) return null;
+  const highlight = total !== undefined && total.target !== undefined && total.percent >= total.target;
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 mb-1.5 px-1">
+        <span className="text-[10.5px] uppercase tracking-wider text-fg-muted font-semibold">
+          {label}
+        </span>
+        {total && (
+          <span className="text-[11px] font-mono text-fg-muted">
+            <b className={cn('font-bold', highlight ? 'text-success' : 'text-fg')}>{total.percent}%</b>
+            <span className="opacity-70"> · {total.realisees}/{total.total}</span>
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2 overflow-x-auto">
+        {chips.map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            onClick={() => onSelect(c.key)}
+            className={cn(
+              'shrink-0 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors',
+              active === c.key
+                ? 'bg-primary text-white'
+                : 'bg-surface border border-border hover:bg-muted',
+            )}
+          >
+            {c.label}
+            <span
+              className={cn(
+                'font-mono px-1.5 py-0.5 rounded text-[10.5px]',
+                active === c.key ? 'bg-white/20' : 'bg-muted',
+              )}
+            >
+              {c.badge}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 

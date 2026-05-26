@@ -14,6 +14,8 @@ export const reunionTechniqueSchema = z.object({
   lieu: z.string().nullable(),
   sousSecteur: z.enum(SOUS_SECTEURS).nullable(),
   copilLie: z.string().nullable(),
+  // Nature de la réunion (copil/technique/...) — code d'un référentiel typeReunion (extensible)
+  typeReunion: z.string().max(50).nullable(),
   ordreDuJour: z.string().nullable(),
   decisions: z.string().nullable(),
   participants: z.array(z.string()),

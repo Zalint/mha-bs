@@ -154,19 +154,21 @@ export interface CreateMatriceInput {
   observations?: string | null;
 }
 
-export async function createMatrice(
-  input: CreateMatriceInput,
-  createdBy: string,
-): Promise<RecommandationMatrice> {
-  // numOrdre = MAX(numOrdre) + 1 pour le typeMatrice, ou 1 si vide
+async function nextNumOrdre(typeMatrice: string): Promise<number> {
   const maxRow = await queryOne<{ maxNum: string | null }>(
     `SELECT MAX("numOrdre")::TEXT AS "maxNum"
      FROM "recommandationsMatrice"
      WHERE "typeMatrice" = $1`,
-    [input.typeMatrice],
+    [typeMatrice],
   );
-  const nextNum = (maxRow?.maxNum ? Number(maxRow.maxNum) : 0) + 1;
+  return (maxRow?.maxNum ? Number(maxRow.maxNum) : 0) + 1;
+}
 
+export async function createMatrice(
+  input: CreateMatriceInput,
+  createdBy: string,
+): Promise<RecommandationMatrice> {
+  const nextNum = await nextNumOrdre(input.typeMatrice);
   const row = await queryOne<MatriceRow>(
     `INSERT INTO "recommandationsMatrice" (
        "typeMatrice", "numOrdre", "texteRecommandation", "etat",
@@ -185,5 +187,37 @@ export async function createMatrice(
     ],
   );
   if (!row) throw new Error("Échec de l'insertion");
+  return toMatrice(row);
+}
+
+/**
+ * Réassigne une recommandation d'une matrice à une autre.
+ * Le nouveau numOrdre est attribué automatiquement (MAX+1 dans la matrice cible).
+ * Si la matrice cible est identique à la matrice courante, retourne l'entrée inchangée.
+ */
+export async function reassignMatrice(
+  currentTypeMatrice: string,
+  currentNumOrdre: number,
+  newTypeMatrice: string,
+  updatedBy: string,
+): Promise<RecommandationMatrice> {
+  if (currentTypeMatrice === newTypeMatrice) {
+    const existing = await queryOne<MatriceRow>(
+      `SELECT ${SELECT_COLS} FROM "recommandationsMatrice"
+       WHERE "typeMatrice" = $1 AND "numOrdre" = $2`,
+      [currentTypeMatrice, currentNumOrdre],
+    );
+    if (!existing) throw new Error('Recommandation introuvable');
+    return toMatrice(existing);
+  }
+  const nextNum = await nextNumOrdre(newTypeMatrice);
+  const row = await queryOne<MatriceRow>(
+    `UPDATE "recommandationsMatrice"
+     SET "typeMatrice" = $3, "numOrdre" = $4, "updatedBy" = $5
+     WHERE "typeMatrice" = $1 AND "numOrdre" = $2
+     RETURNING ${SELECT_COLS}`,
+    [currentTypeMatrice, currentNumOrdre, newTypeMatrice, nextNum, updatedBy],
+  );
+  if (!row) throw new Error('Recommandation introuvable');
   return toMatrice(row);
 }

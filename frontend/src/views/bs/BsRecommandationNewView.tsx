@@ -94,13 +94,7 @@ export function BsRecommandationNewView() {
       setSelectedMatrice(code);
       closeNewMatriceModal();
     } catch (err) {
-      if (err instanceof ApiClientError && err.status === 403) {
-        toast.error("Création de matrice réservée aux admins. Demande à un administrateur.");
-      } else if (err instanceof ApiClientError) {
-        toast.error(err.message);
-      } else {
-        toast.error('Échec de la création');
-      }
+      toast.error(err instanceof ApiClientError ? err.message : 'Échec de la création');
     } finally {
       setCreatingMatrice(false);
     }
@@ -243,8 +237,9 @@ export function BsRecommandationNewView() {
                   </button>
                 </div>
                 <div className="px-5 py-4 text-sm text-fg-2">
-                  Réservé aux administrateurs. Si tu n&apos;es pas admin, demande à un administrateur de
-                  créer la matrice via la page Configuration.
+                  La nouvelle matrice sera créée et rattachée par défaut à la catégorie <b>Autres</b>.
+                  Tu pourras la déplacer vers une autre catégorie ensuite depuis Saisie matrices ou
+                  Configuration.
                 </div>
                 <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
                   <button type="button" className="btn btn-ghost" onClick={closeNewMatriceModal}>

@@ -655,6 +655,33 @@ ALTER TABLE "interpellations"        DROP CONSTRAINT IF EXISTS "interpellations_
 
 
 -- =============================================================================
+-- Hierarchie referentiel : parentCode permet de rattacher une entree a une
+-- autre entree du meme codeType (ou d'un codeType "categorie" dedie).
+-- Utilise pour : mapping typeMatrice -> matriceCategorie (COPIL/Reformes/CNGI/Autres).
+-- =============================================================================
+ALTER TABLE "referentiels" ADD COLUMN IF NOT EXISTS "parentCode" VARCHAR(100);
+
+-- Seed des categories de matrice
+INSERT INTO "referentiels" ("codeType", "code", "label", "ordreAffichage") VALUES
+  ('matriceCategorie', 'copil',    'COPIL',    10),
+  ('matriceCategorie', 'reformes', 'Reformes', 20),
+  ('matriceCategorie', 'cngi',     'CNGI',     30),
+  ('matriceCategorie', 'autres',   'Autres',   99),
+  -- Types de reunion (pour BsReunionMissionView : COPIL vs technique)
+  ('typeReunion', 'copil',     'COPIL',     10),
+  ('typeReunion', 'technique', 'Technique', 20)
+ON CONFLICT ("codeType", "code") DO NOTHING;
+
+-- Backfill : rattachement des 8 matrices existantes a leur categorie
+UPDATE "referentiels" SET "parentCode" = 'copil'    WHERE "codeType" = 'typeMatrice' AND "code" LIKE 'copil%'   AND "parentCode" IS NULL;
+UPDATE "referentiels" SET "parentCode" = 'reformes' WHERE "codeType" = 'typeMatrice' AND "code" LIKE 'reforme%' AND "parentCode" IS NULL;
+UPDATE "referentiels" SET "parentCode" = 'cngi'     WHERE "codeType" = 'typeMatrice' AND "code" = 'cngi'        AND "parentCode" IS NULL;
+
+-- Colonne typeReunion sur reunionsTechniques (copil/technique/...)
+ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "typeReunion" VARCHAR(50);
+
+
+-- =============================================================================
 -- VUES : agrégations dashboard
 -- =============================================================================
 

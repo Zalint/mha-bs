@@ -16,6 +16,7 @@ import {
   getStatsByType,
   listAll,
   listByType,
+  reassignMatrice,
   updateByOrder,
 } from '../../models/matriceModel.js';
 
@@ -88,6 +89,34 @@ matriceRoutes.put(
       const params = req.params as unknown as z.infer<typeof updateParamsSchema>;
       const body = req.body as z.infer<typeof updateBodySchema>;
       const updated = await updateByOrder(params.typeMatrice, params.numOrdre, body, req.user.userId);
+      res.json(updated);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+const reassignBodySchema = z.object({
+  newTypeMatrice: z.string().min(1).max(50),
+});
+
+matriceRoutes.put(
+  '/:typeMatrice/:numOrdre/reassign',
+  authJwt,
+  requireRole('bs', 'admin'),
+  validate(updateParamsSchema, 'params'),
+  validate(reassignBodySchema),
+  async (req, res, next) => {
+    try {
+      if (!req.user) throw new UnauthorizedError();
+      const params = req.params as unknown as z.infer<typeof updateParamsSchema>;
+      const body = req.body as z.infer<typeof reassignBodySchema>;
+      const updated = await reassignMatrice(
+        params.typeMatrice,
+        params.numOrdre,
+        body.newTypeMatrice,
+        req.user.userId,
+      );
       res.json(updated);
     } catch (err) {
       next(err);

@@ -90,7 +90,7 @@ dashboardRoutes.get('/top-retards', authJwt, async (_req, res, next) => {
  */
 dashboardRoutes.get('/nav-counts', authJwt, async (_req, res, next) => {
   try {
-    const [directives, matrices, reunions, missions, interpellations] = await Promise.all([
+    const [directives, matrices, matriceCategories, reunions, missions, interpellations] = await Promise.all([
       queryAll<{ typeRencontre: string; n: string }>(
         `SELECT r."typeRencontre", COUNT(*)::TEXT AS "n"
          FROM "directives" d
@@ -98,10 +98,20 @@ dashboardRoutes.get('/nav-counts', authJwt, async (_req, res, next) => {
          WHERE r."typeRencontre" IS NOT NULL
          GROUP BY r."typeRencontre"`,
       ),
-      queryAll<{ typeMatrice: string; n: string }>(
-        `SELECT "typeMatrice", COUNT(*)::TEXT AS "n"
-         FROM "recommandationsMatrice"
-         GROUP BY "typeMatrice"`,
+      // Compte les recommandations par typeMatrice + cle vers parentCode de la matrice
+      queryAll<{ typeMatrice: string; parentCode: string | null; n: string }>(
+        `SELECT m."typeMatrice",
+                r."parentCode",
+                COUNT(*)::TEXT AS "n"
+         FROM "recommandationsMatrice" m
+         LEFT JOIN "referentiels" r
+           ON r."codeType" = 'typeMatrice' AND r."code" = m."typeMatrice"
+         GROUP BY m."typeMatrice", r."parentCode"`,
+      ),
+      // Liste des categories de matrice (pour exposer aussi celles a 0 reco)
+      queryAll<{ code: string }>(
+        `SELECT "code" FROM "referentiels"
+         WHERE "codeType" = 'matriceCategorie' AND "isActive" = TRUE`,
       ),
       queryAll<{ n: string }>(`SELECT COUNT(*)::TEXT AS "n" FROM "reunionsTechniques"`),
       queryAll<{ n: string }>(`SELECT COUNT(*)::TEXT AS "n" FROM "missionsTerrain"`),
@@ -111,13 +121,15 @@ dashboardRoutes.get('/nav-counts', authJwt, async (_req, res, next) => {
     const directivesByType: Record<string, number> = {};
     for (const r of directives) directivesByType[r.typeRencontre] = Number(r.n);
 
-    const matricesByType: Record<string, number> = {};
-    for (const r of matrices) matricesByType[r.typeMatrice] = Number(r.n);
-
-    const sumStartingWith = (prefix: string): number =>
-      Object.entries(matricesByType)
-        .filter(([k]) => k.toLowerCase().startsWith(prefix))
-        .reduce((acc, [, v]) => acc + v, 0);
+    // Compte les recommandations par categorie (via parentCode de la matrice).
+    // Si la matrice n'a pas de parentCode => bucket 'autres'.
+    const recommandationsByCategory: Record<string, number> = {};
+    for (const c of matriceCategories) recommandationsByCategory[c.code] = 0;
+    if (!recommandationsByCategory.autres) recommandationsByCategory.autres = 0;
+    for (const m of matrices) {
+      const cat = m.parentCode ?? 'autres';
+      recommandationsByCategory[cat] = (recommandationsByCategory[cat] ?? 0) + Number(m.n);
+    }
 
     res.json({
       directives: {
@@ -125,11 +137,9 @@ dashboardRoutes.get('/nav-counts', authJwt, async (_req, res, next) => {
         conseilMinistres: directivesByType.conseilMinistres ?? 0,
         coordinationSggSg: directivesByType.coordinationSggSg ?? 0,
       },
-      recommandations: {
-        copil: sumStartingWith('copil'),
-        reformes: sumStartingWith('reforme'),
-        cngi: matricesByType.cngi ?? 0,
-      },
+      // Compteurs par categorie de matrice (driven by parentCode)
+      // Cles : 'copil', 'reformes', 'cngi', 'autres' + toute nouvelle categorie creee
+      recommandations: recommandationsByCategory,
       reunionsTechniques: Number(reunions[0]?.n ?? 0),
       missionsTerrain: Number(missions[0]?.n ?? 0),
       interpellations: Number(interpellations[0]?.n ?? 0),

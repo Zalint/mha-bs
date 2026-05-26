@@ -25,6 +25,15 @@ export interface SgSummaryResponse {
     nbEnCours: number;
     nbAttente: number;
   };
+  recommandationsParCategorie: {
+    code: string;
+    label: string;
+    nbMatrices: number;
+    recommandations: number;
+    nbRealisees: number;
+    nbEnCours: number;
+    nbAttente: number;
+  }[];
   reunionsTechniques: {
     reunionsTenues: number;
     parMois: { yearMonth: string; count: number }[];
@@ -67,6 +76,31 @@ export function computeAggregate(d: SgSummaryResponse['directives']): GlobalKpis
     nbAttente: sum('nbAttente'),
     nbIneligibles: sum('nbIneligibles'),
     nbRetards: sum('nbRetards'),
+    tauxExecution: total > 0 ? Math.round((real / total) * 1000) / 10 : 0,
+  };
+}
+
+export interface RecommandationsAggregate {
+  total: number;
+  nbRealisees: number;
+  nbEnCours: number;
+  nbAttente: number;
+  tauxExecution: number;
+}
+
+/**
+ * Agrège toutes les catégories de recommandations en un total global.
+ */
+export function computeRecommandationsAggregate(
+  categories: SgSummaryResponse['recommandationsParCategorie'],
+): RecommandationsAggregate {
+  const total = categories.reduce((acc, c) => acc + c.recommandations, 0);
+  const real = categories.reduce((acc, c) => acc + c.nbRealisees, 0);
+  return {
+    total,
+    nbRealisees: real,
+    nbEnCours: categories.reduce((acc, c) => acc + c.nbEnCours, 0),
+    nbAttente: categories.reduce((acc, c) => acc + c.nbAttente, 0),
     tauxExecution: total > 0 ? Math.round((real / total) * 1000) / 10 : 0,
   };
 }
