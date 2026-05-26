@@ -7,6 +7,8 @@
  *
  * Feuilles traitées (toutes optionnelles — chaque migrate* skip silencieusement
  * si sa feuille n'existe pas) :
+ *
+ *   Format historique (workbooks d'origine) :
  *   - PLAN                    → rencontres + directives
  *   - Suivi Recom Copil       → recommandationsMatrice (COPIL)
  *   - Suivi Recom CNGI        → recommandationsMatrice (CNGI)
@@ -14,12 +16,20 @@
  *   - Sui FeuilleR Ref Inst   → recommandationsMatrice (reformeInstitutionnelle)
  *   - Suivi Rtechnique        → reunionsTechniques
  *
+ *   Format export (roundtrip) :
+ *   - PLAN                    → rencontres + directives (en-têtes en ligne 1)
+ *   - Recommandations         → recommandationsMatrice (flat, colonne Matrice)
+ *   - Réunions techniques     → reunionsTechniques (alias de Suivi Rtechnique)
+ *   - Missions terrain        → missionsTerrain
+ *   - Feuilles "<projet>"     → recommandationsMatrice (une feuille par projet COPIL)
+ *
  * Idempotent : ne réinsère pas une entité déjà présente (clé naturelle :
- * codeRencontre, codeDirective, (typeMatrice, numOrdre), (dateReunion, theme)).
+ * codeRencontre, codeDirective, (typeMatrice, numOrdre), (dateReunion, theme),
+ * (dateMission, localite)).
  */
 import * as XLSX from 'xlsx';
 
-import { query, queryOne } from '../db/query.js';
+import { query, queryAll, queryOne } from '../db/query.js';
 import { logger } from '../lib/logger.js';
 
 type UnknownRow = Record<string, unknown>;
@@ -130,6 +140,7 @@ function inferCopil(text: string): string | null {
 
 async function migratePlan(
   workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
 ): Promise<{ rencontres: number; directives: number }> {
   const planSheet = workbook.Sheets['PLAN'];
   if (!planSheet) {
@@ -163,15 +174,19 @@ async function migratePlan(
       if (existing) {
         rencontreId = existing.id;
       } else {
-        const annee = normalizeInt(r['ANNEE']) ?? Number(dateRenc.slice(0, 4));
-        const created = await queryOne<{ id: string }>(
-          `INSERT INTO "rencontres" ("typeRencontre", "codeRencontre", "intitule", "dateRencontre", "annee")
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT ("codeRencontre") DO UPDATE SET "intitule" = EXCLUDED."intitule"
-           RETURNING "id"`,
-          [typeRencontre, codeRenc, intitule, dateRenc, annee],
-        );
-        rencontreId = created?.id;
+        if (opts.dryRun) {
+          rencontreId = `dryrun-${codeRenc}`;
+        } else {
+          const annee = normalizeInt(r['ANNEE']) ?? Number(dateRenc.slice(0, 4));
+          const created = await queryOne<{ id: string }>(
+            `INSERT INTO "rencontres" ("typeRencontre", "codeRencontre", "intitule", "dateRencontre", "annee")
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT ("codeRencontre") DO UPDATE SET "intitule" = EXCLUDED."intitule"
+             RETURNING "id"`,
+            [typeRencontre, codeRenc, intitule, dateRenc, annee],
+          );
+          rencontreId = created?.id;
+        }
         if (rencontreId) rencCount++;
       }
       if (rencontreId) rencCache.set(codeRenc, rencontreId);
@@ -200,38 +215,43 @@ async function migratePlan(
       .map((m) => m.trim())
       .filter(Boolean);
 
-    await query(
-      `INSERT INTO "directives" (
-         "rencontreId", "codeDirective", "texteDirective", "ministeresAssocies",
-         "echeance", "debutExecution", "finExecution", "etat", "typeCause",
-         "joursPrevu", "joursReel", "joursRetardDemarrage", "derniereDateTraitement", "commentaires",
-         "statutValidation"
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'valide')`,
-      [
-        rencontreId,
-        codeDir,
-        texteDir,
-        ministeres,
-        echeance,
-        debutExecution,
-        finExecution,
-        etat,
-        typeCause,
-        joursPrevu,
-        joursReel,
-        joursRetardDemarrage,
-        derniereDateTraitement,
-        commentaires,
-      ],
-    );
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "directives" (
+           "rencontreId", "codeDirective", "texteDirective", "ministeresAssocies",
+           "echeance", "debutExecution", "finExecution", "etat", "typeCause",
+           "joursPrevu", "joursReel", "joursRetardDemarrage", "derniereDateTraitement", "commentaires",
+           "statutValidation"
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'valide')`,
+        [
+          rencontreId,
+          codeDir,
+          texteDir,
+          ministeres,
+          echeance,
+          debutExecution,
+          finExecution,
+          etat,
+          typeCause,
+          joursPrevu,
+          joursReel,
+          joursRetardDemarrage,
+          derniereDateTraitement,
+          commentaires,
+        ],
+      );
+    }
     dirCount++;
   }
 
   return { rencontres: rencCount, directives: dirCount };
 }
 
-async function migrateCopil(workbook: XLSX.WorkBook): Promise<number> {
+async function migrateCopil(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
   const sheet = workbook.Sheets['Suivi Recom Copil'];
   if (!sheet) return 0;
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
@@ -257,18 +277,23 @@ async function migrateCopil(workbook: XLSX.WorkBook): Promise<number> {
         [currentType, num],
       );
       if (exists) continue;
-      await query(
-        `INSERT INTO "recommandationsMatrice" ("typeMatrice", "numOrdre", "texteRecommandation", "etat")
-         VALUES ($1, $2, $3, 'attente')`,
-        [currentType, num, col2],
-      );
+      if (!opts.dryRun) {
+        await query(
+          `INSERT INTO "recommandationsMatrice" ("typeMatrice", "numOrdre", "texteRecommandation", "etat")
+           VALUES ($1, $2, $3, 'attente')`,
+          [currentType, num, col2],
+        );
+      }
       inserted++;
     }
   }
   return inserted;
 }
 
-async function migrateCngi(workbook: XLSX.WorkBook): Promise<number> {
+async function migrateCngi(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
   const sheet = workbook.Sheets['Suivi Recom CNGI'];
   if (!sheet) return 0;
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
@@ -291,17 +316,22 @@ async function migrateCngi(workbook: XLSX.WorkBook): Promise<number> {
       [numOrdre],
     );
     if (exists) continue;
-    await query(
-      `INSERT INTO "recommandationsMatrice" ("typeMatrice", "numOrdre", "texteRecommandation", "etat")
-       VALUES ('cngi', $1, $2, 'attente')`,
-      [numOrdre, texte],
-    );
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "recommandationsMatrice" ("typeMatrice", "numOrdre", "texteRecommandation", "etat")
+         VALUES ('cngi', $1, $2, 'attente')`,
+        [numOrdre, texte],
+      );
+    }
     inserted++;
   }
   return inserted;
 }
 
-async function migrateReformeAssainissement(workbook: XLSX.WorkBook): Promise<number> {
+async function migrateReformeAssainissement(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
   const sheet = workbook.Sheets["Réf sur l'ASS"];
   if (!sheet) return 0;
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
@@ -323,17 +353,22 @@ async function migrateReformeAssainissement(workbook: XLSX.WorkBook): Promise<nu
       [numOrdre],
     );
     if (exists) continue;
-    await query(
-      `INSERT INTO "recommandationsMatrice" ("typeMatrice", "numOrdre", "texteRecommandation", "etat")
-       VALUES ('reformeAssainissement', $1, $2, 'attente')`,
-      [numOrdre, texte],
-    );
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "recommandationsMatrice" ("typeMatrice", "numOrdre", "texteRecommandation", "etat")
+         VALUES ('reformeAssainissement', $1, $2, 'attente')`,
+        [numOrdre, texte],
+      );
+    }
     inserted++;
   }
   return inserted;
 }
 
-async function migrateReformeInstitutionnelle(workbook: XLSX.WorkBook): Promise<number> {
+async function migrateReformeInstitutionnelle(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
   const sheet = workbook.Sheets['Sui FeuilleR Ref Inst'];
   if (!sheet) return 0;
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
@@ -361,17 +396,24 @@ async function migrateReformeInstitutionnelle(workbook: XLSX.WorkBook): Promise<
       [numOrdre],
     );
     if (exists) continue;
-    await query(
-      `INSERT INTO "recommandationsMatrice" ("typeMatrice", "numOrdre", "texteRecommandation", "etat", "echeanceTrimestre", "priorite")
-       VALUES ('reformeInstitutionnelle', $1, $2, 'attente', $3, $4)`,
-      [numOrdre, activite, trimestre, priority],
-    );
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "recommandationsMatrice" ("typeMatrice", "numOrdre", "texteRecommandation", "etat", "echeanceTrimestre", "priorite")
+         VALUES ('reformeInstitutionnelle', $1, $2, 'attente', $3, $4)`,
+        [numOrdre, activite, trimestre, priority],
+      );
+    }
     inserted++;
   }
   return inserted;
 }
 
-async function migrateReunions(workbook: XLSX.WorkBook): Promise<number> {
+async function migrateReunions(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  // Format historique : header=1 + colonnes positionnelles. Le sheet "Suivi Rtechnique"
+  // n'a pas d'en-tête nommé donc on lit en mode tableau brut.
   const sheet = workbook.Sheets['Suivi Rtechnique'];
   if (!sheet) return 0;
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
@@ -391,12 +433,269 @@ async function migrateReunions(workbook: XLSX.WorkBook): Promise<number> {
     const sousSecteur = inferSousSecteur(`${theme} ${normalizeString(row[2]) ?? ''}`);
     const copilLie = inferCopil(`${theme} ${normalizeString(row[2]) ?? ''}`);
 
-    await query(
-      `INSERT INTO "reunionsTechniques" ("dateReunion", "theme", "participants", "sousSecteur", "copilLie")
-       VALUES ($1, $2, '[]'::jsonb, $3, $4)`,
-      [date, theme, sousSecteur, copilLie],
-    );
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "reunionsTechniques" ("dateReunion", "theme", "participants", "sousSecteur", "copilLie")
+         VALUES ($1, $2, '[]'::jsonb, $3, $4)`,
+        [date, theme, sousSecteur, copilLie],
+      );
+    }
     inserted++;
+  }
+  return inserted;
+}
+
+// ---------------------------------------------------------------------------
+// Migrations format EXPORT (roundtrip)
+// ---------------------------------------------------------------------------
+
+/**
+ * Construit une map { label -> code } à partir des référentiels typeMatrice
+ * pour résoudre la colonne "Matrice" du format export.
+ */
+async function loadMatriceLabelMap(): Promise<Map<string, string>> {
+  const rows = await queryAll<{ code: string; label: string }>(
+    `SELECT "code", "label" FROM "referentiels" WHERE "codeType" = 'typeMatrice'`,
+  );
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    map.set(r.label.trim().toLowerCase(), r.code);
+    map.set(r.code.toLowerCase(), r.code);
+  }
+  return map;
+}
+
+/**
+ * Lit la feuille "Recommandations" du format export (à plat) où chaque ligne
+ * porte sa colonne Matrice (label). Convertit le label en code via le référentiel.
+ */
+async function migrateRecommandationsFlat(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  const sheet = workbook.Sheets['Recommandations'];
+  if (!sheet) return 0;
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { defval: null });
+  if (rows.length === 0) return 0;
+
+  const labelMap = await loadMatriceLabelMap();
+  let inserted = 0;
+
+  for (const r of rows) {
+    const matriceLabel = normalizeString(r['Matrice']);
+    const numOrdre = normalizeInt(r['N° ordre']);
+    const texte = normalizeString(r['Recommandation']);
+    if (!matriceLabel || numOrdre === null || !texte) continue;
+
+    const code = labelMap.get(matriceLabel.trim().toLowerCase());
+    if (!code) continue;
+
+    const exists = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "recommandationsMatrice" WHERE "typeMatrice" = $1 AND "numOrdre" = $2`,
+      [code, numOrdre],
+    );
+    if (exists) continue;
+
+    const etat = ETAT_MAP[normalizeString(r['État']) ?? ''] ?? 'attente';
+    const echeance = normalizeString(r['Échéance trim.']);
+    const trimestre = echeance && /^T[1-4]$/i.test(echeance) ? echeance.toUpperCase() : null;
+    const priorite = normalizeString(r['Priorité']);
+    const observations = normalizeString(r['Observations']);
+
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "recommandationsMatrice"
+           ("typeMatrice", "numOrdre", "texteRecommandation", "etat", "echeanceTrimestre", "priorite", "observations")
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [code, numOrdre, texte, etat, trimestre, priorite, observations],
+      );
+    }
+    inserted++;
+  }
+  return inserted;
+}
+
+/**
+ * Alias pour la feuille "Réunions techniques" du format export (avec en-têtes nommés).
+ */
+async function migrateReunionsExport(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  const sheet = workbook.Sheets['Réunions techniques'];
+  if (!sheet) return 0;
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { defval: null });
+  let inserted = 0;
+
+  for (const r of rows) {
+    const date = normalizeDate(r['Date']);
+    const theme = normalizeString(r['Thème']);
+    if (!date || !theme) continue;
+
+    const exists = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "reunionsTechniques" WHERE "dateReunion" = $1 AND "theme" = $2 LIMIT 1`,
+      [date, theme],
+    );
+    if (exists) continue;
+
+    const sousSecteur =
+      normalizeString(r['Sous-secteur']) ?? inferSousSecteur(theme);
+    const copilLie = normalizeString(r['COPIL rattaché']) ?? inferCopil(theme);
+    const typeReunion = normalizeString(r['Type de réunion']);
+    const lieu = normalizeString(r['Lieu']);
+    const heureDebut = normalizeString(r['Heure']);
+    const dureeEstimee = normalizeString(r['Durée']);
+    const ordreDuJour = normalizeString(r['Ordre du jour']);
+    const decisions = normalizeString(r['Décisions']);
+    const participantsRaw = normalizeString(r['Participants']) ?? '';
+    const participants = participantsRaw
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "reunionsTechniques"
+           ("dateReunion", "heureDebut", "dureeEstimee", "theme", "lieu",
+            "sousSecteur", "copilLie", "typeReunion",
+            "ordreDuJour", "decisions", "participants")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`,
+        [
+          date,
+          heureDebut,
+          dureeEstimee,
+          theme,
+          lieu,
+          sousSecteur,
+          copilLie,
+          typeReunion,
+          ordreDuJour,
+          decisions,
+          JSON.stringify(participants),
+        ],
+      );
+    }
+    inserted++;
+  }
+  return inserted;
+}
+
+/**
+ * Lit la feuille "Missions terrain" du format export.
+ */
+async function migrateMissions(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  const sheet = workbook.Sheets['Missions terrain'];
+  if (!sheet) return 0;
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { defval: null });
+  let inserted = 0;
+
+  for (const r of rows) {
+    const date = normalizeDate(r['Date']);
+    const localite = normalizeString(r['Localité']);
+    if (!date || !localite) continue;
+
+    const exists = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "missionsTerrain"
+       WHERE "dateMission" = $1 AND "localite" = $2 LIMIT 1`,
+      [date, localite],
+    );
+    if (exists) continue;
+
+    const region = normalizeString(r['Région']);
+    const latRaw = r['Latitude'];
+    const lonRaw = r['Longitude'];
+    const latitude = latRaw === null || latRaw === '' ? null : Number(latRaw);
+    const longitude = lonRaw === null || lonRaw === '' ? null : Number(lonRaw);
+    const projetRattache = normalizeString(r['Projet rattaché']);
+    const constats = normalizeString(r['Constats']);
+    const recommandations = normalizeString(r['Recommandations']);
+
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "missionsTerrain"
+           ("dateMission", "localite", "region", "latitude", "longitude",
+            "projetRattache", "constats", "recommandations")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          date,
+          localite,
+          region,
+          Number.isFinite(latitude as number) ? latitude : null,
+          Number.isFinite(longitude as number) ? longitude : null,
+          projetRattache,
+          constats,
+          recommandations,
+        ],
+      );
+    }
+    inserted++;
+  }
+  return inserted;
+}
+
+/**
+ * Lit les feuilles "par projet" du format export 'projets' (une feuille par COPIL).
+ * Identifie une feuille comme "feuille projet" si son nom matche un label de
+ * référentiel typeMatrice (parentCode='copil'). Chaque feuille a un titre row 1
+ * fusionné + en-tête row 2.
+ */
+async function migrateProjetsSheets(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  const projets = await queryAll<{ code: string; label: string }>(
+    `SELECT "code", "label"
+     FROM "referentiels"
+     WHERE "codeType" = 'typeMatrice'
+       AND (COALESCE("parentCode", '') = 'copil' OR "code" LIKE 'copil%')`,
+  );
+  if (projets.length === 0) return 0;
+
+  const labelToCode = new Map<string, string>();
+  for (const p of projets) {
+    const safeName = p.label.replace(/[\\/?*[\]:]/g, ' ').slice(0, 31);
+    labelToCode.set(safeName, p.code);
+  }
+
+  let inserted = 0;
+  for (const sheetName of workbook.SheetNames) {
+    const code = labelToCode.get(sheetName);
+    if (!code) continue;
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+    // Lit en sautant la ligne de titre (range: 1 => en-têtes en ligne 2, 0-indexed = 1).
+    const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { range: 1, defval: null });
+
+    for (const r of rows) {
+      const numOrdre = normalizeInt(r['N° ordre']);
+      const texte = normalizeString(r['Recommandation']);
+      if (numOrdre === null || !texte) continue;
+
+      const exists = await queryOne<{ id: string }>(
+        `SELECT "id" FROM "recommandationsMatrice" WHERE "typeMatrice" = $1 AND "numOrdre" = $2`,
+        [code, numOrdre],
+      );
+      if (exists) continue;
+
+      const etat = ETAT_MAP[normalizeString(r['État']) ?? ''] ?? 'attente';
+      const echeance = normalizeString(r['Échéance trim.']);
+      const trimestre = echeance && /^T[1-4]$/i.test(echeance) ? echeance.toUpperCase() : null;
+      const priorite = normalizeString(r['Priorité']);
+      const observations = normalizeString(r['Observations']);
+
+      if (!opts.dryRun) {
+        await query(
+          `INSERT INTO "recommandationsMatrice"
+             ("typeMatrice", "numOrdre", "texteRecommandation", "etat", "echeanceTrimestre", "priorite", "observations")
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [code, numOrdre, texte, etat, trimestre, priorite, observations],
+        );
+      }
+      inserted++;
+    }
   }
   return inserted;
 }
@@ -412,18 +711,31 @@ export interface ImportSummary {
   cngi: number;
   reformeAssainissement: number;
   reformeInstitutionnelle: number;
+  recommandationsFlat: number;
+  projetsSheets: number;
   reunions: number;
+  missions: number;
 }
 
-export async function importWorkbook(buffer: Buffer): Promise<ImportSummary> {
+export async function importWorkbook(
+  buffer: Buffer,
+  opts: { dryRun?: boolean } = {},
+): Promise<ImportSummary> {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
 
-  const plan = await migratePlan(workbook);
-  const copil = await migrateCopil(workbook);
-  const cngi = await migrateCngi(workbook);
-  const refAss = await migrateReformeAssainissement(workbook);
-  const refInst = await migrateReformeInstitutionnelle(workbook);
-  const reunions = await migrateReunions(workbook);
+  // --- Format historique ---
+  const plan = await migratePlan(workbook, opts);
+  const copil = await migrateCopil(workbook, opts);
+  const cngi = await migrateCngi(workbook, opts);
+  const refAss = await migrateReformeAssainissement(workbook, opts);
+  const refInst = await migrateReformeInstitutionnelle(workbook, opts);
+  const reunionsHist = await migrateReunions(workbook, opts);
+
+  // --- Format export (roundtrip) ---
+  const recommandationsFlat = await migrateRecommandationsFlat(workbook, opts);
+  const projetsSheets = await migrateProjetsSheets(workbook, opts);
+  const reunionsExport = await migrateReunionsExport(workbook, opts);
+  const missions = await migrateMissions(workbook, opts);
 
   return {
     rencontres: plan.rencontres,
@@ -432,6 +744,9 @@ export async function importWorkbook(buffer: Buffer): Promise<ImportSummary> {
     cngi,
     reformeAssainissement: refAss,
     reformeInstitutionnelle: refInst,
-    reunions,
+    recommandationsFlat,
+    projetsSheets,
+    reunions: reunionsHist + reunionsExport,
+    missions,
   };
 }

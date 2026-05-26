@@ -9,6 +9,7 @@ import { ConseilInterMinisterielView } from '../views/directives/ConseilInterMin
 import { ConseilMinistresView } from '../views/directives/ConseilMinistresView.js';
 import { CoordinationSgView } from '../views/directives/CoordinationSgView.js';
 import { DirectivesPresidentiellesView } from '../views/directives/DirectivesPresidentiellesView.js';
+import { BsExportView } from '../views/bs/BsExportView.js';
 import { BsImportView } from '../views/bs/BsImportView.js';
 import { BsInterpellationNewView } from '../views/bs/BsInterpellationNewView.js';
 import { BsListeView } from '../views/bs/BsListeView.js';
@@ -74,6 +75,7 @@ export const router = createBrowserRouter([
           { path: 'bs/reunion', element: <BsReunionMissionView /> },
           { path: 'bs/interpellation/new', element: <BsInterpellationNewView /> },
           { path: 'bs/import', element: <BsImportView /> },
+          { path: 'bs/export', element: <BsExportView /> },
           {
             path: 'bs/config',
             // Route ouverte au BS et aux administrateurs

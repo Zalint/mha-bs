@@ -235,6 +235,12 @@ export async function deleteDirective(id: string): Promise<void> {
   await query(`DELETE FROM "directives" WHERE "id" = $1`, [id]);
 }
 
+export async function deleteDirectivesBulk(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const result = await query(`DELETE FROM "directives" WHERE "id" = ANY($1::uuid[])`, [ids]);
+  return result.rowCount ?? 0;
+}
+
 export async function submitDirective(id: string, userId: string): Promise<Directive> {
   const row = await queryOne<DirectiveRow>(
     `UPDATE "directives"

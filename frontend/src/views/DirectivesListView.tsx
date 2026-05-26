@@ -1,15 +1,18 @@
-import { AlertTriangle, CheckCircle2, Clock, Download, Plus, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Download, Plus, Trash2, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import type { PaginatedResponse, Directive, TypeRencontre } from '@mha-bs/shared';
 
 import { DirectiveFiltersBar, type DirectiveFiltersValue } from '../components/directives/DirectiveFilters.js';
 import { DirectiveTable } from '../components/directives/DirectiveTable.js';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { Spinner } from '../components/ui/Spinner.js';
 import { StatStrip, type StatCell } from '../components/ui/StatStrip.js';
 import { useApi } from '../hooks/useApi.js';
-import { api } from '../lib/apiClient.js';
+import { ApiClientError, api } from '../lib/apiClient.js';
+import { useAuthStore } from '../stores/authStore.js';
 
 interface Props {
   typeRencontre: TypeRencontre;
@@ -31,8 +34,13 @@ const AVAILABLE_YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2, CURRE
 
 export function DirectivesListView({ typeRencontre }: Props) {
   const navigate = useNavigate();
+  const role = useAuthStore((s) => s.user?.role);
+  const isAdmin = role === 'admin';
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<DirectiveFiltersValue>({ annee: '', etat: '', search: '' });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState<{ kind: 'single'; id: string } | { kind: 'bulk' } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const queryParams = useMemo(() => {
     const params: Record<string, string | number | undefined> = {
@@ -89,9 +97,42 @@ export function DirectivesListView({ typeRencontre }: Props) {
     setPage(1);
   };
 
+  const handleConfirmDelete = async (): Promise<void> => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      if (confirmDelete.kind === 'single') {
+        await api.delete(`/directives/${confirmDelete.id}`);
+        toast.success('Directive supprimée');
+      } else {
+        const res = await api.post<{ deleted: number }>('/directives/bulk-delete', {
+          ids: selectedIds,
+        });
+        toast.success(`${res.deleted} directive${res.deleted > 1 ? 's' : ''} supprimée${res.deleted > 1 ? 's' : ''}`);
+        setSelectedIds([]);
+      }
+      directivesQuery.refetch();
+      kpisQuery.refetch();
+      setConfirmDelete(null);
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Échec de la suppression');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div>
       <div className="flex flex-wrap items-end justify-end gap-2 mb-3">
+        {isAdmin && selectedIds.length > 0 && (
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => setConfirmDelete({ kind: 'bulk' })}
+          >
+            <Trash2 className="w-4 h-4" /> Supprimer ({selectedIds.length})
+          </button>
+        )}
         <button type="button" className="btn btn-secondary">
           <Download className="w-4 h-4" /> Exporter
         </button>
@@ -122,8 +163,30 @@ export function DirectivesListView({ typeRencontre }: Props) {
           pageSize={directivesQuery.data.pageSize}
           onPageChange={setPage}
           onRowClick={(d) => navigate(`/directives/${d.id}`)}
+          selectable={isAdmin}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+          onDeleteRow={isAdmin ? (id) => setConfirmDelete({ kind: 'single', id }) : undefined}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        onOpenChange={(o) => !o && !deleting && setConfirmDelete(null)}
+        title={
+          confirmDelete?.kind === 'bulk'
+            ? `Supprimer ${selectedIds.length} directive${selectedIds.length > 1 ? 's' : ''} ?`
+            : 'Supprimer cette directive ?'
+        }
+        description={
+          confirmDelete?.kind === 'bulk'
+            ? `Les ${selectedIds.length} directives sélectionnées seront définitivement supprimées de la base. Cette action est irréversible — leur historique de commentaires sera aussi perdu.`
+            : 'Cette directive sera définitivement supprimée de la base. Cette action est irréversible — son historique de commentaires sera aussi perdu.'
+        }
+        confirmLabel="Supprimer"
+        variant="danger"
+        onConfirm={() => handleConfirmDelete()}
+      />
     </div>
   );
 }

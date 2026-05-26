@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Upload } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, Upload, X } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,16 +14,25 @@ interface ImportResult {
   cngi: number;
   reformeAssainissement: number;
   reformeInstitutionnelle: number;
+  recommandationsFlat: number;
+  projetsSheets: number;
   reunions: number;
+  missions: number;
 }
 
 const SHEETS_INFO: { sheet: string; description: string }[] = [
+  // Format historique
   { sheet: 'PLAN', description: 'Directives présidentielles (avec leurs rencontres source)' },
   { sheet: 'Suivi Recom Copil', description: 'Recommandations COPIL (PROGEP II, PISEA, PASEA-RD, PDBH, PROMOREN)' },
   { sheet: 'Suivi Recom CNGI', description: 'Recommandations CNGI' },
   { sheet: "Réf sur l'ASS", description: 'Réforme assainissement' },
   { sheet: 'Sui FeuilleR Ref Inst', description: 'Réforme institutionnelle' },
-  { sheet: 'Suivi Rtechnique', description: 'Réunions techniques' },
+  { sheet: 'Suivi Rtechnique', description: 'Réunions techniques (format historique)' },
+  // Format export (roundtrip)
+  { sheet: 'Recommandations', description: 'Recommandations à plat (colonne Matrice) — format export' },
+  { sheet: 'Réunions techniques', description: 'Réunions techniques (format export, en-têtes nommés)' },
+  { sheet: 'Missions terrain', description: 'Missions terrain — format export' },
+  { sheet: '<projet>', description: 'Une feuille par projet COPIL (format export "projets")' },
 ];
 
 function formatBytes(n: number): string {
@@ -40,16 +49,42 @@ export function BsImportView() {
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  const handleSubmit = async (): Promise<void> => {
+  // Preview (dry-run) avant insertion
+  const [preview, setPreview] = useState<ImportResult | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  const handlePreview = async (): Promise<void> => {
     if (!file) return;
     setSubmitting(true);
     setError(null);
     setResult(null);
+    setPreview(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post<ImportResult>('/import', form, { query: { dryRun: 'true' } });
+      setPreview(res);
+    } catch (e) {
+      if (e instanceof ApiClientError) {
+        setError(e.message);
+      } else {
+        setError("Erreur inattendue pendant l'analyse du fichier.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleConfirmImport = async (): Promise<void> => {
+    if (!file) return;
+    setConfirming(true);
+    setError(null);
     try {
       const form = new FormData();
       form.append('file', file);
       const res = await api.post<ImportResult>('/import', form);
       setResult(res);
+      setPreview(null);
     } catch (e) {
       if (e instanceof ApiClientError) {
         setError(e.message);
@@ -57,8 +92,13 @@ export function BsImportView() {
         setError("Erreur inattendue pendant l'import.");
       }
     } finally {
-      setSubmitting(false);
+      setConfirming(false);
     }
+  };
+
+  const cancelPreview = (): void => {
+    if (confirming) return;
+    setPreview(null);
   };
 
   const totalImported = result
@@ -68,7 +108,10 @@ export function BsImportView() {
       result.cngi +
       result.reformeAssainissement +
       result.reformeInstitutionnelle +
-      result.reunions
+      result.recommandationsFlat +
+      result.projetsSheets +
+      result.reunions +
+      result.missions
     : 0;
 
   return (
@@ -162,10 +205,10 @@ export function BsImportView() {
         <button
           type="button"
           className="btn btn-primary"
-          onClick={() => void handleSubmit()}
+          onClick={() => void handlePreview()}
           disabled={!file || submitting}
         >
-          {submitting ? 'Import en cours…' : 'Importer'}
+          {submitting ? 'Analyse en cours…' : 'Analyser le fichier'}
         </button>
       </div>
 
@@ -196,10 +239,13 @@ export function BsImportView() {
             <ResultCell label="Rencontres" value={result.rencontres} />
             <ResultCell label="Directives" value={result.directives} />
             <ResultCell label="Réunions techniques" value={result.reunions} />
+            <ResultCell label="Missions terrain" value={result.missions} />
             <ResultCell label="COPIL" value={result.copil} />
             <ResultCell label="CNGI" value={result.cngi} />
             <ResultCell label="Réforme assainissement" value={result.reformeAssainissement} />
             <ResultCell label="Réforme institutionnelle" value={result.reformeInstitutionnelle} />
+            <ResultCell label="Recos (à plat)" value={result.recommandationsFlat} />
+            <ResultCell label="Recos (par projet)" value={result.projetsSheets} />
           </div>
           <div className="mt-4 flex gap-3 text-sm">
             <button
@@ -222,6 +268,113 @@ export function BsImportView() {
           </div>
         </div>
       )}
+
+      {/* Modale de preview / confirmation */}
+      {preview && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={cancelPreview}
+        >
+          <div
+            className="bg-surface rounded-xl border border-border w-full max-w-xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center flex-shrink-0">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Confirmer l&apos;import</h2>
+                  <p className="text-xs text-fg-muted mt-1">
+                    {preview.filename} · {formatBytes(preview.sizeBytes)}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={cancelPreview}
+                disabled={confirming}
+                className="p-1 text-fg-muted hover:text-fg rounded hover:bg-muted"
+                aria-label="Fermer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-fg-2 mb-3">
+                Voici ce qui sera <b>nouvellement créé</b> en base (les lignes déjà présentes
+                sont ignorées) :
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <PreviewCell label="Directives" value={preview.directives} highlight />
+                <PreviewCell label="Rencontres" value={preview.rencontres} />
+                <PreviewCell label="Réunions" value={preview.reunions} />
+                <PreviewCell label="Missions" value={preview.missions} />
+                <PreviewCell label="COPIL" value={preview.copil} />
+                <PreviewCell label="CNGI" value={preview.cngi} />
+                <PreviewCell label="Réforme Ass." value={preview.reformeAssainissement} />
+                <PreviewCell label="Réforme Inst." value={preview.reformeInstitutionnelle} />
+                <PreviewCell label="Recos plat" value={preview.recommandationsFlat} />
+                <PreviewCell label="Recos projet" value={preview.projetsSheets} />
+              </div>
+              {preview.directives +
+                preview.rencontres +
+                preview.reunions +
+                preview.missions +
+                preview.copil +
+                preview.cngi +
+                preview.reformeAssainissement +
+                preview.reformeInstitutionnelle +
+                preview.recommandationsFlat +
+                preview.projetsSheets ===
+                0 && (
+                <div className="mt-3 bg-warning-bg border-l-4 border-warning px-3 py-2 text-xs text-fg-2 rounded-r">
+                  <AlertTriangle className="inline w-3.5 h-3.5 mr-1 text-warning" />
+                  Aucune nouvelle ligne à insérer. Toutes les données du fichier sont déjà en base.
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={cancelPreview}
+                disabled={confirming}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void handleConfirmImport()}
+                disabled={confirming}
+              >
+                {confirming ? 'Import en cours…' : "Confirmer l'import"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreviewCell({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={`rounded-lg px-3 py-2.5 ${highlight ? 'bg-primary-100' : 'bg-muted'}`}>
+      <div className="text-[10.5px] uppercase tracking-wider text-fg-muted font-medium">{label}</div>
+      <div className={`font-mono text-2xl font-bold tabular-nums mt-0.5 ${highlight ? 'text-primary-700' : 'text-fg'}`}>
+        {value}
+      </div>
     </div>
   );
 }

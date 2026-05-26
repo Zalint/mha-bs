@@ -19,6 +19,7 @@ import {
 import {
   createDirective,
   deleteDirective,
+  deleteDirectivesBulk,
   findDirectiveById,
   listDirectives,
   submitDirective,
@@ -87,6 +88,26 @@ directiveRoutes.delete('/:id', authJwt, requireRole('admin'), async (req, res, n
     next(err);
   }
 });
+
+const bulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(500),
+});
+
+directiveRoutes.post(
+  '/bulk-delete',
+  authJwt,
+  requireRole('admin'),
+  validate(bulkDeleteSchema),
+  async (req, res, next) => {
+    try {
+      const body = req.body as z.infer<typeof bulkDeleteSchema>;
+      const deleted = await deleteDirectivesBulk(body.ids);
+      res.json({ deleted });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 directiveRoutes.post('/:id/soumettre', authJwt, requireRole('bs', 'admin'), async (req, res, next) => {
   try {

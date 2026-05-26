@@ -30,6 +30,8 @@ const upload = multer({
 /**
  * POST /api/import
  * multipart/form-data : champ `file` = .xlsx / .xls
+ * Query : ?dryRun=true pour un mode preview (compte ce qui serait inséré sans
+ *         rien écrire en base).
  *
  * Parse les feuilles connues du classeur et insère ce qui manque encore
  * (idempotent — pas de doublons grâce aux clés naturelles).
@@ -45,10 +47,12 @@ importRoutes.post(
         res.status(400).json({ error: 'Fichier manquant (champ "file")' });
         return;
       }
-      const summary = await importWorkbook(req.file.buffer);
+      const dryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+      const summary = await importWorkbook(req.file.buffer, { dryRun });
       res.json({
         filename: req.file.originalname,
         sizeBytes: req.file.size,
+        dryRun,
         ...summary,
       });
     } catch (err) {
