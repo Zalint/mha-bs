@@ -14,7 +14,8 @@
     "db:create": "tsx src/scripts/createDb.ts",
     "db:schema": "tsx src/scripts/applySchema.ts",
     "bootstrap:admin": "tsx src/scripts/bootstrapAdmin.ts",
-    "migrate:excel": "tsx src/scripts/migrateExcelToDb.ts"
+    "migrate:excel": "tsx src/scripts/migrateExcelToDb.ts",
+    "backfill:reunions": "tsx src/scripts/backfillReunionsCategorization.ts"
   },
   "dependencies": {
     "@mha-bs/shared": "*",

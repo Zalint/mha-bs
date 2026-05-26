@@ -145,3 +145,45 @@ export async function deleteByTypeAndOrder(typeMatrice: string, numOrdre: number
     [typeMatrice, numOrdre],
   );
 }
+
+export interface CreateMatriceInput {
+  typeMatrice: string;
+  texteRecommandation: string;
+  echeanceTrimestre?: 'T1' | 'T2' | 'T3' | 'T4' | null;
+  priorite?: 'urgent' | 'prioritaire' | 'obligatoire' | 'standard' | null;
+  observations?: string | null;
+}
+
+export async function createMatrice(
+  input: CreateMatriceInput,
+  createdBy: string,
+): Promise<RecommandationMatrice> {
+  // numOrdre = MAX(numOrdre) + 1 pour le typeMatrice, ou 1 si vide
+  const maxRow = await queryOne<{ maxNum: string | null }>(
+    `SELECT MAX("numOrdre")::TEXT AS "maxNum"
+     FROM "recommandationsMatrice"
+     WHERE "typeMatrice" = $1`,
+    [input.typeMatrice],
+  );
+  const nextNum = (maxRow?.maxNum ? Number(maxRow.maxNum) : 0) + 1;
+
+  const row = await queryOne<MatriceRow>(
+    `INSERT INTO "recommandationsMatrice" (
+       "typeMatrice", "numOrdre", "texteRecommandation", "etat",
+       "echeanceTrimestre", "priorite", "observations", "createdBy"
+     )
+     VALUES ($1, $2, $3, 'attente', $4, $5, $6, $7)
+     RETURNING ${SELECT_COLS}`,
+    [
+      input.typeMatrice,
+      nextNum,
+      input.texteRecommandation,
+      input.echeanceTrimestre ?? null,
+      input.priorite ?? null,
+      input.observations ?? null,
+      createdBy,
+    ],
+  );
+  if (!row) throw new Error("Échec de l'insertion");
+  return toMatrice(row);
+}

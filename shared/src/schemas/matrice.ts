@@ -24,3 +24,17 @@ export const updateRecommandationMatriceSchema = recommandationMatriceSchema
   .pick({ etat: true, observations: true, echeanceTrimestre: true, priorite: true })
   .partial();
 export type UpdateRecommandationMatriceInput = z.infer<typeof updateRecommandationMatriceSchema>;
+
+/**
+ * Création d'une nouvelle recommandation matrice.
+ * numOrdre est auto-calculé (MAX+1 pour le typeMatrice) côté serveur,
+ * donc absent de l'input.
+ */
+export const createRecommandationMatriceSchema = z.object({
+  typeMatrice: z.string().min(1).max(50),
+  texteRecommandation: z.string().min(3),
+  echeanceTrimestre: z.enum(['T1', 'T2', 'T3', 'T4']).nullable().optional(),
+  priorite: z.enum(['urgent', 'prioritaire', 'obligatoire', 'standard']).nullable().optional(),
+  observations: z.string().nullable().optional(),
+});
+export type CreateRecommandationMatriceInput = z.infer<typeof createRecommandationMatriceSchema>;

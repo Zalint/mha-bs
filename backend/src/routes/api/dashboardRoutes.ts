@@ -10,6 +10,7 @@ import {
   getEvolutionMensuelle,
   getGlobalKpis,
   getKpisByTypeRencontre,
+  getSgSummary,
   getStatsByDirection,
   getStatsByType,
   getTopRetards,
@@ -34,19 +35,38 @@ dashboardRoutes.get('/global', authJwt, async (_req, res, next) => {
 
 const kpisQuerySchema = z.object({
   typeRencontre: z.enum(TYPES_RENCONTRE).optional(),
+  annee: z.coerce.number().int().min(2000).max(2100).optional(),
 });
 
 dashboardRoutes.get('/kpis', authJwt, validate(kpisQuerySchema, 'query'), async (req, res, next) => {
   try {
-    const q = req.query as z.infer<typeof kpisQuerySchema>;
+    const q = req.query as unknown as z.infer<typeof kpisQuerySchema>;
     const kpis = q.typeRencontre
-      ? await getKpisByTypeRencontre(q.typeRencontre)
+      ? await getKpisByTypeRencontre(q.typeRencontre, q.annee)
       : await getGlobalKpis();
     res.json(kpis);
   } catch (err) {
     next(err);
   }
 });
+
+const sgSummaryQuerySchema = z.object({
+  annee: z.coerce.number().int().min(2000).max(2100).optional(),
+});
+
+dashboardRoutes.get(
+  '/sg-summary',
+  authJwt,
+  validate(sgSummaryQuerySchema, 'query'),
+  async (req, res, next) => {
+    try {
+      const q = req.query as unknown as z.infer<typeof sgSummaryQuerySchema>;
+      res.json(await getSgSummary(q.annee));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 dashboardRoutes.get('/par-direction', authJwt, async (_req, res, next) => {
   try {

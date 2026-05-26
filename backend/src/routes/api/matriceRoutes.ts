@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import {
   DIRECTIVE_ETATS,
+  createRecommandationMatriceSchema,
   updateRecommandationMatriceSchema,
 } from '@mha-bs/shared';
 
@@ -11,6 +12,7 @@ import { authJwt } from '../../middlewares/authJwt.js';
 import { requireRole } from '../../middlewares/rbac.js';
 import { validate } from '../../middlewares/validate.js';
 import {
+  createMatrice,
   getStatsByType,
   listAll,
   listByType,
@@ -56,6 +58,23 @@ const updateParamsSchema = z.object({
 const updateBodySchema = updateRecommandationMatriceSchema.extend({
   etat: z.enum(DIRECTIVE_ETATS).optional(),
 });
+
+matriceRoutes.post(
+  '/',
+  authJwt,
+  requireRole('bs', 'admin'),
+  validate(createRecommandationMatriceSchema),
+  async (req, res, next) => {
+    try {
+      if (!req.user) throw new UnauthorizedError();
+      const body = req.body as z.infer<typeof createRecommandationMatriceSchema>;
+      const created = await createMatrice(body, req.user.userId);
+      res.status(201).json(created);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 matriceRoutes.put(
   '/:typeMatrice/:numOrdre',

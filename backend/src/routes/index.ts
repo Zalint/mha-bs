@@ -8,6 +8,7 @@ import { dashboardRoutes } from './api/dashboardRoutes.js';
 import { directionRoutes } from './api/directionRoutes.js';
 import { directiveRoutes } from './api/directiveRoutes.js';
 import { healthRoutes } from './api/healthRoutes.js';
+import { importRoutes } from './api/importRoutes.js';
 import { matriceRoutes } from './api/matriceRoutes.js';
 import { missionRoutes } from './api/missionRoutes.js';
 import { referentielRoutes } from './api/referentielRoutes.js';
@@ -30,6 +31,7 @@ apiRouter.use('/reunions', reunionRoutes);
 apiRouter.use('/missions', missionRoutes);
 apiRouter.use('/referentiels', referentielRoutes);
 apiRouter.use('/dashboard', dashboardRoutes);
+apiRouter.use('/import', importRoutes);
 apiRouter.use('/users', userRoutes);
 
 // --- API externe (x-api-key) ---
