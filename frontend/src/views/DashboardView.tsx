@@ -95,7 +95,29 @@ export function DashboardView() {
   // Fallback : si la table est vide ou que la requête filtrée ne renvoie rien,
   // on affiche les sites de démo (filtrés par l'année active si non null).
   const missions = realMissions.length > 0 ? realMissions : filterDemoMissionsByYear(annee);
-  const childProps = { data: summaryQuery.data, missions, annee, anneeLabel };
+
+  // Recalcule les KPIs missions depuis la liste effectivement affichée (incl. fallback démo).
+  // Évite l'incohérence : carte avec 4 sites mais KPI "0 missions" parce que la table est vide.
+  const regionsCouvertesEffectif = new Set(
+    missions.map((m) => m.region).filter((r) => Boolean(r)) as string[],
+  ).size;
+  const nextProchaine = missions
+    .filter((m) => m.dateMission && new Date(m.dateMission) >= new Date())
+    .sort((a, b) => (a.dateMission ?? '').localeCompare(b.dateMission ?? ''))[0];
+
+  const dataWithLiveMissions: SgSummaryResponse = {
+    ...summaryQuery.data,
+    missionsTerrain: {
+      ...summaryQuery.data.missionsTerrain,
+      missionsEffectuees: missions.length,
+      regionsCouvertes: regionsCouvertesEffectif,
+      prochaineDate: nextProchaine?.dateMission ?? summaryQuery.data.missionsTerrain.prochaineDate,
+      prochaineLocalite:
+        nextProchaine?.localite ?? summaryQuery.data.missionsTerrain.prochaineLocalite,
+    },
+  };
+
+  const childProps = { data: dataWithLiveMissions, missions, annee, anneeLabel };
 
   return (
     <div>
