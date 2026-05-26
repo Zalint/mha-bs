@@ -6,7 +6,6 @@ import {
   Download,
   FileSpreadsheet,
   Landmark,
-  Layers,
   Package,
   ShieldAlert,
   Trash2,
@@ -21,7 +20,7 @@ import { cn } from '../../lib/cn.js';
 import { env } from '../../lib/env.js';
 import { useAuthStore } from '../../stores/authStore.js';
 
-type Scope = 'all' | 'directives' | 'recommandations' | 'activite' | 'projets';
+type Scope = 'all' | 'directives' | 'recommandations' | 'activite';
 
 interface CardDef {
   scope: Scope;
@@ -36,10 +35,17 @@ interface CardDef {
 const CARDS: CardDef[] = [
   {
     scope: 'all',
-    title: 'Tout exporter',
+    title: 'Tout exporter (format historique)',
     description:
-      "Un classeur unique avec une feuille Sommaire + toutes les données (directives, recommandations, réunions, missions). Compatible avec la fonction d'import.",
-    sheets: ['Sommaire', 'PLAN', 'Recommandations', 'Réunions techniques', 'Missions terrain'],
+      "Classeur au format historique du BS MHA — 6 onglets directement réimportables : directives, recommandations COPIL/CNGI/Réformes et réunions techniques.",
+    sheets: [
+      'PLAN',
+      'Suivi Recom Copil',
+      'Suivi Recom CNGI',
+      "Réf sur l'ASS",
+      'Sui FeuilleR Ref Inst',
+      'Suivi Rtechnique',
+    ],
     icon: Package,
     accent: 'bg-primary-100 text-primary-700 border-primary',
     primary: true,
@@ -57,28 +63,18 @@ const CARDS: CardDef[] = [
     scope: 'recommandations',
     title: 'Recommandations MHA',
     description:
-      'Recommandations de toutes les matrices (COPIL, CNGI, Réformes) avec état, observations, priorité et échéance.',
-    sheets: ['Recommandations'],
+      'Recommandations COPIL (blocs par projet), CNGI, Réforme assainissement et Réforme institutionnelle — 4 onglets dédiés.',
+    sheets: ['Suivi Recom Copil', 'Suivi Recom CNGI', "Réf sur l'ASS", 'Sui FeuilleR Ref Inst'],
     icon: ClipboardList,
     accent: 'bg-warning-bg text-warning border-warning',
   },
   {
     scope: 'activite',
-    title: 'Activité du MHA',
-    description:
-      'Réunions techniques + missions terrain : dates, thèmes, sous-secteurs, COPIL, participants, constats, géolocalisation.',
-    sheets: ['Réunions techniques', 'Missions terrain'],
+    title: 'Réunions techniques',
+    description: 'Suivi des réunions du MHA (date + thème).',
+    sheets: ['Suivi Rtechnique'],
     icon: Activity,
     accent: 'bg-danger-bg text-danger border-danger',
-  },
-  {
-    scope: 'projets',
-    title: 'Projets COPIL (une feuille par projet)',
-    description:
-      'Une feuille Excel par projet COPIL (PROGEP II, PISEA, PASEA-RD, PDBH, PROMOREN…). Chaque feuille liste les recommandations du projet, avec état, échéance et observations.',
-    sheets: ['<une feuille par projet>'],
-    icon: Layers,
-    accent: 'bg-primary-100 text-primary-700 border-primary',
   },
 ];
 
@@ -254,11 +250,10 @@ export function BsExportView() {
       </div>
 
       <div className="mt-6 bg-primary-50 border-l-4 border-primary px-4 py-3 text-sm text-fg-2 rounded-r">
-        <b className="text-primary-700">Astuce :</b> tous les formats d&apos;export sont compatibles
-        avec la fonction d&apos;import. Tu peux donc faire un cycle{' '}
-        <i>export → modifier → re-import</i> en gardant la cohérence des données (les codes uniques
-        préviennent les doublons). L&apos;export <b>"Projets COPIL"</b> est particulièrement utile
-        pour partager une feuille de suivi dédiée à un chef de projet.
+        <b className="text-primary-700">Format historique :</b> les exports respectent la structure
+        d&apos;origine du BS MHA (en-tête PLAN à la ligne 5, blocs par projet COPIL, sections
+        Attente/En cours/Exécuté). Le cycle <i>export → modifier → re-import</i> conserve la
+        cohérence (codes uniques évitent les doublons).
       </div>
 
       {/* Zone dangereuse — admin uniquement */}

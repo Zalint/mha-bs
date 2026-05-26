@@ -98,6 +98,27 @@ export function ReunionsTechniquesView() {
       .slice(0, 10);
   }, [reunions]);
 
+  // KPIs dynamiques calculés depuis les données réelles
+  const copilStats = useMemo(() => {
+    const copils = new Set<string>();
+    for (const r of reunions) {
+      if (r.copilLie) copils.add(r.copilLie);
+    }
+    const list = Array.from(copils);
+    return {
+      count: list.length,
+      delta: list.length > 0 ? list.join(' · ') : 'Aucun COPIL rattaché',
+    };
+  }, [reunions]);
+
+  const nextReunion = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const future = reunions
+      .filter((r) => r.dateReunion >= today)
+      .sort((a, b) => a.dateReunion.localeCompare(b.dateReunion));
+    return future[0] ?? null;
+  }, [reunions]);
+
   if (reunionsQuery.isLoading) return <Spinner label="Chargement des réunions techniques…" />;
   if (reunionsQuery.error) {
     return (
@@ -127,7 +148,12 @@ export function ReunionsTechniquesView() {
       {/* KPIs */}
       <div className="grid gap-4 mb-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Réunions tenues" value={reunions.length} delta="depuis le début" icon={Calendar} />
-        <KpiCard label="COPIL réunis" value={5} delta="PROMOREN · PISEA · PASEA-RD · PROGEP · PDBH" icon={FolderKanban} />
+        <KpiCard
+          label="COPIL réunis"
+          value={copilStats.count}
+          delta={copilStats.delta}
+          icon={FolderKanban}
+        />
         <KpiCard
           label="Cette semaine"
           value={countThisWeek(reunions)}
@@ -135,7 +161,12 @@ export function ReunionsTechniquesView() {
           icon={CalendarClock}
           variant="warning"
         />
-        <KpiCard label="Prochaine échéance" value="Hivernage 2026" delta="curage à finaliser fin juin" icon={CloudRain} />
+        <KpiCard
+          label="Prochaine réunion"
+          value={nextReunion ? formatShort(nextReunion.dateReunion) : '—'}
+          delta={nextReunion ? nextReunion.theme : 'Aucune réunion à venir'}
+          icon={CloudRain}
+        />
       </div>
 
       <div className="grid gap-4 grid-cols-1 lg:grid-cols-[1.4fr_1fr] mb-5">

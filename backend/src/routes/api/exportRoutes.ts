@@ -8,12 +8,15 @@ import { buildExportWorkbook, type ExportScope } from '../../services/excelExpor
 export const exportRoutes = Router();
 
 const scopeSchema = z.object({
-  scope: z.enum(['all', 'directives', 'recommandations', 'activite', 'projets']).default('all'),
+  scope: z.enum(['all', 'directives', 'recommandations', 'activite']).default('all'),
 });
 
 /**
- * GET /api/export?scope=all|directives|recommandations|activite|projets
- * Renvoie un fichier .xlsx binaire avec les données demandées.
+ * GET /api/export?scope=all|directives|recommandations|activite
+ * Renvoie un fichier .xlsx binaire au format historique (6 onglets pour 'all') :
+ *   PLAN, Suivi Recom Copil, Suivi Recom CNGI, Réf sur l'ASS,
+ *   Sui FeuilleR Ref Inst, Suivi Rtechnique.
+ * Directement réimportable via /api/import.
  */
 exportRoutes.get('/', authJwt, validate(scopeSchema, 'query'), async (req, res, next) => {
   try {

@@ -97,7 +97,13 @@ interface SidebarProps {
 
 export function Sidebar({ mode, onModeChange, isOpen = false, onClose }: SidebarProps) {
   const userRole = useAuthStore((s) => s.user?.role);
-  const counts = useApi(() => api.get<NavCounts>('/dashboard/nav-counts'), []);
+  const location = useLocation();
+  // Refetch des compteurs nav à chaque navigation pour rester cohérent
+  // après un wipe / import / suppression.
+  const counts = useApi(
+    () => api.get<NavCounts>('/dashboard/nav-counts'),
+    [location.pathname],
+  );
   const baseItems = mode === 'sg' ? buildNavSg(counts.data) : NAV_BS;
   // Filtres role-based des entrees de menu :
   //  - bs-users     -> admin uniquement
