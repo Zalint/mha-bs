@@ -62,16 +62,7 @@ function buildNavSg(counts: NavCounts | null): NavItem[] {
   return [
     { id: 'dashboard', label: 'Dashboard global', icon: LayoutDashboard, to: '/' },
     { id: 'sg-validation', label: 'Validation', icon: ShieldCheck, to: '/sg/validation' },
-    {
-      id: 'directive-pres',
-      label: 'Directive présidentielle',
-      icon: Landmark,
-      children: [
-        { id: 'ci', label: 'Conseil inter-ministériel', to: '/directives/conseil-interministeriel', badge: counts?.directives.conseilInterMinisteriel },
-        { id: 'cm', label: 'Conseil des ministres', to: '/directives/conseil-ministres', badge: counts?.directives.conseilMinistres },
-        { id: 'sgg', label: 'Coordination SGG/SG', to: '/directives/coordination-sg', badge: counts?.directives.coordinationSggSg },
-      ],
-    },
+    { id: 'directive-pres', label: 'Directives présidentielles', icon: Landmark, to: '/directives' },
     {
       id: 'reco-mha',
       label: 'Recommandations MHA',
@@ -116,10 +107,12 @@ export function Sidebar({ mode, onModeChange, isOpen = false, onClose }: Sidebar
   const counts = useApi(() => api.get<NavCounts>('/dashboard/nav-counts'), []);
   const baseItems = mode === 'sg' ? buildNavSg(counts.data) : NAV_BS;
   // Filtres role-based des entrees de menu :
-  //  - bs-config, bs-users   -> admin uniquement
-  //  - sg-validation         -> admin + sg (action sg)
+  //  - bs-users     -> admin uniquement
+  //  - bs-config    -> admin + bs
+  //  - sg-validation -> admin + sg
   const navItems = baseItems.filter((it) => {
-    if ('id' in it && (it.id === 'bs-config' || it.id === 'bs-users')) return userRole === 'admin';
+    if ('id' in it && it.id === 'bs-users') return userRole === 'admin';
+    if ('id' in it && it.id === 'bs-config') return userRole === 'admin' || userRole === 'bs';
     if ('id' in it && it.id === 'sg-validation') return userRole === 'admin' || userRole === 'sg';
     return true;
   });

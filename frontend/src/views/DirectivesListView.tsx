@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock, Download, Landmark, Plus, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, Download, Plus, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,8 +13,6 @@ import { api } from '../lib/apiClient.js';
 
 interface Props {
   typeRencontre: TypeRencontre;
-  title: string;
-  subtitle: string;
 }
 
 interface KpisResponse {
@@ -31,7 +29,7 @@ const PAGE_SIZE = 50;
 const CURRENT_YEAR = new Date().getUTCFullYear();
 const AVAILABLE_YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2, CURRENT_YEAR - 3];
 
-export function DirectivesListView({ typeRencontre, title, subtitle }: Props) {
+export function DirectivesListView({ typeRencontre }: Props) {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<DirectiveFiltersValue>({ annee: '', etat: '', search: '' });
@@ -93,22 +91,13 @@ export function DirectivesListView({ typeRencontre, title, subtitle }: Props) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-3">
-        <div>
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-primary-100 text-primary-700 rounded text-[11.5px] font-semibold uppercase tracking-wider mb-2">
-            <Landmark className="w-3.5 h-3.5" /> Directive présidentielle
-          </div>
-          <h1 className="text-2xl font-semibold text-fg leading-tight">{title}</h1>
-          <p className="text-sm text-fg-muted mt-1">{subtitle}</p>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" className="btn btn-secondary">
-            <Download className="w-4 h-4" /> Exporter
-          </button>
-          <button type="button" className="btn btn-primary" onClick={() => navigate('/bs/fiche')}>
-            <Plus className="w-4 h-4" /> Nouvelle directive
-          </button>
-        </div>
+      <div className="flex flex-wrap items-end justify-end gap-2 mb-3">
+        <button type="button" className="btn btn-secondary">
+          <Download className="w-4 h-4" /> Exporter
+        </button>
+        <button type="button" className="btn btn-primary" onClick={() => navigate('/bs/fiche')}>
+          <Plus className="w-4 h-4" /> Nouvelle directive
+        </button>
       </div>
 
       {kpisQuery.isLoading ? (

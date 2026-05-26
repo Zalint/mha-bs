@@ -8,6 +8,7 @@ import { DirectiveFicheView } from '../views/DirectiveFicheView.js';
 import { ConseilInterMinisterielView } from '../views/directives/ConseilInterMinisterielView.js';
 import { ConseilMinistresView } from '../views/directives/ConseilMinistresView.js';
 import { CoordinationSgView } from '../views/directives/CoordinationSgView.js';
+import { DirectivesPresidentiellesView } from '../views/directives/DirectivesPresidentiellesView.js';
 import { BsListeView } from '../views/bs/BsListeView.js';
 import { BsMatriceView } from '../views/bs/BsMatriceView.js';
 import { BsRencontreView } from '../views/bs/BsRencontreView.js';
@@ -36,9 +37,16 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <DashboardView /> },
           { path: 'guide', element: <GuideView /> },
-          { path: 'directives/conseil-ministres', element: <ConseilMinistresView /> },
-          { path: 'directives/conseil-interministeriel', element: <ConseilInterMinisterielView /> },
-          { path: 'directives/coordination-sg', element: <CoordinationSgView /> },
+          {
+            path: 'directives',
+            element: <DirectivesPresidentiellesView />,
+            children: [
+              { index: true, element: <Navigate to="/directives/conseil-interministeriel" replace /> },
+              { path: 'conseil-interministeriel', element: <ConseilInterMinisterielView /> },
+              { path: 'conseil-ministres', element: <ConseilMinistresView /> },
+              { path: 'coordination-sg', element: <CoordinationSgView /> },
+            ],
+          },
           { path: 'directives/:id', element: <DirectiveFicheView /> },
           { path: 'recommandations/copil', element: <CopilView /> },
           { path: 'recommandations/reformes', element: <ReformesView /> },
@@ -53,8 +61,8 @@ export const router = createBrowserRouter([
           { path: 'bs/reunion', element: <BsReunionMissionView /> },
           {
             path: 'bs/config',
-            // Route reservee aux administrateurs : ProtectedRoute imbrique avec roles=['admin']
-            element: <ProtectedRoute roles={['admin']} />,
+            // Route ouverte au BS et aux administrateurs
+            element: <ProtectedRoute roles={['admin', 'bs']} />,
             children: [{ index: true, element: <ConfigView /> }],
           },
           {
