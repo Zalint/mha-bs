@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MHA · 3 designs Dashboard SG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Fira Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"Fira Mono"', 'monospace'],
+          },
+          colors: {
+            bg:       '#F5F8FB',
+            'bg-2':   '#EEF3F8',
+            surface:  '#FFFFFF',
+            border:   '#E2E8F0',
+            muted:    '#F1F5F9',
+            fg:       '#0F172A',
+            'fg-2':   '#1E293B',
+            'fg-muted': '#64748B',
+            primary:  '#0284C7',
+            'primary-50':  '#F0F9FF',
+            'primary-100': '#E0F2FE',
+            'primary-700': '#0369A1',
+            success:  '#16A34A',
+            'success-bg': '#F0FDF4',
+            warning:  '#D97706',
+            'warning-bg': '#FFFBEB',
+            danger:   '#DC2626',
+            'danger-bg': '#FEF2F2',
+            info:     '#0284C7',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    body { font-family: 'Fira Sans', system-ui, sans-serif; }
+    .num { font-family: 'Fira Mono', monospace; font-variant-numeric: tabular-nums; }
+    .design-anchor { scroll-margin-top: 90px; }
+    .stat-cell { background: white; padding: 0.9rem 1rem; }
+    .strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: #E2E8F0; border-radius: 0.5rem; overflow: hidden; }
+    .strip-5 { grid-template-columns: repeat(5, 1fr); }
+    .strip-3 { grid-template-columns: repeat(3, 1fr); }
+    .strip-1 { grid-template-columns: 1fr; }
+    @media (max-width: 768px) { .strip, .strip-5 { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body class="bg-bg-2 text-fg">
+
+  <!-- Top nav -->
+  <header class="sticky top-0 z-50 bg-white border-b border-border">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded bg-primary text-white grid place-items-center font-bold">M</div>
+        <div>
+          <div class="text-sm font-semibold leading-tight">MHA · Bureau de Suivi</div>
+          <div class="text-xs text-fg-muted">3 directions visuelles · Dashboard SG</div>
+        </div>
+      </div>
+      <nav class="flex gap-1 text-sm">
+        <a href="#design-a" class="px-3 py-1.5 rounded hover:bg-muted">A · Bento</a>
+        <a href="#design-b" class="px-3 py-1.5 rounded hover:bg-muted">B · Executive KPI</a>
+        <a href="#design-c" class="px-3 py-1.5 rounded hover:bg-muted">C · Focus</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Intro -->
+  <section class="max-w-7xl mx-auto px-6 pt-10 pb-6">
+    <h1 class="text-3xl font-bold leading-tight">3 designs pour le Dashboard SG</h1>
+    <p class="text-fg-muted mt-2 max-w-2xl">
+      Même données dans chaque maquette (chiffres de tes screenshots), trois directions visuelles distinctes.
+      Compare et indique laquelle implémenter.
+    </p>
+  </section>
+
+  <!-- =========================================== -->
+  <!-- DESIGN A · BENTO GRID                       -->
+  <!-- =========================================== -->
+  <section id="design-a" class="design-anchor max-w-7xl mx-auto px-6 py-8">
+    <div class="flex items-end justify-between mb-2">
+      <div>
+        <div class="inline-flex items-center gap-2 px-2.5 py-1 bg-primary-100 text-primary-700 rounded text-[11px] font-semibold uppercase tracking-wider mb-2">
+          Design A
+        </div>
+        <h2 class="text-2xl font-semibold">Bento Grid compact</h2>
+        <p class="text-sm text-fg-muted mt-1">6 cartes en grille 3×2 · scan en 1 écran sans scroll · clic pour détail</p>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-fg-muted">
+        Année
+        <select class="rounded border border-border bg-white px-3 py-1.5 text-sm font-mono">
+          <option>2026</option><option>2025</option><option>2024</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-4">
+
+      <!-- Carte Conseil ministres -->
+      <a href="#" class="bg-surface rounded-xl border border-border p-5 hover:shadow-md hover:-translate-y-0.5 transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="text-[10.5px] uppercase tracking-wider text-primary-700 font-semibold">Directive présidentielle</div>
+            <h3 class="text-base font-semibold mt-0.5">Conseil des ministres</h3>
+          </div>
+          <svg class="w-4 h-4 text-fg-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="flex items-end gap-3 mb-3">
+          <div class="num text-4xl font-bold leading-none">124</div>
+          <div class="text-xs text-fg-muted pb-1">directives · 2024-26</div>
+        </div>
+        <div class="mb-3">
+          <div class="flex justify-between text-[11px] text-fg-muted mb-1">
+            <span>Taux d'exécution</span><span class="num font-semibold text-success">87.1 %</span>
+          </div>
+          <div class="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div class="h-full bg-success rounded-full" style="width:87.1%"></div>
+          </div>
+        </div>
+        <div class="flex gap-2 text-[11px] flex-wrap">
+          <span class="px-2 py-0.5 bg-warning-bg text-warning rounded font-medium num">7 cours</span>
+          <span class="px-2 py-0.5 bg-primary-100 text-primary-700 rounded font-medium num">3 attente</span>
+          <span class="px-2 py-0.5 bg-danger-bg text-danger rounded font-medium num">1 retard</span>
+        </div>
+      </a>
+
+      <!-- Carte Conseil inter -->
+      <a href="#" class="bg-surface rounded-xl border border-border p-5 hover:shadow-md hover:-translate-y-0.5 transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="text-[10.5px] uppercase tracking-wider text-primary-700 font-semibold">Directive présidentielle</div>
+            <h3 class="text-base font-semibold mt-0.5">Conseil inter-ministériel</h3>
+          </div>
+          <svg class="w-4 h-4 text-fg-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="flex items-end gap-3 mb-3">
+          <div class="num text-4xl font-bold leading-none">65</div>
+          <div class="text-xs text-fg-muted pb-1">directives · 2024-26</div>
+        </div>
+        <div class="mb-3">
+          <div class="flex justify-between text-[11px] text-fg-muted mb-1">
+            <span>Taux d'exécution</span><span class="num font-semibold text-success">84.6 %</span>
+          </div>
+          <div class="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div class="h-full bg-success rounded-full" style="width:84.6%"></div>
+          </div>
+        </div>
+        <div class="flex gap-2 text-[11px] flex-wrap">
+          <span class="px-2 py-0.5 bg-warning-bg text-warning rounded font-medium num">7 cours</span>
+          <span class="px-2 py-0.5 bg-primary-100 text-primary-700 rounded font-medium num">1 attente</span>
+          <span class="px-2 py-0.5 bg-danger-bg text-danger rounded font-medium num">8 retards</span>
+        </div>
+      </a>
+
+      <!-- Carte Coordination SGG/SG -->
+      <a href="#" class="bg-surface rounded-xl border border-border p-5 hover:shadow-md hover:-translate-y-0.5 transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="text-[10.5px] uppercase tracking-wider text-primary-700 font-semibold">Directive présidentielle</div>
+            <h3 class="text-base font-semibold mt-0.5">Coordination SGG/SG</h3>
+          </div>
+          <svg class="w-4 h-4 text-fg-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="flex items-end gap-3 mb-3">
+          <div class="num text-4xl font-bold leading-none">10</div>
+          <div class="text-xs text-fg-muted pb-1">directives · 2024-26</div>
+        </div>
+        <div class="mb-3">
+          <div class="flex justify-between text-[11px] text-fg-muted mb-1">
+            <span>Taux d'exécution</span><span class="num font-semibold text-success">100 %</span>
+          </div>
+          <div class="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div class="h-full bg-success rounded-full" style="width:100%"></div>
+          </div>
+        </div>
+        <div class="flex gap-2 text-[11px]">
+          <span class="px-2 py-0.5 bg-success-bg text-success rounded font-medium num">Tout réalisé</span>
+        </div>
+      </a>
+
+      <!-- Carte COPIL -->
+      <a href="#" class="bg-surface rounded-xl border border-border p-5 hover:shadow-md hover:-translate-y-0.5 transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="text-[10.5px] uppercase tracking-wider text-primary-700 font-semibold">Recommandations MHA</div>
+            <h3 class="text-base font-semibold mt-0.5">COPIL</h3>
+          </div>
+          <svg class="w-4 h-4 text-fg-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="flex items-end gap-3 mb-3">
+          <div class="num text-4xl font-bold leading-none">40</div>
+          <div class="text-xs text-fg-muted pb-1">recommandations · 5 COPIL</div>
+        </div>
+        <div class="mb-3">
+          <div class="flex justify-between text-[11px] text-fg-muted mb-1">
+            <span>Avancement</span><span class="num font-semibold text-fg-muted">0 %</span>
+          </div>
+          <div class="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div class="h-full bg-success rounded-full" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="flex gap-2 text-[11px] flex-wrap">
+          <span class="px-2 py-0.5 bg-primary-100 text-primary-700 rounded font-medium num">PROGEP II · 7</span>
+          <span class="px-2 py-0.5 bg-primary-100 text-primary-700 rounded font-medium num">PISEA · 12</span>
+          <span class="px-2 py-0.5 bg-primary-100 text-primary-700 rounded font-medium num">+3</span>
+        </div>
+      </a>
+
+      <!-- Carte Réunions -->
+      <a href="#" class="bg-surface rounded-xl border border-border p-5 hover:shadow-md hover:-translate-y-0.5 transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="text-[10.5px] uppercase tracking-wider text-primary-700 font-semibold">Activité MHA</div>
+            <h3 class="text-base font-semibold mt-0.5">Réunions techniques</h3>
+          </div>
+          <svg class="w-4 h-4 text-fg-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="flex items-end gap-3 mb-3">
+          <div class="num text-4xl font-bold leading-none">17</div>
+          <div class="text-xs text-fg-muted pb-1">réunions tenues · 2026</div>
+        </div>
+        <div class="text-[11px] text-fg-muted mb-2">Par sous-secteur</div>
+        <div class="flex gap-2 text-[11px] flex-wrap">
+          <span class="px-2 py-0.5 bg-muted rounded font-medium num">Eau · 6</span>
+          <span class="px-2 py-0.5 bg-muted rounded font-medium num">Assainis. · 5</span>
+          <span class="px-2 py-0.5 bg-muted rounded font-medium num">Inonda. · 4</span>
+          <span class="px-2 py-0.5 bg-muted rounded font-medium num">GIRE · 2</span>
+        </div>
+      </a>
+
+      <!-- Carte Missions terrain -->
+      <a href="#" class="bg-surface rounded-xl border border-border p-5 hover:shadow-md hover:-translate-y-0.5 transition-all">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="text-[10.5px] uppercase tracking-wider text-primary-700 font-semibold">Terrain</div>
+            <h3 class="text-base font-semibold mt-0.5">Suivi missions terrain</h3>
+          </div>
+          <svg class="w-4 h-4 text-fg-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+        <div class="flex items-end gap-3 mb-3">
+          <div class="num text-4xl font-bold leading-none">4</div>
+          <div class="text-xs text-fg-muted pb-1">missions · 1 région</div>
+        </div>
+        <div class="rounded-lg bg-primary-50 px-3 py-2 mb-2">
+          <div class="text-[10.5px] uppercase tracking-wider text-primary-700 font-semibold">Prochaine mission</div>
+          <div class="text-sm font-semibold mt-0.5">21 mai 2026 · Baie de Hann</div>
+          <div class="text-[11px] text-fg-muted">PDBH</div>
+        </div>
+      </a>
+
+    </div>
+  </section>
+
+  <hr class="border-border my-6" />
+
+  <!-- =========================================== -->
+  <!-- DESIGN B · EXECUTIVE KPI + BULLET CHARTS    -->
+  <!-- =========================================== -->
+  <section id="design-b" class="design-anchor max-w-7xl mx-auto px-6 py-8">
+    <div class="flex items-end justify-between mb-2">
+      <div>
+        <div class="inline-flex items-center gap-2 px-2.5 py-1 bg-primary-100 text-primary-700 rounded text-[11px] font-semibold uppercase tracking-wider mb-2">
+          Design B
+        </div>
+        <h2 class="text-2xl font-semibold">Executive KPI + bullet charts</h2>
+        <p class="text-sm text-fg-muted mt-1">Synthèse globale en haut · 6 catégories avec barre cible</p>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-fg-muted">
+        Année
+        <select class="rounded border border-border bg-white px-3 py-1.5 text-sm font-mono">
+          <option>2026</option><option>2025</option><option>2024</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- Mega KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="text-[10.5px] uppercase tracking-wider text-fg-muted font-medium">Directives totales</div>
+        <div class="num text-3xl font-bold mt-1">199</div>
+        <div class="text-[11.5px] text-success mt-1 font-medium">↑ +12 vs 2025</div>
+      </div>
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="text-[10.5px] uppercase tracking-wider text-fg-muted font-medium">Taux global</div>
+        <div class="num text-3xl font-bold mt-1 text-success">87.0 %</div>
+        <div class="text-[11.5px] text-success mt-1 font-medium">↑ +2.1 pts</div>
+      </div>
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="text-[10.5px] uppercase tracking-wider text-fg-muted font-medium">À relancer</div>
+        <div class="num text-3xl font-bold mt-1 text-danger">9</div>
+        <div class="text-[11.5px] text-fg-muted mt-1">échéances dépassées</div>
+      </div>
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="text-[10.5px] uppercase tracking-wider text-fg-muted font-medium">Activité 2026</div>
+        <div class="num text-3xl font-bold mt-1">17 + 4</div>
+        <div class="text-[11.5px] text-fg-muted mt-1">réunions · missions</div>
+      </div>
+    </div>
+
+    <!-- Section title -->
+    <h3 class="text-md font-semibold mt-8 mb-3">Avancement par catégorie</h3>
+
+    <!-- Cartes catégorie avec bullet chart -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <!-- Bullet card factory -->
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="flex items-start justify-between mb-3">
+          <h4 class="font-semibold text-base">Conseil des ministres</h4>
+          <a href="#" class="text-xs text-primary hover:underline">Détail →</a>
+        </div>
+        <!-- Bullet -->
+        <div class="relative h-7 bg-muted rounded mb-2 overflow-hidden">
+          <div class="absolute inset-y-0 left-0 bg-danger-bg" style="width:50%"></div>
+          <div class="absolute inset-y-0 left-1/2 bg-warning-bg" style="width:30%"></div>
+          <div class="absolute inset-y-0 left-[80%] bg-success-bg" style="width:20%"></div>
+          <div class="absolute inset-y-1 left-0 bg-primary rounded" style="width:87.1%"></div>
+          <div class="absolute top-0 bottom-0 w-0.5 bg-fg" style="left:90%"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-fg-muted mb-3">
+          <span>0%</span><span>Cible 90%</span><span>100%</span>
+        </div>
+        <div class="flex gap-3 text-xs">
+          <span class="num"><b class="text-fg text-base font-bold">124</b> total</span>
+          <span class="num text-success"><b class="text-base font-bold">108</b> ✓</span>
+          <span class="num text-warning"><b class="text-base font-bold">7</b> cours</span>
+          <span class="num text-danger"><b class="text-base font-bold">1</b> retard</span>
+        </div>
+      </div>
+
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="flex items-start justify-between mb-3">
+          <h4 class="font-semibold text-base">Conseil inter-ministériel</h4>
+          <a href="#" class="text-xs text-primary hover:underline">Détail →</a>
+        </div>
+        <div class="relative h-7 bg-muted rounded mb-2 overflow-hidden">
+          <div class="absolute inset-y-0 left-0 bg-danger-bg" style="width:50%"></div>
+          <div class="absolute inset-y-0 left-1/2 bg-warning-bg" style="width:30%"></div>
+          <div class="absolute inset-y-0 left-[80%] bg-success-bg" style="width:20%"></div>
+          <div class="absolute inset-y-1 left-0 bg-primary rounded" style="width:84.6%"></div>
+          <div class="absolute top-0 bottom-0 w-0.5 bg-fg" style="left:90%"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-fg-muted mb-3">
+          <span>0%</span><span>Cible 90%</span><span>100%</span>
+        </div>
+        <div class="flex gap-3 text-xs">
+          <span class="num"><b class="text-fg text-base font-bold">65</b> total</span>
+          <span class="num text-success"><b class="text-base font-bold">55</b> ✓</span>
+          <span class="num text-warning"><b class="text-base font-bold">7</b> cours</span>
+          <span class="num text-danger"><b class="text-base font-bold">8</b> retards</span>
+        </div>
+      </div>
+
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="flex items-start justify-between mb-3">
+          <h4 class="font-semibold text-base">Coordination SGG/SG</h4>
+          <a href="#" class="text-xs text-primary hover:underline">Détail →</a>
+        </div>
+        <div class="relative h-7 bg-muted rounded mb-2 overflow-hidden">
+          <div class="absolute inset-y-0 left-0 bg-danger-bg" style="width:50%"></div>
+          <div class="absolute inset-y-0 left-1/2 bg-warning-bg" style="width:30%"></div>
+          <div class="absolute inset-y-0 left-[80%] bg-success-bg" style="width:20%"></div>
+          <div class="absolute inset-y-1 left-0 bg-success rounded" style="width:100%"></div>
+          <div class="absolute top-0 bottom-0 w-0.5 bg-fg" style="left:90%"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-fg-muted mb-3">
+          <span>0%</span><span>Cible 90%</span><span>100%</span>
+        </div>
+        <div class="flex gap-3 text-xs">
+          <span class="num"><b class="text-fg text-base font-bold">10</b> total</span>
+          <span class="num text-success"><b class="text-base font-bold">10</b> ✓</span>
+          <span class="num text-fg-muted"><b class="text-base font-bold">0</b> cours</span>
+          <span class="num text-fg-muted"><b class="text-base font-bold">0</b> retard</span>
+        </div>
+      </div>
+
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="flex items-start justify-between mb-3">
+          <h4 class="font-semibold text-base">COPIL · portefeuille MHA</h4>
+          <a href="#" class="text-xs text-primary hover:underline">Détail →</a>
+        </div>
+        <div class="relative h-7 bg-muted rounded mb-2 overflow-hidden">
+          <div class="absolute inset-y-0 left-0 bg-danger-bg" style="width:50%"></div>
+          <div class="absolute inset-y-0 left-1/2 bg-warning-bg" style="width:30%"></div>
+          <div class="absolute inset-y-0 left-[80%] bg-success-bg" style="width:20%"></div>
+          <div class="absolute inset-y-1 left-0 bg-primary rounded" style="width:0%"></div>
+          <div class="absolute top-0 bottom-0 w-0.5 bg-fg" style="left:60%"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-fg-muted mb-3">
+          <span>0%</span><span>Cible 60%</span><span>100%</span>
+        </div>
+        <div class="flex gap-3 text-xs">
+          <span class="num"><b class="text-fg text-base font-bold">40</b> reco</span>
+          <span class="num text-success"><b class="text-base font-bold">0</b> ✓</span>
+          <span class="num text-primary"><b class="text-base font-bold">40</b> attente</span>
+          <span class="num text-fg-muted"><b class="text-base font-bold">5</b> COPIL</span>
+        </div>
+      </div>
+
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="flex items-start justify-between mb-3">
+          <h4 class="font-semibold text-base">Réunions techniques</h4>
+          <a href="#" class="text-xs text-primary hover:underline">Détail →</a>
+        </div>
+        <div class="flex items-end gap-2 h-12 mb-2">
+          <div class="bg-primary rounded-t flex-1" style="height:30%"></div>
+          <div class="bg-primary rounded-t flex-1" style="height:50%"></div>
+          <div class="bg-primary rounded-t flex-1" style="height:70%"></div>
+          <div class="bg-primary rounded-t flex-1" style="height:40%"></div>
+          <div class="bg-primary rounded-t flex-1" style="height:90%"></div>
+          <div class="bg-primary rounded-t flex-1" style="height:60%"></div>
+        </div>
+        <div class="text-[10px] text-fg-muted flex justify-between mb-3 num">
+          <span>Jan</span><span>Fev</span><span>Mar</span><span>Avr</span><span>Mai</span><span>Juin</span>
+        </div>
+        <div class="flex gap-3 text-xs">
+          <span class="num"><b class="text-fg text-base font-bold">17</b> tenues</span>
+          <span class="text-fg-muted">soit ~3 / mois</span>
+        </div>
+      </div>
+
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <div class="flex items-start justify-between mb-3">
+          <h4 class="font-semibold text-base">Missions terrain</h4>
+          <a href="#" class="text-xs text-primary hover:underline">Détail →</a>
+        </div>
+        <div class="text-[11px] text-fg-muted mb-1">Régions couvertes · 1 / 14</div>
+        <div class="h-2 bg-muted rounded-full overflow-hidden mb-3">
+          <div class="h-full bg-primary rounded-full" style="width:7%"></div>
+        </div>
+        <div class="flex items-center gap-3 text-xs">
+          <span class="num"><b class="text-fg text-base font-bold">4</b> missions</span>
+          <span class="text-fg-muted">Prochaine : <b class="text-fg">21-05-26</b> · Baie de Hann</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="border-border my-6" />
+
+  <!-- =========================================== -->
+  <!-- DESIGN C · FOCUS / TABBED                   -->
+  <!-- =========================================== -->
+  <section id="design-c" class="design-anchor max-w-7xl mx-auto px-6 py-8 pb-20">
+    <div class="flex items-end justify-between mb-2">
+      <div>
+        <div class="inline-flex items-center gap-2 px-2.5 py-1 bg-primary-100 text-primary-700 rounded text-[11px] font-semibold uppercase tracking-wider mb-2">
+          Design C
+        </div>
+        <h2 class="text-2xl font-semibold">Focus mode tabulé</h2>
+        <p class="text-sm text-fg-muted mt-1">Une catégorie à la fois · contexte riche (évolution, dernières directives)</p>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-fg-muted">
+        Année
+        <select class="rounded border border-border bg-white px-3 py-1.5 text-sm font-mono">
+          <option>2026</option><option>2025</option><option>2024</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- Chips -->
+    <div class="flex gap-2 overflow-x-auto pb-2 mt-4 -mx-1 px-1">
+      <button class="shrink-0 px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium flex items-center gap-2">
+        Conseil ministres
+        <span class="num bg-white/20 px-1.5 py-0.5 rounded text-[10.5px]">124</span>
+      </button>
+      <button class="shrink-0 px-3 py-2 rounded-lg bg-white border border-border text-sm font-medium flex items-center gap-2 hover:bg-muted">
+        Conseil inter
+        <span class="num bg-muted px-1.5 py-0.5 rounded text-[10.5px]">65</span>
+      </button>
+      <button class="shrink-0 px-3 py-2 rounded-lg bg-white border border-border text-sm font-medium flex items-center gap-2 hover:bg-muted">
+        SGG/SG
+        <span class="num bg-muted px-1.5 py-0.5 rounded text-[10.5px]">10</span>
+      </button>
+      <button class="shrink-0 px-3 py-2 rounded-lg bg-white border border-border text-sm font-medium flex items-center gap-2 hover:bg-muted">
+        COPIL
+        <span class="num bg-muted px-1.5 py-0.5 rounded text-[10.5px]">40</span>
+      </button>
+      <button class="shrink-0 px-3 py-2 rounded-lg bg-white border border-border text-sm font-medium flex items-center gap-2 hover:bg-muted">
+        Réunions
+        <span class="num bg-muted px-1.5 py-0.5 rounded text-[10.5px]">17</span>
+      </button>
+      <button class="shrink-0 px-3 py-2 rounded-lg bg-white border border-border text-sm font-medium flex items-center gap-2 hover:bg-muted">
+        Missions
+        <span class="num bg-muted px-1.5 py-0.5 rounded text-[10.5px]">4</span>
+      </button>
+    </div>
+
+    <!-- Focus active -->
+    <div class="mt-4">
+      <h3 class="text-xl font-semibold">Conseil des ministres</h3>
+      <p class="text-sm text-fg-muted">Directives issues des Conseils des ministres · année 2026</p>
+    </div>
+
+    <!-- StatStrip 6 cellules grand format -->
+    <div class="strip mt-4">
+      <div class="stat-cell">
+        <div class="text-[11px] uppercase tracking-wider text-fg-muted font-medium">Total</div>
+        <div class="num text-2xl font-semibold mt-0.5">124</div>
+        <div class="text-[11.5px] text-fg-muted">depuis 2024</div>
+      </div>
+      <div class="stat-cell">
+        <div class="text-[11px] uppercase tracking-wider text-fg-muted font-medium">Réalisées</div>
+        <div class="num text-2xl font-semibold mt-0.5 text-success">108</div>
+        <div class="text-[11.5px] text-fg-muted">87.1 %</div>
+      </div>
+      <div class="stat-cell">
+        <div class="text-[11px] uppercase tracking-wider text-fg-muted font-medium">En cours</div>
+        <div class="num text-2xl font-semibold mt-0.5 text-warning">7</div>
+        <div class="text-[11.5px] text-fg-muted">6 %</div>
+      </div>
+      <div class="stat-cell">
+        <div class="text-[11px] uppercase tracking-wider text-fg-muted font-medium">En attente</div>
+        <div class="num text-2xl font-semibold mt-0.5 text-primary">3</div>
+        <div class="text-[11.5px] text-fg-muted">2 %</div>
+      </div>
+      <div class="stat-cell">
+        <div class="text-[11px] uppercase tracking-wider text-fg-muted font-medium">Inéligibles</div>
+        <div class="num text-2xl font-semibold mt-0.5">6</div>
+        <div class="text-[11.5px] text-fg-muted">hors périmètre</div>
+      </div>
+      <div class="stat-cell">
+        <div class="text-[11px] uppercase tracking-wider text-fg-muted font-medium">Échéance dépassée</div>
+        <div class="num text-2xl font-semibold mt-0.5 text-danger">1</div>
+        <div class="text-[11.5px] text-fg-muted">à relancer</div>
+      </div>
+    </div>
+
+    <!-- Contexte sous le strip -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-3">
+      <div class="bg-surface rounded-xl border border-border p-5 lg:col-span-2">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="font-semibold">Évolution mensuelle</h4>
+          <span class="text-[11px] text-fg-muted">12 derniers mois</span>
+        </div>
+        <div class="flex items-end gap-2 h-36">
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">8</span>
+            <div class="w-full bg-primary rounded-t" style="height:30%"></div>
+            <span class="text-[10px] text-fg-muted">Jun 25</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">12</span>
+            <div class="w-full bg-primary rounded-t" style="height:45%"></div>
+            <span class="text-[10px] text-fg-muted">Jul 25</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">9</span>
+            <div class="w-full bg-primary rounded-t" style="height:35%"></div>
+            <span class="text-[10px] text-fg-muted">Aoû 25</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">14</span>
+            <div class="w-full bg-primary rounded-t" style="height:52%"></div>
+            <span class="text-[10px] text-fg-muted">Sep 25</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">11</span>
+            <div class="w-full bg-primary rounded-t" style="height:41%"></div>
+            <span class="text-[10px] text-fg-muted">Oct 25</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">15</span>
+            <div class="w-full bg-primary rounded-t" style="height:56%"></div>
+            <span class="text-[10px] text-fg-muted">Nov 25</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">18</span>
+            <div class="w-full bg-primary rounded-t" style="height:67%"></div>
+            <span class="text-[10px] text-fg-muted">Déc 25</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">13</span>
+            <div class="w-full bg-primary rounded-t" style="height:49%"></div>
+            <span class="text-[10px] text-fg-muted">Jan 26</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">10</span>
+            <div class="w-full bg-primary rounded-t" style="height:38%"></div>
+            <span class="text-[10px] text-fg-muted">Fév 26</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">7</span>
+            <div class="w-full bg-primary rounded-t" style="height:27%"></div>
+            <span class="text-[10px] text-fg-muted">Mar 26</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">5</span>
+            <div class="w-full bg-primary rounded-t" style="height:19%"></div>
+            <span class="text-[10px] text-fg-muted">Avr 26</span>
+          </div>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <span class="num text-[10px] text-fg-muted">2</span>
+            <div class="w-full bg-primary rounded-t" style="height:8%"></div>
+            <span class="text-[10px] text-fg-muted">Mai 26</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-surface rounded-xl border border-border p-5">
+        <h4 class="font-semibold mb-3">Dernières directives</h4>
+        <div class="divide-y divide-border text-sm">
+          <div class="py-2.5 flex justify-between items-start gap-3">
+            <div class="min-w-0">
+              <div class="truncate">Reformer la gestion des PPP eau</div>
+              <div class="num text-[11px] text-fg-muted">CM-2026-014 · 12-05-2026</div>
+            </div>
+            <span class="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] bg-warning-bg text-warning font-semibold">EN COURS</span>
+          </div>
+          <div class="py-2.5 flex justify-between items-start gap-3">
+            <div class="min-w-0">
+              <div class="truncate">Lancer l'audit assainissement Dakar</div>
+              <div class="num text-[11px] text-fg-muted">CM-2026-013 · 28-04-2026</div>
+            </div>
+            <span class="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] bg-success-bg text-success font-semibold">RÉALISÉE</span>
+          </div>
+          <div class="py-2.5 flex justify-between items-start gap-3">
+            <div class="min-w-0">
+              <div class="truncate">Finaliser l'accord-cadre PROGEP</div>
+              <div class="num text-[11px] text-fg-muted">CM-2026-012 · 22-04-2026</div>
+            </div>
+            <span class="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] bg-danger-bg text-danger font-semibold">RETARD</span>
+          </div>
+          <div class="py-2.5 flex justify-between items-start gap-3">
+            <div class="min-w-0">
+              <div class="truncate">Réunion régionale Tambacounda</div>
+              <div class="num text-[11px] text-fg-muted">CM-2026-011 · 14-04-2026</div>
+            </div>
+            <span class="shrink-0 px-1.5 py-0.5 rounded text-[10.5px] bg-success-bg text-success font-semibold">RÉALISÉE</span>
+          </div>
+        </div>
+        <a href="#" class="block mt-3 text-xs text-primary hover:underline">Voir toutes →</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="max-w-7xl mx-auto px-6 py-10 text-center text-xs text-fg-muted">
+    Maquette · MHA Bureau de Suivi · 2026
+  </footer>
+
+</body>
+</html>

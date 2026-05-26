@@ -71,7 +71,17 @@ export async function getGlobalKpis(): Promise<GlobalKpis> {
   };
 }
 
-export async function getKpisByTypeRencontre(typeRencontre: string): Promise<GlobalKpis> {
+export async function getKpisByTypeRencontre(
+  typeRencontre: string,
+  annee?: number,
+): Promise<GlobalKpis> {
+  const params: (string | number)[] = [typeRencontre];
+  let anneeClause = '';
+  if (annee !== undefined) {
+    params.push(annee);
+    anneeClause = `AND r."annee" = $${params.length}`;
+  }
+
   const row = await queryOne<{
     totalDirectives: string;
     nbRealisees: string;
@@ -92,8 +102,8 @@ export async function getKpisByTypeRencontre(typeRencontre: string): Promise<Glo
        )::TEXT AS "nbRetards"
      FROM "directives" d
      LEFT JOIN "rencontres" r ON r."id" = d."rencontreId"
-     WHERE r."typeRencontre" = $1`,
-    [typeRencontre],
+     WHERE r."typeRencontre" = $1 ${anneeClause}`,
+    params,
   );
   const total = row ? Number(row.totalDirectives) : 0;
   const real = row ? Number(row.nbRealisees) : 0;
@@ -181,6 +191,227 @@ export async function getTopRetards(limit = 5): Promise<TopRetard[]> {
     echeance: r.echeance ? r.echeance.toISOString().slice(0, 10) : null,
     daysLate: Number(r.daysLate),
   }));
+}
+
+// =============================================================================
+// Vue SG : agrégation par catégorie avec filtre année
+// =============================================================================
+
+export interface CopilSummary {
+  copilSuivis: number;        // nombre de COPIL distincts (typeMatrice LIKE 'copil%')
+  recommandations: number;    // total recommandations COPIL
+  nbRealisees: number;
+  nbEnCours: number;
+  nbAttente: number;
+}
+
+export interface ReunionsTechniquesSummary {
+  reunionsTenues: number;
+  parMois: { yearMonth: string; count: number }[]; // 6 derniers mois
+  parSousSecteur: { key: string; label: string; count: number }[];
+  parCopil: { copil: string; count: number }[];
+}
+
+const SOUS_SECTEUR_LABELS: Record<string, string> = {
+  eau: 'Eau (accès)',
+  gire: 'GIRE (ressources en eau)',
+  assainissement: 'Assainissement (eaux usées)',
+  inondations: 'Eaux pluviales / Inondations',
+  transversal: 'Projets transversaux',
+  reformeInstitutionnelle: 'Réforme institutionnelle',
+};
+
+export interface MissionsTerrainSummary {
+  missionsEffectuees: number;
+  regionsCouvertes: number;
+  totalRegions: number;       // référence pour la barre de progression (14 au Sénégal)
+  prochaineDate: string | null;
+  prochaineLocalite: string | null;
+}
+
+export interface SgSummary {
+  annee: number | null;
+  availableYears: number[];
+  directives: {
+    conseilMinistres: GlobalKpis;
+    conseilInterMinisteriel: GlobalKpis;
+    coordinationSggSg: GlobalKpis;
+  };
+  copil: CopilSummary;
+  reunionsTechniques: ReunionsTechniquesSummary;
+  missionsTerrain: MissionsTerrainSummary;
+}
+
+/**
+ * Récupère les COPIL stats. Pas de filtre année car la table recommandationsMatrice
+ * ne porte pas de date métier — le stock total reflète l'état courant du portefeuille.
+ */
+export async function getCopilSummary(): Promise<CopilSummary> {
+  const row = await queryOne<{
+    copilSuivis: string;
+    recommandations: string;
+    nbRealisees: string;
+    nbEnCours: string;
+    nbAttente: string;
+  }>(
+    `SELECT
+       COUNT(DISTINCT "typeMatrice")::TEXT                            AS "copilSuivis",
+       COUNT(*)::TEXT                                                  AS "recommandations",
+       COUNT(*) FILTER (WHERE "etat" = 'realisee')::TEXT               AS "nbRealisees",
+       COUNT(*) FILTER (WHERE "etat" = 'enCours')::TEXT                AS "nbEnCours",
+       COUNT(*) FILTER (WHERE "etat" = 'attente')::TEXT                AS "nbAttente"
+     FROM "recommandationsMatrice"
+     WHERE "typeMatrice" LIKE 'copil%'`,
+  );
+  return {
+    copilSuivis: row ? Number(row.copilSuivis) : 0,
+    recommandations: row ? Number(row.recommandations) : 0,
+    nbRealisees: row ? Number(row.nbRealisees) : 0,
+    nbEnCours: row ? Number(row.nbEnCours) : 0,
+    nbAttente: row ? Number(row.nbAttente) : 0,
+  };
+}
+
+export async function getReunionsTechniquesSummary(
+  annee?: number,
+): Promise<ReunionsTechniquesSummary> {
+  const params: number[] = [];
+  let where = '';
+  if (annee !== undefined) {
+    params.push(annee);
+    where = `WHERE EXTRACT(YEAR FROM "dateReunion") = $1`;
+  }
+  const totalRow = await queryOne<{ n: string }>(
+    `SELECT COUNT(*)::TEXT AS "n" FROM "reunionsTechniques" ${where}`,
+    params,
+  );
+
+  // 6 derniers mois (glissants depuis aujourd'hui) — toujours non filtré par année
+  // car on veut une trend lisible même si l'année courante a peu de données.
+  const parMoisRows = await queryAll<{ yearMonth: string; cnt: string }>(
+    `SELECT TO_CHAR("dateReunion", 'YYYY-MM') AS "yearMonth",
+            COUNT(*)::TEXT AS "cnt"
+     FROM "reunionsTechniques"
+     WHERE "dateReunion" >= (CURRENT_DATE - INTERVAL '6 months')
+     GROUP BY 1
+     ORDER BY 1 ASC`,
+  );
+
+  // Répartitions par sous-secteur et par COPIL — filtrées par l'année active
+  const parSousSecteurRows = await queryAll<{ sousSecteur: string | null; cnt: string }>(
+    `SELECT "sousSecteur", COUNT(*)::TEXT AS "cnt"
+     FROM "reunionsTechniques"
+     ${where}
+     GROUP BY "sousSecteur"
+     ORDER BY COUNT(*) DESC`,
+    params,
+  );
+  const parCopilRows = await queryAll<{ copilLie: string | null; cnt: string }>(
+    `SELECT "copilLie", COUNT(*)::TEXT AS "cnt"
+     FROM "reunionsTechniques"
+     ${where}
+     ${where ? 'AND' : 'WHERE'} "copilLie" IS NOT NULL AND "copilLie" <> ''
+     GROUP BY "copilLie"
+     ORDER BY COUNT(*) DESC`,
+    params,
+  );
+
+  return {
+    reunionsTenues: totalRow ? Number(totalRow.n) : 0,
+    parMois: parMoisRows.map((r) => ({ yearMonth: r.yearMonth, count: Number(r.cnt) })),
+    parSousSecteur: parSousSecteurRows
+      .filter((r) => r.sousSecteur !== null)
+      .map((r) => ({
+        key: r.sousSecteur as string,
+        label: SOUS_SECTEUR_LABELS[r.sousSecteur as string] ?? (r.sousSecteur as string),
+        count: Number(r.cnt),
+      })),
+    parCopil: parCopilRows
+      .filter((r) => r.copilLie !== null)
+      .map((r) => ({ copil: r.copilLie as string, count: Number(r.cnt) })),
+  };
+}
+
+export async function getMissionsTerrainSummary(
+  annee?: number,
+): Promise<MissionsTerrainSummary> {
+  const params: number[] = [];
+  let where = '';
+  if (annee !== undefined) {
+    params.push(annee);
+    where = `WHERE EXTRACT(YEAR FROM "dateMission") = $1`;
+  }
+  const row = await queryOne<{
+    missions: string;
+    regions: string;
+  }>(
+    `SELECT COUNT(*)::TEXT                       AS "missions",
+            COUNT(DISTINCT "region")::TEXT       AS "regions"
+     FROM "missionsTerrain" ${where}`,
+    params,
+  );
+  const prochain = await queryOne<{ dateMission: Date; localite: string }>(
+    `SELECT "dateMission", "localite"
+     FROM "missionsTerrain"
+     WHERE "dateMission" >= CURRENT_DATE
+     ORDER BY "dateMission" ASC
+     LIMIT 1`,
+  );
+  return {
+    missionsEffectuees: row ? Number(row.missions) : 0,
+    regionsCouvertes: row ? Number(row.regions) : 0,
+    totalRegions: 14, // Sénégal : 14 régions administratives
+    prochaineDate: prochain?.dateMission ? prochain.dateMission.toISOString().slice(0, 10) : null,
+    prochaineLocalite: prochain?.localite ?? null,
+  };
+}
+
+/**
+ * Liste des années qui ont des données quelque part (rencontres, réunions ou missions).
+ * Toujours inclut l'année courante. Triées DESC.
+ */
+export async function getAvailableYears(): Promise<number[]> {
+  const rows = await queryAll<{ annee: string }>(
+    `SELECT DISTINCT "annee"::TEXT AS "annee" FROM (
+       SELECT "annee" FROM "rencontres" WHERE "annee" IS NOT NULL
+       UNION
+       SELECT EXTRACT(YEAR FROM "dateReunion")::INT FROM "reunionsTechniques"
+       UNION
+       SELECT EXTRACT(YEAR FROM "dateMission")::INT FROM "missionsTerrain"
+     ) y
+     ORDER BY "annee" DESC`,
+  );
+  const years = new Set<number>(rows.map((r) => Number(r.annee)));
+  years.add(new Date().getUTCFullYear());
+  return Array.from(years).sort((a, b) => b - a);
+}
+
+export async function getSgSummary(annee?: number): Promise<SgSummary> {
+  const [
+    availableYears,
+    conseilMinistres,
+    conseilInterMinisteriel,
+    coordinationSggSg,
+    copil,
+    reunionsTechniques,
+    missionsTerrain,
+  ] = await Promise.all([
+    getAvailableYears(),
+    getKpisByTypeRencontre('conseilMinistres', annee),
+    getKpisByTypeRencontre('conseilInterMinisteriel', annee),
+    getKpisByTypeRencontre('coordinationSggSg', annee),
+    getCopilSummary(),
+    getReunionsTechniquesSummary(annee),
+    getMissionsTerrainSummary(annee),
+  ]);
+  return {
+    annee: annee ?? null,
+    availableYears,
+    directives: { conseilMinistres, conseilInterMinisteriel, coordinationSggSg },
+    copil,
+    reunionsTechniques,
+    missionsTerrain,
+  };
 }
 
 export async function getStatsByType(): Promise<StatsByType[]> {

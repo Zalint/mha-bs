@@ -1,4 +1,4 @@
-import { Cloud, CloudRain, Droplets, FolderKanban, History, Landmark, Send } from 'lucide-react';
+import { Cloud, CloudRain, Droplets, FolderKanban, History, Landmark, Plus, Send, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -64,9 +64,37 @@ export function BsMatriceView() {
   // Local edits buffer pour observations (debounced à 1s sur blur)
   const [obsDraft, setObsDraft] = useState<Record<string, string>>({});
 
+  // Modale création
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newText, setNewText] = useState('');
+
   useEffect(() => {
     setObsDraft({});
   }, [current]);
+
+  const handleCreate = async (): Promise<void> => {
+    const text = newText.trim();
+    if (text.length < 3) {
+      toast.error('Texte trop court (3 caractères minimum)');
+      return;
+    }
+    setCreating(true);
+    try {
+      await api.post<RecommandationMatrice>('/matrices', {
+        typeMatrice: current,
+        texteRecommandation: text,
+      });
+      toast.success('Recommandation ajoutée');
+      setNewText('');
+      setCreateOpen(false);
+      allQuery.refetch();
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : "Échec de la création");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const stats = useMemo(() => {
     const counts: Record<string, { total: number; realisees: number }> = {};
@@ -183,6 +211,13 @@ export function BsMatriceView() {
               <div className="h-full bg-success rounded-full" style={{ width: `${pctCurrent}%` }} />
             </div>
             <span className="font-mono font-semibold text-sm min-w-[40px] text-right">{pctCurrent}%</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary ml-2"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="w-3.5 h-3.5" /> Nouvelle recommandation
+            </button>
           </div>
 
           <table className="w-full text-sm border-separate border-spacing-0">
@@ -258,6 +293,71 @@ export function BsMatriceView() {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {createOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={() => !creating && setCreateOpen(false)}
+        >
+          <div
+            className="bg-surface rounded-xl border border-border w-full max-w-xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between px-5 py-4 border-b border-border">
+              <div>
+                <h2 className="text-lg font-semibold">Nouvelle recommandation</h2>
+                <p className="text-xs text-fg-muted mt-0.5">
+                  Sera ajoutée à <b>{currentTypeLabel}</b>. Le numéro d&apos;ordre est attribué
+                  automatiquement (n° {currentItems.length + 1}).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(false)}
+                disabled={creating}
+                className="p-1 text-fg-muted hover:text-fg rounded hover:bg-muted"
+                aria-label="Fermer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <label className="block text-sm font-medium mb-1.5">
+                Texte de la recommandation <span className="text-danger">*</span>
+              </label>
+              <textarea
+                value={newText}
+                onChange={(e) => setNewText(e.target.value)}
+                rows={5}
+                autoFocus
+                placeholder="Ex. : Finaliser le rapport d'avancement Q2 et le présenter au prochain COPIL"
+                className="w-full px-3 py-2 border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary resize-y"
+              />
+              <p className="text-xs text-fg-muted mt-1.5">
+                État initial : <b>En attente</b>. Tu pourras le changer ensuite directement dans la matrice.
+              </p>
+            </div>
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setCreateOpen(false)}
+                disabled={creating}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void handleCreate()}
+                disabled={creating || newText.trim().length < 3}
+              >
+                {creating ? 'Création…' : 'Créer'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

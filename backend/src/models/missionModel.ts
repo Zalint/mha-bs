@@ -71,10 +71,18 @@ const SELECT_MISSION = `
   "createdBy", "createdAt", "updatedAt"
 `;
 
-export async function listMissions(): Promise<MissionTerrain[]> {
+export async function listMissions(opts: { annee?: number } = {}): Promise<MissionTerrain[]> {
+  const params: number[] = [];
+  let where = '';
+  if (opts.annee !== undefined) {
+    params.push(opts.annee);
+    where = `WHERE EXTRACT(YEAR FROM "dateMission") = $1`;
+  }
   const rows = await queryAll<MissionRow>(
     `SELECT ${SELECT_MISSION} FROM "missionsTerrain"
+     ${where}
      ORDER BY "dateMission" DESC`,
+    params,
   );
   return rows.map(toMission);
 }

@@ -20,13 +20,23 @@ import {
 
 export const missionRoutes = Router();
 
-missionRoutes.get('/', authJwt, async (_req, res, next) => {
-  try {
-    res.json({ items: await listMissions() });
-  } catch (err) {
-    next(err);
-  }
+const listMissionsQuerySchema = z.object({
+  annee: z.coerce.number().int().min(2000).max(2100).optional(),
 });
+
+missionRoutes.get(
+  '/',
+  authJwt,
+  validate(listMissionsQuerySchema, 'query'),
+  async (req, res, next) => {
+    try {
+      const q = req.query as unknown as z.infer<typeof listMissionsQuerySchema>;
+      res.json({ items: await listMissions({ annee: q.annee }) });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 missionRoutes.get('/:id', authJwt, async (req, res, next) => {
   try {

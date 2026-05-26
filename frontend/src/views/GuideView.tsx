@@ -111,18 +111,99 @@ export function GuideView() {
           un texte, une échéance, un état, et une rencontre d'origine.
         </ConceptItem>
         <ConceptItem icon={Calendar} title="Rencontre">
-          Une réunion de haut niveau (Conseil des ministres, Conseil interministériel,
-          Coordination SGG/SG) à laquelle sont rattachées des directives. Identifiée par un code
-          (ex. <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">CI20260204</code>).
+          <b>Événement ponctuel et daté</b>&nbsp;: une réunion de haut niveau (Conseil des
+          ministres, Conseil interministériel, Coordination SGG/SG) tenue à une date précise. À une
+          rencontre sont rattachées les <b>directives</b> qui en sont issues. Identifiée par un
+          code (ex.{' '}
+          <code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">CI20260204</code> =
+          Conseil Interministériel du 04/02/2026).
         </ConceptItem>
-        <ConceptItem icon={ClipboardList} title="Recommandation MHA (matrice)">
-          Liste de recommandations issues d'un cadre interne au MHA&nbsp;:
-          <ul className="list-disc pl-5 mt-1 space-y-0.5">
-            <li><b>COPIL</b> — comités de pilotage des projets (PROGEP II, PISEA, PASEA-RD, PDBH, PROMOREN)</li>
-            <li><b>Réformes</b> — Réforme de l'assainissement et Réforme institutionnelle</li>
-            <li><b>CNGI</b> — Comité national de gestion intégrée</li>
-          </ul>
+        <ConceptItem icon={ClipboardList} title="Matrice (recommandations MHA)">
+          <p>
+            <b>Portefeuille permanent</b> de recommandations rattachées à un cadre de pilotage
+            récurrent. Contrairement à une rencontre (événement daté, unique), une matrice vit
+            dans le temps&nbsp;: elle s'enrichit au fil des comités, sur plusieurs mois ou années.
+          </p>
+          <p className="mt-2">
+            Le terme vient de l'Excel d'origine — chaque onglet est un tableau (<i>matrice</i> 2D)
+            avec en lignes les recommandations et en colonnes l'état, les observations, le
+            responsable. <b>Les 8 matrices actuelles</b>&nbsp;:
+          </p>
+          <table className="w-full text-xs border-separate border-spacing-0 mt-2 mb-1">
+            <thead className="bg-surface2">
+              <tr>
+                <Th>Catégorie</Th>
+                <Th>Matrices</Th>
+                <Th>Nature</Th>
+              </tr>
+            </thead>
+            <tbody>
+              <MatriceRow
+                cat="COPIL (5)"
+                items="PROGEP II, PISEA, PASEA-RD, PDBH, PROMOREN"
+                nature="Un comité de pilotage par projet du portefeuille MHA, se réunit régulièrement"
+              />
+              <MatriceRow
+                cat="Réformes (2)"
+                items="Assainissement, Institutionnelle"
+                nature="Feuilles de route stratégiques (cadre légal, ARSE, DSP…)"
+              />
+              <MatriceRow
+                cat="Autres (1)"
+                items="CNGI"
+                nature="Comité National de Gestion Intégrée des Inondations"
+              />
+            </tbody>
+          </table>
         </ConceptItem>
+
+        <div className="border-l-2 border-primary-100 pl-3 py-2 mb-3">
+          <h4 className="font-semibold text-fg flex items-center gap-2 mb-1">
+            <ClipboardList className="w-4 h-4 text-primary" strokeWidth={1.8} /> Rencontre vs Matrice &mdash; ne pas confondre
+          </h4>
+          <div className="text-sm text-fg-2 leading-relaxed">
+            <p className="mb-2">
+              Les deux servent à <b>ancrer</b> une action (directive ou recommandation) à sa source,
+              mais leur nature est opposée&nbsp;:
+            </p>
+            <table className="w-full text-sm border-separate border-spacing-0">
+              <thead className="bg-surface2">
+                <tr>
+                  <Th>&nbsp;</Th>
+                  <Th>Rencontre</Th>
+                  <Th>Matrice</Th>
+                </tr>
+              </thead>
+              <tbody>
+                <CompareRow
+                  label="Durée"
+                  a="Événement ponctuel (une journée, une séance)"
+                  b="Cadre permanent (vit sur plusieurs années)"
+                />
+                <CompareRow
+                  label="Produit"
+                  a={<>N <b>directives</b> en sortie</>}
+                  b={<>N <b>recommandations</b> qui s'accumulent</>}
+                />
+                <CompareRow
+                  label="Exemple"
+                  a="Conseil des ministres du 04/03/2026"
+                  b="COPIL PROGEP II (depuis 2024)"
+                />
+                <CompareRow
+                  label="Identifiant"
+                  a={<>Code daté (ex.&nbsp;<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">CM20260304</code>)</>}
+                  b={<>Code stable (ex.&nbsp;<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">copilProgepIi</code>)</>}
+                />
+                <CompareRow
+                  label="Création"
+                  a="À la volée depuis le formulaire de directive"
+                  b={<>Réservée aux admins (page Configuration ou popup &laquo;&nbsp;+&nbsp;Nouvelle matrice&nbsp;&raquo;)</>}
+                />
+              </tbody>
+            </table>
+          </div>
+        </div>
         <ConceptItem icon={Calendar} title="Réunion technique">
           Réunion interne MHA (Eau, GIRE, Assainissement, etc.) avec thème, lieu, participants,
           décisions. Sert au reporting hebdomadaire du SG.
@@ -579,6 +660,16 @@ function FileTab({ label, desc }: { label: string; desc: string }) {
       <span className="font-semibold text-fg min-w-[140px]">{label}</span>
       <span className="text-fg-2">{desc}</span>
     </li>
+  );
+}
+
+function MatriceRow({ cat, items, nature }: { cat: string; items: string; nature: string }) {
+  return (
+    <tr className="border-b border-border last:border-0 align-top">
+      <td className="px-3 py-2 font-semibold text-fg whitespace-nowrap">{cat}</td>
+      <td className="px-3 py-2 font-mono text-[11.5px] text-fg-2">{items}</td>
+      <td className="px-3 py-2 text-fg-2">{nature}</td>
+    </tr>
   );
 }
 

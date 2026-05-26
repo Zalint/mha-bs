@@ -242,10 +242,10 @@ export function DirectiveFicheView() {
       )}
 
       <h1 className="text-2xl font-semibold text-fg leading-tight">
-        {isEdit ? 'Fiche recommandation' : 'Nouvelle recommandation'}
+        {isEdit ? 'Fiche directive' : 'Nouvelle directive'}
       </h1>
       <p className="text-sm text-fg-muted mt-1 mb-6">
-        {isEdit ? "Édition complète d'une directive" : 'Création d\'une nouvelle directive'}
+        {isEdit ? "Édition complète d'une directive" : "Création d'une nouvelle directive"}
       </p>
 
       <form

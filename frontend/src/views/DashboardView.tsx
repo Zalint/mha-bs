@@ -1,76 +1,89 @@
-import {
-  AlertTriangle,
-  Clock,
-  ListChecks,
-  TrendingUp,
-} from 'lucide-react';
-import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Landmark } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { KpiCard } from '../components/ui/KpiCard.js';
+import type { MissionTerrain } from '@mha-bs/shared';
+
 import { Spinner } from '../components/ui/Spinner.js';
-import { StateBadge } from '../components/ui/StateBadge.js';
 import { useApi } from '../hooks/useApi.js';
 import { api } from '../lib/apiClient.js';
-import { formatShort } from '../lib/formatDate.js';
+import { cn } from '../lib/cn.js';
+import { filterDemoMissionsByYear } from '../lib/demoMissions.js';
+import { DashboardSgBento } from './dashboard/DashboardSgBento.js';
+import { DashboardSgExecutive } from './dashboard/DashboardSgExecutive.js';
+import { DashboardSgFocus } from './dashboard/DashboardSgFocus.js';
+import type { SgSummaryResponse } from './dashboard/types.js';
 
-interface DashboardResponse {
-  kpis: {
-    totalDirectives: number;
-    nbRealisees: number;
-    nbEnCours: number;
-    nbAttente: number;
-    nbIneligibles: number;
-    nbRetards: number;
-    tauxExecution: number;
-  };
-  statsByType: { typeRencontre: string; total: number; nbRealisees: number }[];
-  evolution: { yearMonth: string; count: number }[];
-  topRetards: {
-    id: string;
-    codeDirective: string;
-    texteDirective: string;
-    etat: 'enCours' | 'attente';
-    echeance: string | null;
-    daysLate: number;
-  }[];
-  byDirection: {
-    directionId: number;
-    directionCode: string;
-    directionName: string;
-    totalDirectives: number;
-    nbRealisees: number;
-    nbEnCours: number;
-    nbRetards: number;
-  }[];
+const ANNEE_STORAGE_KEY = 'mha.dashboard.annee';
+const LAYOUT_STORAGE_KEY = 'mha.dashboard.layout';
+const CURRENT_YEAR = new Date().getUTCFullYear();
+
+type Layout = 'executive' | 'bento' | 'focus';
+const LAYOUTS: { key: Layout; label: string; hint: string }[] = [
+  { key: 'executive', label: 'Executive', hint: 'KPI + bullet charts' },
+  { key: 'bento', label: 'Bento', hint: 'Cartes compactes' },
+  { key: 'focus', label: 'Focus', hint: 'Une catégorie à la fois' },
+];
+
+// Sentinel string used in <select> when the user picks "Toutes les années"
+const ALL_YEARS = 'all';
+
+function loadInitialAnnee(): number | null {
+  if (typeof window === 'undefined') return CURRENT_YEAR;
+  const raw = window.localStorage.getItem(ANNEE_STORAGE_KEY);
+  if (raw === ALL_YEARS) return null;
+  if (!raw) return CURRENT_YEAR;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : CURRENT_YEAR;
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  conseilMinistres: 'Conseil des ministres',
-  conseilInterMinisteriel: 'Conseil inter-ministériel',
-  coordinationSggSg: 'Coordination SGG/SG',
-};
+function loadInitialLayout(): Layout {
+  if (typeof window === 'undefined') return 'executive';
+  const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
+  if (raw === 'executive' || raw === 'bento' || raw === 'focus') return raw;
+  return 'executive';
+}
 
 export function DashboardView() {
-  const navigate = useNavigate();
-  const query = useApi(() => api.get<DashboardResponse>('/dashboard/global'), []);
+  const [annee, setAnnee] = useState<number | null>(loadInitialAnnee);
+  const [layout, setLayout] = useState<Layout>(loadInitialLayout);
 
-  const evolutionLabels = useMemo(() => {
-    if (!query.data) return [];
-    const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-    return query.data.evolution.map((p) => {
-      const [year, month] = p.yearMonth.split('-');
-      return `${months[Number(month) - 1] ?? month} ${year?.slice(2)}`;
-    });
-  }, [query.data]);
+  useEffect(() => {
+    window.localStorage.setItem(ANNEE_STORAGE_KEY, annee === null ? ALL_YEARS : String(annee));
+  }, [annee]);
 
-  const maxEvolution = useMemo(() => {
-    if (!query.data) return 0;
-    return Math.max(...query.data.evolution.map((p) => p.count), 1);
-  }, [query.data]);
+  useEffect(() => {
+    window.localStorage.setItem(LAYOUT_STORAGE_KEY, layout);
+  }, [layout]);
 
-  if (query.isLoading) return <Spinner label="Chargement du dashboard…" />;
-  if (query.error || !query.data) {
+  const summaryQuery = useApi(
+    () =>
+      api.get<SgSummaryResponse>('/dashboard/sg-summary', {
+        query: annee !== null ? { annee } : {},
+      }),
+    [annee],
+  );
+
+  const missionsQuery = useApi(
+    () =>
+      api.get<{ items: MissionTerrain[] }>('/missions', {
+        query: annee !== null ? { annee } : {},
+      }),
+    [annee],
+  );
+
+  const anneeLabel = annee === null ? 'toutes années' : `année ${annee}`;
+
+  const yearsToShow = useMemo(() => {
+    const set = new Set<number>(summaryQuery.data?.availableYears ?? []);
+    set.add(CURRENT_YEAR);
+    if (annee !== null) set.add(annee);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [summaryQuery.data, annee]);
+
+  if (summaryQuery.isLoading && !summaryQuery.data) {
+    return <Spinner label="Chargement du dashboard…" />;
+  }
+  if (summaryQuery.error || !summaryQuery.data) {
     return (
       <div className="bg-danger-bg border border-danger text-danger rounded-lg px-4 py-3 text-sm">
         Impossible de charger le dashboard.
@@ -78,186 +91,67 @@ export function DashboardView() {
     );
   }
 
-  const { kpis, statsByType, evolution, topRetards, byDirection } = query.data;
+  const realMissions = missionsQuery.data?.items ?? [];
+  // Fallback : si la table est vide ou que la requête filtrée ne renvoie rien,
+  // on affiche les sites de démo (filtrés par l'année active si non null).
+  const missions = realMissions.length > 0 ? realMissions : filterDemoMissionsByYear(annee);
+  const childProps = { data: summaryQuery.data, missions, annee, anneeLabel };
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-fg leading-tight">Dashboard global</h1>
-      <p className="text-sm text-fg-muted mb-5 mt-1">
-        Vue temps réel du suivi des recommandations ministérielles
-      </p>
-
-      {/* KPIs */}
-      <div className="grid gap-4 mb-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          label="Taux d'exécution"
-          value={`${kpis.tauxExecution} %`}
-          delta={`${kpis.nbRealisees} sur ${kpis.totalDirectives}`}
-          icon={TrendingUp}
-          variant="success"
-        />
-        <KpiCard
-          label="Directives suivies"
-          value={kpis.totalDirectives}
-          delta="depuis 2024"
-          icon={ListChecks}
-        />
-        <KpiCard
-          label="En cours / attente"
-          value={kpis.nbEnCours + kpis.nbAttente}
-          delta={`${kpis.nbEnCours} en cours · ${kpis.nbAttente} en attente`}
-          icon={Clock}
-          variant="warning"
-        />
-        <KpiCard
-          label="En retard"
-          value={kpis.nbRetards}
-          delta="à relancer"
-          icon={AlertTriangle}
-          variant="danger"
-        />
-      </div>
-
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-3 mb-5">
-        {/* Evolution mensuelle */}
-        <div className="card lg:col-span-2">
-          <div className="card-header">
-            <div>
-              <h2 className="text-md font-semibold">Évolution mensuelle · directives reçues</h2>
-              <p className="text-xs text-fg-muted mt-0.5">Sur les 12 derniers mois</p>
-            </div>
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
+        <div>
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-primary-100 text-primary-700 rounded text-[11.5px] font-semibold uppercase tracking-wider mb-2">
+            <Landmark className="w-3.5 h-3.5" /> Vue Secrétaire général
           </div>
-          <div className="card-body">
-            {evolution.length === 0 ? (
-              <p className="text-sm text-fg-muted text-center py-6">Pas encore de données.</p>
-            ) : (
-              <div className="flex items-end gap-2 h-48">
-                {evolution.map((p, i) => (
-                  <div key={p.yearMonth} className="flex-1 flex flex-col items-center gap-1.5">
-                    <div className="text-[11px] font-mono text-fg-muted">{p.count}</div>
-                    <div
-                      className="w-full bg-primary rounded-t transition-all"
-                      style={{ height: `${(p.count / maxEvolution) * 100}%` }}
-                      title={`${evolutionLabels[i]} : ${p.count}`}
-                    />
-                    <div className="text-[10.5px] text-fg-muted whitespace-nowrap">
-                      {evolutionLabels[i]}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <h1 className="text-2xl font-semibold text-fg leading-tight">Dashboard global</h1>
+          <p className="text-sm text-fg-muted mt-1">
+            Synthèse de l&apos;activité du Bureau de Suivi · {anneeLabel}
+          </p>
         </div>
-
-        {/* Repartition par etat */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="text-md font-semibold">Répartition par état</h2>
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex bg-surface border border-border rounded-lg p-0.5">
+            {LAYOUTS.map((l) => (
+              <button
+                key={l.key}
+                type="button"
+                onClick={() => setLayout(l.key)}
+                title={l.hint}
+                className={cn(
+                  'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+                  layout === l.key
+                    ? 'bg-primary text-white'
+                    : 'text-fg-muted hover:text-fg hover:bg-muted',
+                )}
+              >
+                {l.label}
+              </button>
+            ))}
           </div>
-          <div className="card-body space-y-3">
-            <DonutLegendRow color="#16A34A" label="Réalisée" value={kpis.nbRealisees} total={kpis.totalDirectives} />
-            <DonutLegendRow color="#D97706" label="En cours" value={kpis.nbEnCours} total={kpis.totalDirectives} />
-            <DonutLegendRow color="#0284C7" label="En attente" value={kpis.nbAttente} total={kpis.totalDirectives} />
-            <DonutLegendRow color="#64748B" label="Inéligible" value={kpis.nbIneligibles} total={kpis.totalDirectives} />
-          </div>
+          <label className="flex items-center gap-2 text-sm text-fg-muted">
+            Année
+            <select
+              value={annee === null ? ALL_YEARS : String(annee)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setAnnee(v === ALL_YEARS ? null : Number(v));
+              }}
+              className="rounded border border-border bg-surface px-3 py-1.5 text-sm font-mono text-fg focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value={ALL_YEARS}>Toutes les années</option>
+              {yearsToShow.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
 
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2 mb-5">
-        {/* Top retards */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="text-md font-semibold">Top retards à traiter</h2>
-          </div>
-          <div className="card-body">
-            {topRetards.length === 0 ? (
-              <p className="text-sm text-fg-muted text-center py-4">Aucun retard détecté.</p>
-            ) : (
-              topRetards.map((r, i) => (
-                <div
-                  key={r.id}
-                  onClick={() => navigate(`/directives/${r.id}`)}
-                  className="grid grid-cols-[36px_1fr_auto] gap-3 items-start py-2.5 border-b border-border last:border-0 cursor-pointer hover:bg-muted px-2 rounded"
-                >
-                  <div className="font-mono text-xs text-fg-muted pt-0.5">#{i + 1}</div>
-                  <div>
-                    <div className="text-sm line-clamp-2 text-fg-2 leading-snug">
-                      {r.texteDirective.slice(0, 140)}
-                      {r.texteDirective.length > 140 ? '…' : ''}
-                    </div>
-                    <div className="text-[11.5px] text-fg-muted mt-1 flex items-center gap-2 flex-wrap">
-                      <StateBadge etat={r.etat} />
-                      <span className="font-mono">· Échéance {formatShort(r.echeance)}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-danger font-mono font-semibold text-sm">+{r.daysLate} j</div>
-                    <div className="text-[11px] text-fg-muted font-mono mt-0.5">{r.codeDirective}</div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Volume par type */}
-        <div className="card">
-          <div className="card-header">
-            <h2 className="text-md font-semibold">Volume par type de rencontre</h2>
-          </div>
-          <div className="card-body space-y-3">
-            {statsByType.map((s) => {
-              const maxTotal = Math.max(...statsByType.map((x) => x.total), 1);
-              const pct = (s.total / maxTotal) * 100;
-              return (
-                <div key={s.typeRencontre} className="grid grid-cols-[1fr_2fr_50px] gap-3 items-center">
-                  <div className="text-sm font-medium">{TYPE_LABELS[s.typeRencontre] ?? s.typeRencontre}</div>
-                  <div className="h-3 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
-                  </div>
-                  <div className="font-mono text-sm font-semibold text-right">{s.total}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Stats par direction */}
-      <div className="card">
-        <div className="card-header">
-          <h2 className="text-md font-semibold">Top directions · taux d'exécution</h2>
-        </div>
-        <div className="card-body space-y-2">
-          {byDirection.slice(0, 8).map((d) => {
-            const pct = d.totalDirectives > 0 ? (d.nbRealisees / d.totalDirectives) * 100 : 0;
-            return (
-              <div key={d.directionId} className="grid grid-cols-[120px_1fr_60px] gap-3 items-center py-1.5">
-                <div className="text-sm font-semibold">{d.directionCode}</div>
-                <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-success rounded-full" style={{ width: `${pct}%` }} />
-                </div>
-                <div className="font-mono text-sm text-right">
-                  {d.nbRealisees}/{d.totalDirectives}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DonutLegendRow({ color, label, value, total }: { color: string; label: string; value: number; total: number }) {
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-  return (
-    <div className="flex items-center gap-2.5 text-sm">
-      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
-      <span className="flex-1">{label}</span>
-      <span className="font-mono font-semibold">{value}</span>
-      <span className="text-fg-muted text-xs w-10 text-right">{pct}%</span>
+      {layout === 'executive' && <DashboardSgExecutive {...childProps} />}
+      {layout === 'bento' && <DashboardSgBento {...childProps} />}
+      {layout === 'focus' && <DashboardSgFocus {...childProps} />}
     </div>
   );
 }

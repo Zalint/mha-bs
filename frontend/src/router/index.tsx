@@ -8,8 +8,10 @@ import { DirectiveFicheView } from '../views/DirectiveFicheView.js';
 import { ConseilInterMinisterielView } from '../views/directives/ConseilInterMinisterielView.js';
 import { ConseilMinistresView } from '../views/directives/ConseilMinistresView.js';
 import { CoordinationSgView } from '../views/directives/CoordinationSgView.js';
+import { BsImportView } from '../views/bs/BsImportView.js';
 import { BsListeView } from '../views/bs/BsListeView.js';
 import { BsMatriceView } from '../views/bs/BsMatriceView.js';
+import { BsRecommandationNewView } from '../views/bs/BsRecommandationNewView.js';
 import { BsRencontreView } from '../views/bs/BsRencontreView.js';
 import { BsReunionMissionView } from '../views/bs/BsReunionMissionView.js';
 import { ConfigView } from '../views/ConfigView.js';
@@ -50,7 +52,9 @@ export const router = createBrowserRouter([
           { path: 'bs/fiche/:id', element: <DirectiveFicheView /> },
           { path: 'bs/rencontre', element: <BsRencontreView /> },
           { path: 'bs/matrice', element: <BsMatriceView /> },
+          { path: 'bs/recommandation/new', element: <BsRecommandationNewView /> },
           { path: 'bs/reunion', element: <BsReunionMissionView /> },
+          { path: 'bs/import', element: <BsImportView /> },
           {
             path: 'bs/config',
             // Route reservee aux administrateurs : ProtectedRoute imbrique avec roles=['admin']
