@@ -23,20 +23,10 @@ const PIN_ICON = L.divIcon({
   iconAnchor: [14, 14],
 });
 
-// Donnees de demo : sites pre-saisis dans les maquettes pour combler quand la table est encore vide
-const DEMO_SITES: MissionTerrain[] = [
-  { id: 'demo-1', dateMission: '2026-05-11', localite: 'Keur Massar', region: 'Dakar', latitude: 14.7799, longitude: -17.3344, projetRattache: 'PROGEP II', constats: 'Suivi des bassins versants de Mbao. Avancement satisfaisant.', recommandations: 'Curage à finaliser avant juin.', createdBy: null, createdAt: '', updatedAt: '' },
-  { id: 'demo-2', dateMission: '2026-05-11', localite: 'Tivaouane Peulh', region: 'Dakar', latitude: 14.8167, longitude: -17.2667, projetRattache: 'PISEA / SFI', constats: "Station d'épuration eaux usées (PPP).", recommandations: 'Études techniques en cours.', createdBy: null, createdAt: '', updatedAt: '' },
-  { id: 'demo-3', dateMission: '2026-05-11', localite: 'Thiaroye Sur Mer', region: 'Dakar', latitude: 14.7461, longitude: -17.3192, projetRattache: 'ONAS', constats: "Réseau d'assainissement.", recommandations: 'Travaux à 68% d\'avancement.', createdBy: null, createdAt: '', updatedAt: '' },
-  { id: 'demo-4', dateMission: '2026-05-11', localite: 'APIX Mbao', region: 'Dakar', latitude: 14.7333, longitude: -17.3667, projetRattache: 'DPGI', constats: 'Ouvrages anti-inondations.', recommandations: 'Maintenance avant hivernage.', createdBy: null, createdAt: '', updatedAt: '' },
-];
-
 export function MissionsTerrainView() {
   const navigate = useNavigate();
   const query = useApi(() => api.get<{ items: MissionTerrain[] }>('/missions'), []);
-  const realItems = query.data?.items ?? [];
-  // Si rien en base on affiche au moins les sites de demo pour donner de la matiere
-  const items = realItems.length > 0 ? realItems : DEMO_SITES;
+  const items = query.data?.items ?? [];
 
   const mapRef = useRef<L.Map | null>(null);
 
@@ -190,10 +180,9 @@ export function MissionsTerrainView() {
         </div>
       </div>
 
-      {realItems.length === 0 && (
+      {items.length === 0 && (
         <p className="mt-3 text-xs text-fg-muted italic">
-          Affichage de 4 sites de démonstration (la table missionsTerrain est encore vide). Crée une
-          nouvelle mission via le bouton ci-dessus pour la voir apparaître ici.
+          Aucune mission terrain en base. Crée une nouvelle mission via le bouton ci-dessus.
         </p>
       )}
     </div>

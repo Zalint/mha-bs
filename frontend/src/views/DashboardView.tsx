@@ -7,7 +7,6 @@ import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
 import { api } from '../lib/apiClient.js';
 import { cn } from '../lib/cn.js';
-import { filterDemoMissionsByYear } from '../lib/demoMissions.js';
 import { DashboardSgBento } from './dashboard/DashboardSgBento.js';
 import { DashboardSgExecutive } from './dashboard/DashboardSgExecutive.js';
 import { DashboardSgFocus } from './dashboard/DashboardSgFocus.js';
@@ -91,13 +90,10 @@ export function DashboardView() {
     );
   }
 
-  const realMissions = missionsQuery.data?.items ?? [];
-  // Fallback : si la table est vide ou que la requête filtrée ne renvoie rien,
-  // on affiche les sites de démo (filtrés par l'année active si non null).
-  const missions = realMissions.length > 0 ? realMissions : filterDemoMissionsByYear(annee);
+  // Missions affichées : uniquement les données réelles de la base.
+  const missions = missionsQuery.data?.items ?? [];
 
-  // Recalcule les KPIs missions depuis la liste effectivement affichée (incl. fallback démo).
-  // Évite l'incohérence : carte avec 4 sites mais KPI "0 missions" parce que la table est vide.
+  // Recalcule les KPIs missions depuis la liste effective (gère le filtre année).
   const regionsCouvertesEffectif = new Set(
     missions.map((m) => m.region).filter((r) => Boolean(r)) as string[],
   ).size;

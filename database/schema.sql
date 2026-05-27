@@ -288,6 +288,9 @@ CREATE TABLE IF NOT EXISTS "missionsTerrain" (
 
 CREATE INDEX IF NOT EXISTS "idxMissionsDate"   ON "missionsTerrain" ("dateMission");
 CREATE INDEX IF NOT EXISTS "idxMissionsRegion" ON "missionsTerrain" ("region");
+-- Index unique (dateMission, localite) — natural key utilisée par l'import idempotent
+CREATE UNIQUE INDEX IF NOT EXISTS "uniqMissionsDateLocalite"
+  ON "missionsTerrain" ("dateMission", "localite");
 
 DROP TRIGGER IF EXISTS "trgMissionsUpdatedAt" ON "missionsTerrain";
 CREATE TRIGGER "trgMissionsUpdatedAt"
@@ -756,6 +759,16 @@ VALUES
   ('Session ordinaire 2025-2026',          'ordinaire',     '2026-04-01', '2026-07-31'),
   ('Session extraordinaire mars 2026',     'extraordinaire','2026-03-01', '2026-03-31')
 ON CONFLICT DO NOTHING;
+
+
+-- Missions terrain — sites pré-saisis pour les maquettes (idempotent via index unique)
+INSERT INTO "missionsTerrain" ("dateMission", "localite", "region", "latitude", "longitude", "projetRattache", "constats", "recommandations")
+VALUES
+  ('2026-05-11', 'Keur Massar',      'Dakar', 14.7799, -17.3344, 'PROGEP II',   'Suivi des bassins versants de Mbao. Avancement satisfaisant.', 'Curage à finaliser avant juin.'),
+  ('2026-05-11', 'Tivaouane Peulh',  'Dakar', 14.8167, -17.2667, 'PISEA / SFI', 'Station d''épuration eaux usées (PPP).',                       'Études techniques en cours.'),
+  ('2026-05-11', 'Thiaroye Sur Mer', 'Dakar', 14.7461, -17.3192, 'ONAS',        'Réseau d''assainissement.',                                    'Travaux à 68% d''avancement.'),
+  ('2026-05-11', 'APIX Mbao',        'Dakar', 14.7333, -17.3667, 'DPGI',        'Ouvrages anti-inondations.',                                   'Maintenance avant hivernage.')
+ON CONFLICT ("dateMission", "localite") DO NOTHING;
 
 
 -- Députés (exemples)
