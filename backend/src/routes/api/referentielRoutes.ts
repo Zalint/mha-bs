@@ -93,11 +93,16 @@ referentielRoutes.put(
   },
 );
 
-referentielRoutes.delete('/:id', authJwt, requireRole('admin'), async (req, res, next) => {
-  try {
-    await deleteReferentiel(req.params.id);
-    res.status(204).end();
-  } catch (err) {
-    next(err);
-  }
-});
+referentielRoutes.delete(
+  '/:id',
+  authJwt,
+  requireRole('admin', 'bs'),
+  async (req, res, next) => {
+    try {
+      await deleteReferentiel(req.params.id);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);
