@@ -1,58 +1,84 @@
 import {
   AlertTriangle,
   Archive,
-  Ban,
+  Calendar,
   CheckCircle2,
-  CheckSquare,
+  ClipboardList,
   Clock,
   Filter,
   Inbox,
+  Landmark,
+  Layers,
+  MapPin,
   Plus,
   Search,
   Upload,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { type LucideIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
-import type { Directive, DirectiveEtat, PaginatedResponse } from '@mha-bs/shared';
+import type {
+  Directive,
+  DirectiveEtat,
+  MissionTerrain,
+  PaginatedResponse,
+  RecommandationMatrice,
+  ReunionTechnique,
+} from '@mha-bs/shared';
 
-import { Pagination } from '../../components/ui/Pagination.js';
 import { Spinner } from '../../components/ui/Spinner.js';
 import { useApi } from '../../hooks/useApi.js';
-import { ApiClientError, api } from '../../lib/apiClient.js';
+import { api } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
-import { daysBetween, todayYmd } from '../../lib/formatDate.js';
+import { daysBetween, formatShort, todayYmd } from '../../lib/formatDate.js';
 
-type Tab = 'ouvertes' | 'attente' | 'retard' | 'soumises' | 'cloturees' | 'ineligible';
+// ---------------------------------------------------------------------------
+// Types unifiés
+// ---------------------------------------------------------------------------
 
-const TAB_LABELS: Record<Tab, string> = {
-  ouvertes: 'À traiter',
-  attente: 'En attente',
-  retard: 'En retard',
-  soumises: 'Soumises au SG',
-  cloturees: 'Clôturées',
-  ineligible: 'Inéligibles',
+type EntityType = 'directive' | 'recommandation' | 'reunion' | 'mission';
+type TypeFilter = 'tout' | EntityType;
+type StateTab = 'tous' | 'enCours' | 'attente' | 'retard' | 'realisee' | 'ineligible';
+
+interface UnifiedItem {
+  id: string;
+  type: EntityType;
+  code: string;
+  libelle: string;
+  date: string | null; // échéance ou date événement (YYYY-MM-DD)
+  etat: DirectiveEtat | null; // null pour réunions/missions
+  retardJours: number | null;
+  secondary: string | null; // ministère, projet, sous-secteur, etc.
+  detailUrl: string;
+}
+
+// ---------------------------------------------------------------------------
+// Définitions UI
+// ---------------------------------------------------------------------------
+
+const TYPE_DEF: Record<EntityType, { label: string; icon: LucideIcon; color: string }> = {
+  directive: { label: 'Directive', icon: Landmark, color: 'bg-success-bg text-success' },
+  recommandation: { label: 'Recommandation', icon: ClipboardList, color: 'bg-warning-bg text-warning' },
+  reunion: { label: 'Réunion', icon: Calendar, color: 'bg-info-bg text-info' },
+  mission: { label: 'Mission', icon: MapPin, color: 'bg-danger-bg text-danger' },
 };
 
-const TAB_ICONS = {
-  ouvertes: Inbox,
-  attente: Clock,
-  retard: AlertTriangle,
-  soumises: CheckCircle2,
-  cloturees: Archive,
-  ineligible: Ban,
-};
+const TYPE_TABS: { value: TypeFilter; label: string; icon: LucideIcon }[] = [
+  { value: 'tout', label: 'Tout', icon: Layers },
+  { value: 'directive', label: 'Directives', icon: Landmark },
+  { value: 'recommandation', label: 'Recommandations', icon: ClipboardList },
+  { value: 'reunion', label: 'Réunions', icon: Calendar },
+  { value: 'mission', label: 'Missions', icon: MapPin },
+];
 
-const TAB_ORDER: Tab[] = ['ouvertes', 'attente', 'retard', 'soumises', 'cloturees', 'ineligible'];
-
-const PAGE_SIZE = 50;
-
-const ETAT_OPTIONS: { value: DirectiveEtat; label: string }[] = [
-  { value: 'attente', label: 'En attente' },
-  { value: 'enCours', label: 'En cours' },
-  { value: 'realisee', label: 'Réalisée' },
-  { value: 'ineligible', label: 'Inéligible' },
+const STATE_TABS: { value: StateTab; label: string; icon: LucideIcon }[] = [
+  { value: 'tous', label: 'Tous', icon: Inbox },
+  { value: 'enCours', label: 'À traiter', icon: Inbox },
+  { value: 'attente', label: 'En attente', icon: Clock },
+  { value: 'retard', label: 'En retard', icon: AlertTriangle },
+  { value: 'realisee', label: 'Clôturées', icon: Archive },
+  { value: 'ineligible', label: 'Inéligibles', icon: CheckCircle2 },
 ];
 
 const ETAT_STYLES: Record<DirectiveEtat, string> = {
@@ -62,156 +88,320 @@ const ETAT_STYLES: Record<DirectiveEtat, string> = {
   ineligible: 'bg-neutral-bg text-neutral',
 };
 
+const ETAT_LABELS: Record<DirectiveEtat, string> = {
+  attente: 'En attente',
+  enCours: 'En cours',
+  realisee: 'Réalisée',
+  ineligible: 'Inéligible',
+};
+
+// ---------------------------------------------------------------------------
+// Adaptateurs entité → UnifiedItem
+// ---------------------------------------------------------------------------
+
+function fromDirective(d: Directive, today: string): UnifiedItem {
+  const retard = d.echeance && d.echeance < today && d.etat !== 'realisee'
+    ? daysBetween(d.echeance, today)
+    : null;
+  return {
+    id: d.id,
+    type: 'directive',
+    code: d.codeDirective,
+    libelle: d.texteDirective,
+    date: d.echeance,
+    etat: d.etat,
+    retardJours: retard,
+    secondary: d.ministeresAssocies.length > 0 ? d.ministeresAssocies.join(' · ') : null,
+    detailUrl: `/bs/fiche/${d.id}`,
+  };
+}
+
+function fromRecommandation(r: RecommandationMatrice, _today: string): UnifiedItem {
+  return {
+    id: r.id,
+    type: 'recommandation',
+    code: `${r.typeMatrice}-${String(r.numOrdre).padStart(3, '0')}`,
+    libelle: r.texteRecommandation,
+    date: null, // pas d'échéance ferme (trimestre seulement)
+    etat: r.etat,
+    retardJours: null,
+    secondary: [r.priorite, r.echeanceTrimestre].filter(Boolean).join(' · ') || null,
+    detailUrl: '/bs/matrice',
+  };
+}
+
+function fromReunion(r: ReunionTechnique, _today: string): UnifiedItem {
+  return {
+    id: r.id,
+    type: 'reunion',
+    code: `RT-${r.dateReunion}`,
+    libelle: r.theme,
+    date: r.dateReunion,
+    etat: null,
+    retardJours: null,
+    secondary: [r.lieu, r.sousSecteur, r.copilLie].filter(Boolean).join(' · ') || null,
+    detailUrl: '/reunions-techniques',
+  };
+}
+
+function fromMission(m: MissionTerrain, _today: string): UnifiedItem {
+  return {
+    id: m.id,
+    type: 'mission',
+    code: `MT-${m.dateMission}`,
+    libelle: m.localite,
+    date: m.dateMission,
+    etat: null,
+    retardJours: null,
+    secondary: [m.region, m.projetRattache].filter(Boolean).join(' · ') || null,
+    detailUrl: '/missions-terrain',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Composant
+// ---------------------------------------------------------------------------
+
 export function BsListeView() {
   const navigate = useNavigate();
   const today = todayYmd();
-  const [tab, setTab] = useState<Tab>('ouvertes');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('tout');
+  const [stateTab, setStateTab] = useState<StateTab>('tous');
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const params = useMemo(() => {
-    const base: Record<string, string | number | undefined> = {
-      page,
-      pageSize: PAGE_SIZE,
-      search: search || undefined,
-    };
-    if (tab === 'ouvertes') base.etat = 'enCours';
-    if (tab === 'attente') base.etat = 'attente';
-    if (tab === 'retard') base.etat = 'enCours'; // filtre côté client via échéance
-    if (tab === 'cloturees') base.etat = 'realisee';
-    if (tab === 'ineligible') base.etat = 'ineligible';
-    if (tab === 'soumises') base.statutValidation = 'soumis';
-    return base;
-  }, [tab, search, page]);
-
-  const query = useApi(
-    () => api.get<PaginatedResponse<Directive>>('/directives', { query: params }),
-    [tab, search, page],
+  // Fetch des 4 entités en parallèle (1ère page, large pageSize)
+  const directivesQuery = useApi(
+    () => api.get<PaginatedResponse<Directive>>('/directives', { query: { pageSize: 500 } }),
+    [],
+  );
+  const recosQuery = useApi(
+    () => api.get<{ items: RecommandationMatrice[] }>('/matrices'),
+    [],
+  );
+  const reunionsQuery = useApi(
+    () => api.get<{ items: ReunionTechnique[] }>('/reunions'),
+    [],
+  );
+  const missionsQuery = useApi(
+    () => api.get<{ items: MissionTerrain[] }>('/missions'),
+    [],
   );
 
-  useEffect(() => setSelected(new Set()), [tab, search, page]);
+  const isLoading =
+    directivesQuery.isLoading ||
+    recosQuery.isLoading ||
+    reunionsQuery.isLoading ||
+    missionsQuery.isLoading;
 
-  const items = useMemo(() => {
-    const all = query.data?.items ?? [];
-    if (tab === 'retard') {
-      return all.filter((d) => d.echeance !== null && d.echeance < today);
+  // Construit la liste unifiée
+  const allItems = useMemo<UnifiedItem[]>(() => {
+    const items: UnifiedItem[] = [];
+    if (typeFilter === 'tout' || typeFilter === 'directive') {
+      for (const d of directivesQuery.data?.items ?? []) {
+        items.push(fromDirective(d, today));
+      }
     }
-    return all;
-  }, [query.data, tab, today]);
-
-  const counts = useMemo(() => {
-    const all = query.data?.items ?? [];
-    return {
-      retard: all.filter((d) => d.echeance !== null && d.echeance < today && d.etat !== 'realisee').length,
-      soumises: tab === 'soumises' ? all.length : 0,
-    };
-  }, [query.data, today, tab]);
-
-  const handleStateChange = async (directive: Directive, newEtat: DirectiveEtat): Promise<void> => {
-    try {
-      await api.put(`/directives/${directive.id}`, { etat: newEtat });
-      toast.success(`État mis à jour : ${ETAT_OPTIONS.find((o) => o.value === newEtat)?.label}`);
-      query.refetch();
-    } catch (err) {
-      toast.error(err instanceof ApiClientError ? err.message : 'Erreur');
+    if (typeFilter === 'tout' || typeFilter === 'recommandation') {
+      for (const r of recosQuery.data?.items ?? []) {
+        items.push(fromRecommandation(r, today));
+      }
     }
-  };
-
-  const handleEcheanceChange = async (directive: Directive, newEcheance: string): Promise<void> => {
-    if (newEcheance && !/^\d{4}-\d{2}-\d{2}$/.test(newEcheance)) {
-      toast.error('Format YYYY-MM-DD attendu');
-      return;
+    if (typeFilter === 'tout' || typeFilter === 'reunion') {
+      for (const r of reunionsQuery.data?.items ?? []) {
+        items.push(fromReunion(r, today));
+      }
     }
-    try {
-      await api.put(`/directives/${directive.id}`, { echeance: newEcheance || null });
-      toast.success('Échéance mise à jour');
-      query.refetch();
-    } catch (err) {
-      toast.error(err instanceof ApiClientError ? err.message : 'Erreur');
+    if (typeFilter === 'tout' || typeFilter === 'mission') {
+      for (const m of missionsQuery.data?.items ?? []) {
+        items.push(fromMission(m, today));
+      }
     }
-  };
+    return items;
+  }, [typeFilter, directivesQuery.data, recosQuery.data, reunionsQuery.data, missionsQuery.data, today]);
 
-  const toggleSelect = (id: string): void => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  // Filtre état + recherche
+  const filtered = useMemo(() => {
+    let list = allItems;
+    if (stateTab !== 'tous') {
+      list = list.filter((it) => {
+        if (it.etat === null) {
+          // Pas d'état → on garde seulement quand 'tous' ou 'enCours' (item en activité)
+          return stateTab === 'enCours';
+        }
+        if (stateTab === 'retard') {
+          return it.retardJours !== null && it.retardJours > 0;
+        }
+        return it.etat === stateTab;
+      });
+    }
+    if (search.trim().length > 0) {
+      const s = search.toLowerCase();
+      list = list.filter(
+        (it) =>
+          it.code.toLowerCase().includes(s) ||
+          it.libelle.toLowerCase().includes(s) ||
+          (it.secondary ?? '').toLowerCase().includes(s),
+      );
+    }
+    // Tri : retard décroissant puis date décroissante
+    return [...list].sort((a, b) => {
+      if (a.retardJours !== null && b.retardJours !== null) return b.retardJours - a.retardJours;
+      if (a.retardJours !== null) return -1;
+      if (b.retardJours !== null) return 1;
+      const dateA = a.date ?? '';
+      const dateB = b.date ?? '';
+      return dateB.localeCompare(dateA);
     });
-  };
+  }, [allItems, stateTab, search]);
 
-  const toggleSelectAll = (): void => {
-    if (selected.size === items.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(items.map((d) => d.id)));
-    }
-  };
+  // Compteurs par état (pour les badges des onglets)
+  const stateCounts = useMemo(() => {
+    return {
+      enCours: allItems.filter((it) => it.etat === 'enCours' || it.etat === null).length,
+      attente: allItems.filter((it) => it.etat === 'attente').length,
+      retard: allItems.filter((it) => it.retardJours !== null && it.retardJours > 0).length,
+      realisee: allItems.filter((it) => it.etat === 'realisee').length,
+      ineligible: allItems.filter((it) => it.etat === 'ineligible').length,
+    };
+  }, [allItems]);
 
-  const handleBulkRealisee = async (): Promise<void> => {
-    const ids = Array.from(selected);
-    try {
-      await Promise.all(ids.map((id) => api.put(`/directives/${id}`, { etat: 'realisee' })));
-      toast.success(`${ids.length} directive(s) marquée(s) Réalisée`);
-      setSelected(new Set());
-      query.refetch();
-    } catch (err) {
-      toast.error(err instanceof ApiClientError ? err.message : 'Erreur');
-    }
-  };
+  // Compteurs par type (pour les badges des onglets type)
+  const typeCounts = useMemo(() => {
+    return {
+      directive: directivesQuery.data?.totalCount ?? directivesQuery.data?.items.length ?? 0,
+      recommandation: recosQuery.data?.items.length ?? 0,
+      reunion: reunionsQuery.data?.items.length ?? 0,
+      mission: missionsQuery.data?.items.length ?? 0,
+    };
+  }, [directivesQuery.data, recosQuery.data, reunionsQuery.data, missionsQuery.data]);
+
+  const newItemMenu: { label: string; to: string }[] = [
+    { label: 'Nouvelle directive', to: '/bs/fiche' },
+    { label: 'Nouvelle recommandation', to: '/bs/recommandation/new' },
+    { label: 'Nouvelle réunion / mission', to: '/bs/reunion' },
+    { label: 'Nouvelle interpellation', to: '/bs/interpellation/new' },
+  ];
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
 
   return (
     <div>
+      {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4 mb-3">
         <div>
           <h1 className="text-2xl font-semibold text-fg leading-tight">File de travail</h1>
           <p className="text-sm text-fg-muted mt-1">
-            Directives à saisir, mettre à jour, ou faire valider
+            Vue unifiée : directives, recommandations, réunions et missions à suivre
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 relative">
           <button type="button" className="btn btn-secondary">
             <Filter className="w-3.5 h-3.5" /> Filtres avancés
           </button>
           <button type="button" className="btn btn-secondary" onClick={() => navigate('/bs/import')}>
             <Upload className="w-3.5 h-3.5" /> Importer
           </button>
-          <button type="button" className="btn btn-primary" onClick={() => navigate('/bs/fiche')}>
-            <Plus className="w-3.5 h-3.5" /> Nouvelle directive
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setNewMenuOpen((v) => !v)}
+          >
+            <Plus className="w-3.5 h-3.5" /> Nouveau
           </button>
+          {newMenuOpen && (
+            <div
+              className="absolute right-0 top-full mt-1 bg-surface border border-border rounded-lg shadow-lg py-1 z-10 min-w-[220px]"
+              onMouseLeave={() => setNewMenuOpen(false)}
+            >
+              {newItemMenu.map((it) => (
+                <button
+                  key={it.to}
+                  type="button"
+                  onClick={() => {
+                    setNewMenuOpen(false);
+                    navigate(it.to);
+                  }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted"
+                >
+                  {it.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Type filter */}
+      <div className="inline-flex gap-0.5 p-1 bg-muted border border-border rounded-lg mb-3">
+        {TYPE_TABS.map((t) => {
+          const Icon = t.icon;
+          const isActive = typeFilter === t.value;
+          const badge =
+            t.value === 'tout'
+              ? null
+              : typeCounts[t.value as EntityType];
+          return (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setTypeFilter(t.value)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                isActive ? 'bg-surface text-fg shadow-sm' : 'text-fg-2 hover:text-fg',
+              )}
+            >
+              <Icon className="w-3.5 h-3.5" strokeWidth={1.8} /> {t.label}
+              {badge !== null && (
+                <span
+                  className={cn(
+                    'text-[11px] px-1.5 py-0.5 rounded-full font-mono',
+                    isActive ? 'bg-primary text-white' : 'bg-border text-fg-2',
+                  )}
+                >
+                  {badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* State tabs + search */}
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <div className="inline-flex gap-0.5 p-1 bg-muted border border-border rounded-lg">
-          {TAB_ORDER.map((t) => {
-            const Icon = TAB_ICONS[t];
-            const isActive = tab === t;
+          {STATE_TABS.map((t) => {
+            const Icon = t.icon;
+            const isActive = stateTab === t.value;
             const count =
-              t === 'retard' ? counts.retard : t === 'soumises' ? counts.soumises : null;
+              t.value === 'tous'
+                ? allItems.length
+                : t.value === 'enCours'
+                  ? stateCounts.enCours
+                  : t.value === 'attente'
+                    ? stateCounts.attente
+                    : t.value === 'retard'
+                      ? stateCounts.retard
+                      : t.value === 'realisee'
+                        ? stateCounts.realisee
+                        : stateCounts.ineligible;
             return (
               <button
-                key={t}
+                key={t.value}
                 type="button"
-                onClick={() => setTab(t)}
+                onClick={() => setStateTab(t.value)}
                 className={cn(
                   'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                   isActive ? 'bg-surface text-fg shadow-sm' : 'text-fg-2 hover:text-fg',
                 )}
               >
-                <Icon className="w-3.5 h-3.5" strokeWidth={1.8} /> {TAB_LABELS[t]}
-                {count !== null && (
-                  <span
-                    className={cn(
-                      'text-[11px] px-1.5 py-0.5 rounded-full font-mono',
-                      isActive ? 'bg-primary text-white' : 'bg-border text-fg-2',
-                    )}
-                  >
-                    {count}
-                  </span>
-                )}
+                <Icon className="w-3.5 h-3.5" strokeWidth={1.8} /> {t.label}
+                <span
+                  className={cn(
+                    'text-[11px] px-1.5 py-0.5 rounded-full font-mono',
+                    isActive ? 'bg-primary text-white' : 'bg-border text-fg-2',
+                  )}
+                >
+                  {count}
+                </span>
               </button>
             );
           })}
@@ -221,145 +411,111 @@ export function BsListeView() {
           <input
             type="text"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Rechercher dans la file…"
-            className="input pl-9 w-[280px]"
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Rechercher (code, libellé, métadonnées)…"
+            className="input pl-9 w-[320px]"
           />
         </div>
       </div>
 
-      {/* Bulk bar */}
-      {selected.size > 0 && (
-        <div className="bg-primary-100 border border-primary rounded-lg px-4 py-2 mb-3 flex items-center gap-3 text-sm">
-          <CheckSquare className="w-4 h-4 text-primary" />
-          <span>
-            <b className="text-primary-700">{selected.size}</b> sélectionnée(s)
-          </span>
-          <div className="ml-auto flex gap-2">
-            <button type="button" className="btn btn-sm btn-secondary" onClick={() => void handleBulkRealisee()}>
-              <CheckCircle2 className="w-3.5 h-3.5" /> Marquer Réalisée
-            </button>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setSelected(new Set())}>
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Table */}
       <div className="bg-surface border border-border rounded-lg overflow-hidden">
-        {query.isLoading ? (
+        {isLoading ? (
           <Spinner label="Chargement…" />
-        ) : query.error ? (
-          <div className="text-danger text-sm p-6">Erreur de chargement.</div>
         ) : (
           <div className="overflow-auto">
             <table className="w-full text-sm border-separate border-spacing-0">
               <thead className="bg-surface2">
                 <tr>
-                  <th className="px-3 py-2.5 w-10 border-b border-border">
-                    <input
-                      type="checkbox"
-                      aria-label="Tout sélectionner"
-                      onChange={toggleSelectAll}
-                      checked={selected.size > 0 && selected.size === items.length}
-                      className="accent-primary"
-                    />
+                  <th className="text-left px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border w-32">
+                    Type
                   </th>
-                  <th className="text-left px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border w-24">
+                  <th className="text-left px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border w-32">
                     Code
                   </th>
                   <th className="text-left px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border">
-                    Directive
+                    Libellé
                   </th>
-                  <th className="text-left px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border w-32">
-                    Échéance
+                  <th className="text-left px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border w-28">
+                    Date
                   </th>
-                  <th className="text-left px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border w-36">
+                  <th className="text-left px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border w-28">
                     État
                   </th>
-                  <th className="text-right px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border w-24">
+                  <th className="text-right px-3 py-2.5 text-[11.5px] font-semibold uppercase tracking-wider text-fg-muted border-b border-border w-20">
                     Retard
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {items.length === 0 ? (
+                {filtered.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center text-fg-muted py-12 text-sm">
                       <Inbox className="w-8 h-8 mx-auto mb-2 text-fg-muted" strokeWidth={1.5} />
-                      Aucune directive dans cette vue.
+                      Aucun élément dans cette vue.
                     </td>
                   </tr>
                 ) : (
-                  items.map((d) => {
-                    const isLate =
-                      d.echeance !== null && d.echeance < today && d.etat !== 'realisee';
-                    const retard = isLate && d.echeance ? daysBetween(d.echeance, today) : null;
+                  filtered.map((it) => {
+                    const TypeIcon = TYPE_DEF[it.type].icon;
+                    const isLate = it.retardJours !== null && it.retardJours > 0;
                     return (
                       <tr
-                        key={d.id}
+                        key={`${it.type}-${it.id}`}
                         className={cn(
-                          'border-b border-border last:border-0 hover:bg-muted',
+                          'border-b border-border last:border-0 hover:bg-muted cursor-pointer',
                           isLate && 'bg-danger-bg/30',
                         )}
+                        onClick={() => navigate(it.detailUrl)}
                       >
                         <td className="px-3 py-3 align-top">
-                          <input
-                            type="checkbox"
-                            aria-label="Sélectionner"
-                            checked={selected.has(d.id)}
-                            onChange={() => toggleSelect(d.id)}
-                            className="accent-primary"
-                          />
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium',
+                              TYPE_DEF[it.type].color,
+                            )}
+                          >
+                            <TypeIcon className="w-3 h-3" strokeWidth={2} />
+                            {TYPE_DEF[it.type].label}
+                          </span>
                         </td>
-                        <td
-                          className="px-3 py-3 align-top cursor-pointer"
-                          onClick={() => navigate(`/bs/fiche/${d.id}`)}
-                        >
-                          <span className="font-mono text-xs">{d.codeDirective}</span>
+                        <td className="px-3 py-3 align-top">
+                          <span className="font-mono text-xs">{it.code}</span>
                         </td>
-                        <td
-                          className="px-3 py-3 max-w-[480px] cursor-pointer"
-                          onClick={() => navigate(`/bs/fiche/${d.id}`)}
-                        >
-                          <div className="line-clamp-2 leading-snug">{d.texteDirective}</div>
-                          {d.ministeresAssocies.length > 0 && (
+                        <td className="px-3 py-3 max-w-[480px]">
+                          <div className="line-clamp-2 leading-snug">{it.libelle}</div>
+                          {it.secondary && (
                             <div className="text-[11.5px] text-fg-muted font-mono mt-1">
-                              {d.ministeresAssocies.join(' · ')}
+                              {it.secondary}
                             </div>
                           )}
                         </td>
-                        <td className="px-3 py-3">
-                          <input
-                            type="date"
-                            value={d.echeance ?? ''}
-                            onChange={(e) => void handleEcheanceChange(d, e.target.value)}
-                            className="bg-transparent border border-transparent hover:border-border hover:bg-surface focus:border-primary focus:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 rounded px-2 py-1 text-xs font-mono w-32"
-                          />
+                        <td className="px-3 py-3 align-top">
+                          {it.date ? (
+                            <span className="font-mono text-xs">{formatShort(it.date)}</span>
+                          ) : (
+                            <span className="text-fg-muted text-xs">—</span>
+                          )}
                         </td>
-                        <td className="px-3 py-3">
-                          <select
-                            value={d.etat}
-                            onChange={(e) => void handleStateChange(d, e.target.value as DirectiveEtat)}
-                            className={cn(
-                              'text-xs font-medium px-2.5 py-1 rounded-full border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30',
-                              ETAT_STYLES[d.etat],
-                            )}
-                          >
-                            {ETAT_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
+                        <td className="px-3 py-3 align-top">
+                          {it.etat ? (
+                            <span
+                              className={cn(
+                                'text-xs font-medium px-2.5 py-1 rounded-full',
+                                ETAT_STYLES[it.etat],
+                              )}
+                            >
+                              {ETAT_LABELS[it.etat]}
+                            </span>
+                          ) : (
+                            <span className="text-fg-muted text-xs">—</span>
+                          )}
                         </td>
-                        <td className="px-3 py-3 text-right">
-                          {retard !== null ? (
-                            <span className="font-mono text-danger font-semibold">+{retard} j</span>
+                        <td className="px-3 py-3 text-right align-top">
+                          {it.retardJours !== null && it.retardJours > 0 ? (
+                            <span className="font-mono text-danger font-semibold">
+                              +{it.retardJours} j
+                            </span>
                           ) : (
                             <span className="text-fg-muted">—</span>
                           )}
@@ -372,19 +528,13 @@ export function BsListeView() {
             </table>
           </div>
         )}
-        {query.data && (
-          <Pagination
-            page={query.data.page}
-            pageSize={query.data.pageSize}
-            totalCount={query.data.totalCount}
-            onPageChange={setPage}
-          />
-        )}
       </div>
 
       <p className="mt-3 text-xs text-fg-muted">
-        Astuce : cliquez sur une ligne pour ouvrir la fiche complète. L'état et l'échéance se mettent à
-        jour immédiatement au changement, avec sauvegarde automatique.
+        Astuce : clique sur une ligne pour ouvrir le détail. Le filtre <b>Type</b> au-dessus
+        permet d&apos;isoler une catégorie ; les onglets d&apos;état filtrent par avancement (les
+        réunions et missions n&apos;ont pas d&apos;état — elles sont visibles en mode «&nbsp;Tous&nbsp;»
+        et «&nbsp;À traiter&nbsp;»).
       </p>
     </div>
   );
