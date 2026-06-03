@@ -1,13 +1,27 @@
-import { CheckCircle2, ClipboardList, Clock, FileText, Mic, Users } from 'lucide-react';
-import { useMemo } from 'react';
+import {
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Download,
+  FileText,
+  Mic,
+  Pencil,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
 import { useReferentiel } from '../hooks/useReferentiel.js';
-import { api } from '../lib/apiClient.js';
+import { ApiClientError, api } from '../lib/apiClient.js';
 import { cn } from '../lib/cn.js';
+import { env } from '../lib/env.js';
 import { formatShort } from '../lib/formatDate.js';
+import { useAuthStore } from '../stores/authStore.js';
 
 interface Interpellation {
   id: string;
@@ -45,6 +59,11 @@ const ETAT_STYLES: Record<string, string> = {
 
 export function InterpellationsView() {
   const navigate = useNavigate();
+  const userRole = useAuthStore((s) => s.user?.role);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const isAdmin = userRole === 'admin';
+  const canEdit = userRole === 'admin' || userRole === 'bs';
+
   const listQuery = useApi(() => api.get<{ items: Interpellation[] }>('/interpellations'), []);
   const statsQuery = useApi(() => api.get<InterpellationStats>('/interpellations/stats'), []);
   const etatRef = useReferentiel('etatInterpellation');
@@ -58,6 +77,106 @@ export function InterpellationsView() {
   const typeLabel = (code: string): string =>
     typeRef.items.find((r) => r.code === code)?.label ?? code;
 
+  // === Sélection multiple pour bulk delete (admin) ===
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const allSelected = items.length > 0 && selectedIds.size === items.length;
+  const toggleAll = (): void => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(items.map((i) => i.id)));
+  };
+  const toggleOne = (id: string): void => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
+
+  // === Édition inline ===
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<Partial<Interpellation>>({});
+
+  const startEdit = (it: Interpellation): void => {
+    setEditingId(it.id);
+    setEditDraft({
+      titre: it.titre,
+      description: it.description,
+      typeInterpellation: it.typeInterpellation,
+      etat: it.etat,
+      dateReception: it.dateReception,
+    });
+  };
+  const cancelEdit = (): void => {
+    setEditingId(null);
+    setEditDraft({});
+  };
+  const saveEdit = async (id: string): Promise<void> => {
+    try {
+      await api.put(`/interpellations/${id}`, editDraft);
+      toast.success('Interpellation mise à jour');
+      cancelEdit();
+      listQuery.refetch();
+      statsQuery.refetch();
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : "Erreur de mise à jour");
+    }
+  };
+
+  const deleteOne = async (id: string): Promise<void> => {
+    if (!window.confirm('Supprimer cette interpellation ?')) return;
+    try {
+      await api.delete(`/interpellations/${id}`);
+      toast.success('Interpellation supprimée');
+      listQuery.refetch();
+      statsQuery.refetch();
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Erreur de suppression');
+    }
+  };
+
+  const bulkDelete = async (): Promise<void> => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Supprimer ${selectedIds.size} interpellation(s) ? Action irréversible.`))
+      return;
+    try {
+      const res = await api.post<{ deleted: number }>('/interpellations/bulk-delete', {
+        ids: Array.from(selectedIds),
+      });
+      toast.success(`${res.deleted} interpellation(s) supprimée(s)`);
+      setSelectedIds(new Set());
+      listQuery.refetch();
+      statsQuery.refetch();
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Erreur de suppression');
+    }
+  };
+
+  const handleExport = async (): Promise<void> => {
+    try {
+      const url = `${env.apiBaseUrl.replace(/\/$/, '')}/interpellations/export.xlsx`;
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') ?? '';
+      const match = cd.match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? `mha-interpellations.xlsx`;
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(blobUrl);
+      toast.success(`Téléchargement de ${filename}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur d'export");
+    }
+  };
+
   if (listQuery.isLoading || statsQuery.isLoading) {
     return <Spinner label="Chargement des interpellations…" />;
   }
@@ -69,14 +188,36 @@ export function InterpellationsView() {
 
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-2xl font-semibold text-fg leading-tight flex items-center gap-2.5">
-          <Mic className="w-6 h-6 text-primary" strokeWidth={1.8} />
-          Interpellations parlementaires
-        </h1>
-        <p className="text-sm text-fg-muted mt-1">
-          Questions orales, écrites et interpellations en commission posées par les députés au MHA
-        </p>
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-fg leading-tight flex items-center gap-2.5">
+            <Mic className="w-6 h-6 text-primary" strokeWidth={1.8} />
+            Interpellations parlementaires
+          </h1>
+          <p className="text-sm text-fg-muted mt-1">
+            Questions orales, écrites et interpellations en commission posées par les députés au MHA
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void handleExport()}
+            className="btn btn-secondary"
+            title="Format compatible avec l'import (1er onglet 'In. des députés')"
+          >
+            <Download className="w-3.5 h-3.5" /> Exporter Excel
+          </button>
+          {isAdmin && selectedIds.size > 0 && (
+            <button
+              type="button"
+              onClick={() => void bulkDelete()}
+              className="btn bg-danger text-white hover:bg-danger/90"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Supprimer ({selectedIds.size})
+            </button>
+          )}
+        </div>
       </div>
 
       {/* KPIs */}
@@ -161,67 +302,217 @@ export function InterpellationsView() {
             Aucune interpellation enregistrée pour le moment.
           </div>
         ) : (
-          <table className="w-full text-sm border-separate border-spacing-0">
-            <thead className="bg-surface2">
-              <tr>
-                <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-28">
-                  Réf.
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-24">
-                  Date
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-20">
-                  Type
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border">
-                  Titre & député
-                </th>
-                <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-24">
-                  Échéance
-                </th>
-                <th className="text-center px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-32">
-                  État
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((i) => (
-                <tr key={i.id} className="border-b border-border last:border-0 hover:bg-muted">
-                  <td className="px-4 py-3 font-mono text-xs font-semibold">{i.reference}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg-muted">
-                    {formatShort(i.dateReception)}
-                  </td>
-                  <td className="px-4 py-3 text-xs">{typeLabel(i.typeInterpellation)}</td>
-                  <td className="px-4 py-3">
-                    <div className="text-sm font-medium line-clamp-2">{i.titre}</div>
-                    <div className="text-[11.5px] text-fg-muted mt-0.5">
-                      {i.deputeNom ?? '— député —'}
-                      {i.deputeGroupe ? ` · ${i.deputeGroupe}` : ''}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs">
-                    {i.echeanceReponse ? (
-                      <span className={cn(isOverdue(i) && 'text-danger font-semibold')}>
-                        {formatShort(i.echeanceReponse)}
-                      </span>
-                    ) : (
-                      <span className="text-fg-muted">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span
+          <div className="overflow-auto">
+            <table className="w-full text-sm border-separate border-spacing-0">
+              <thead className="bg-surface2">
+                <tr>
+                  {isAdmin && (
+                    <th className="px-3 py-2.5 border-b border-border w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Tout sélectionner"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        className="accent-primary"
+                      />
+                    </th>
+                  )}
+                  <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-24">
+                    Date
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-44">
+                    Député
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-32">
+                    Groupe parlementaire
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-24">
+                    Type
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border">
+                    Titre / question
+                  </th>
+                  <th className="text-center px-4 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-32">
+                    État
+                  </th>
+                  {canEdit && (
+                    <th className="text-center px-3 py-2.5 text-[11.5px] uppercase tracking-wider text-fg-muted border-b border-border w-24">
+                      Actions
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((i) => {
+                  const isEditing = editingId === i.id;
+                  const isSelected = selectedIds.has(i.id);
+                  return (
+                    <tr
+                      key={i.id}
                       className={cn(
-                        'inline-flex items-center px-2 py-1 rounded text-[11px] font-semibold',
-                        ETAT_STYLES[i.etat] ?? 'bg-muted text-fg-2',
+                        'border-b border-border last:border-0 hover:bg-muted',
+                        isSelected && 'bg-primary-100/30',
+                        isEditing && 'bg-warning-bg/30',
                       )}
                     >
-                      {etatLabel(i.etat)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      {isAdmin && (
+                        <td className="px-3 py-3 align-top">
+                          <input
+                            type="checkbox"
+                            aria-label="Sélectionner"
+                            checked={isSelected}
+                            onChange={() => toggleOne(i.id)}
+                            className="accent-primary"
+                          />
+                        </td>
+                      )}
+                      <td className="px-4 py-3 font-mono text-xs text-fg-muted align-top">
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={editDraft.dateReception ?? ''}
+                            onChange={(e) =>
+                              setEditDraft({ ...editDraft, dateReception: e.target.value })
+                            }
+                            className="input input-sm text-xs w-32"
+                          />
+                        ) : (
+                          formatShort(i.dateReception)
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="font-medium text-sm">
+                          {i.deputeNom ?? <span className="italic text-fg-muted">non lié</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <span
+                          className={cn(
+                            'inline-block px-2 py-0.5 rounded text-[11px] font-medium',
+                            i.deputeGroupe && i.deputeGroupe !== 'Non renseigne'
+                              ? 'bg-primary-100 text-primary-700'
+                              : 'bg-muted text-fg-muted italic',
+                          )}
+                        >
+                          {i.deputeGroupe ?? 'Non renseigné'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs align-top">
+                        {isEditing ? (
+                          <select
+                            value={editDraft.typeInterpellation ?? ''}
+                            onChange={(e) =>
+                              setEditDraft({ ...editDraft, typeInterpellation: e.target.value })
+                            }
+                            className="input input-sm text-xs"
+                          >
+                            <option value="ecrite">Écrite</option>
+                            <option value="orale">Orale</option>
+                            <option value="commission">Commission</option>
+                          </select>
+                        ) : (
+                          typeLabel(i.typeInterpellation)
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        {isEditing ? (
+                          <textarea
+                            value={editDraft.titre ?? ''}
+                            onChange={(e) =>
+                              setEditDraft({ ...editDraft, titre: e.target.value })
+                            }
+                            className="input text-sm w-full min-h-[60px]"
+                          />
+                        ) : (
+                          <>
+                            <div className="text-sm font-medium line-clamp-3">{i.titre}</div>
+                            {i.description && (
+                              <div className="text-[10.5px] text-fg-muted mt-1 italic line-clamp-1">
+                                {i.description}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center align-top">
+                        {isEditing ? (
+                          <select
+                            value={editDraft.etat ?? ''}
+                            onChange={(e) =>
+                              setEditDraft({ ...editDraft, etat: e.target.value })
+                            }
+                            className="input input-sm text-xs"
+                          >
+                            <option value="recue">Reçue</option>
+                            <option value="enPreparation">En préparation</option>
+                            <option value="aValider">À valider</option>
+                            <option value="repondue">Répondue</option>
+                          </select>
+                        ) : (
+                          <span
+                            className={cn(
+                              'inline-flex items-center px-2 py-1 rounded text-[11px] font-semibold',
+                              isOverdue(i) && i.etat !== 'repondue'
+                                ? 'bg-danger-bg text-danger'
+                                : ETAT_STYLES[i.etat] ?? 'bg-muted text-fg-2',
+                            )}
+                          >
+                            {etatLabel(i.etat)}
+                          </span>
+                        )}
+                      </td>
+                      {canEdit && (
+                        <td className="px-3 py-3 text-center align-top">
+                          {isEditing ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => void saveEdit(i.id)}
+                                className="text-xs px-2 py-1 bg-success text-white rounded hover:opacity-90"
+                              >
+                                ✓ Save
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEdit}
+                                className="text-fg-muted hover:text-fg p-1"
+                                aria-label="Annuler"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => startEdit(i)}
+                                className="text-fg-muted hover:text-primary p-1"
+                                aria-label="Éditer"
+                                title="Éditer"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteOne(i.id)}
+                                  className="text-fg-muted hover:text-danger p-1"
+                                  aria-label="Supprimer"
+                                  title="Supprimer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
