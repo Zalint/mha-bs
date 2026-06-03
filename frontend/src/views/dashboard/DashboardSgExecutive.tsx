@@ -472,11 +472,12 @@ function CopilProjetsContent({ projets, target, onProjetClick }: CopilProjetsCon
           />
         ))}
       </div>
-      <div className="flex items-center justify-between text-[10px] text-fg-muted mt-3 pt-2 border-t border-border">
-        <span className="flex items-center gap-3">
-          <Legend color="bg-emerald-500" label={`cible atteinte (≥${target}%)`} />
-          <Legend color="bg-amber-500" label="en progression" />
+      <div className="flex items-center justify-between text-[10px] text-fg-muted mt-3 pt-2 border-t border-border flex-wrap gap-2">
+        <span className="flex items-center gap-3 flex-wrap">
+          <Legend color="bg-slate-400" label="non démarré (0%)" />
           <Legend color="bg-rose-500" label="à relancer" />
+          <Legend color="bg-amber-500" label="en progression" />
+          <Legend color="bg-emerald-500" label={`cible atteinte (≥${target}%)`} />
         </span>
         <span className="font-mono hidden sm:inline">| ligne cible {target}%</span>
       </div>
@@ -492,29 +493,42 @@ interface CopilProjectRowProps {
 
 function CopilProjectRow({ projet, target, onClick }: CopilProjectRowProps) {
   const pct = projet.tauxExecution;
-  const status: 'good' | 'mid' | 'bad' =
-    pct >= target ? 'good' : pct >= target * 0.66 ? 'mid' : 'bad';
+  // 0% = pas démarré (neutre), >0% mais < cible = en progression, >= cible = atteinte
+  const status: 'notStarted' | 'good' | 'mid' | 'bad' =
+    pct === 0
+      ? 'notStarted'
+      : pct >= target
+        ? 'good'
+        : pct >= target * 0.66
+          ? 'mid'
+          : 'bad';
   const gradient = {
+    notStarted: 'from-slate-300 to-slate-400',
     good: 'from-emerald-400 to-emerald-500',
     mid: 'from-amber-400 to-amber-500',
     bad: 'from-rose-400 to-rose-500',
   }[status];
   const textColor = {
+    notStarted: 'text-fg-muted',
     good: 'text-emerald-700',
     mid: 'text-amber-700',
     bad: 'text-rose-700',
   }[status];
+
+  // Retire le préfixe "COPIL " redondant — on est déjà dans la section COPIL
+  const displayLabel = projet.label.replace(/^COPIL\s+/i, '');
+
   return (
     <button
       type="button"
       onClick={onClick}
       className="w-full flex items-center gap-2.5 hover:bg-muted/50 rounded-md px-1.5 py-1 -mx-1.5 transition-colors text-left"
     >
-      <span className="w-24 text-xs font-semibold text-fg-2 truncate">{projet.label}</span>
+      <span className="w-24 text-xs font-semibold text-fg-2 truncate">{displayLabel}</span>
       <div className="flex-1 relative h-4 bg-muted rounded">
         <div
           className={cn('absolute inset-y-0 left-0 rounded bg-gradient-to-r', gradient)}
-          style={{ width: `${pct}%` }}
+          style={{ width: `${Math.max(pct, 0.5)}%` }}
         />
         <div
           className="absolute inset-y-0 w-px bg-fg/40"
@@ -522,7 +536,7 @@ function CopilProjectRow({ projet, target, onClick }: CopilProjectRowProps) {
         />
       </div>
       <span className={cn('w-12 text-right font-mono text-sm font-bold', textColor)}>
-        {Math.round(pct)}%
+        {status === 'notStarted' ? '—' : `${Math.round(pct)}%`}
       </span>
       <span className="text-[10px] text-fg-muted font-mono w-12 text-right">
         {projet.nbRealisees}/{projet.total}
