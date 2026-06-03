@@ -47,6 +47,13 @@ export interface SgSummaryResponse {
     prochaineDate: string | null;
     prochaineLocalite: string | null;
   };
+  // Activité agrégée (réunions techniques + rencontres) par trimestre roulant
+  activiteParTrimestre: {
+    trimestre: string; // ex: "2026-T2"
+    reunions: number;
+    rencontres: number;
+    total: number;
+  }[];
 }
 
 export interface DashboardViewProps {

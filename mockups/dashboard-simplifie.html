@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup · Dashboard simplifié — MHA Bureau de Suivi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    body { font-family: 'Inter', -apple-system, sans-serif; background: #F8FAFC; }
+    .font-mono { font-family: 'Fira Mono', 'Cascadia Mono', monospace; }
+    .section-divider { border-top: 1px solid #E2E8F0; margin: 1.5rem 0; }
+    .expand-arrow { transition: transform 0.2s; }
+    .expanded .expand-arrow { transform: rotate(180deg); }
+    .hidden-by-default { display: none; }
+    .expanded .hidden-by-default { display: block; }
+
+    /* === RESPONSIVE MOBILE === */
+    @media (max-width: 640px) {
+      body { padding: 0.75rem !important; }
+      h1 { font-size: 1.25rem !important; }
+      .chart-stage { height: 130px !important; }
+      .chart-bar { max-height: 100px !important; }
+      .chart-value { font-size: 0.75rem !important; }
+      .chart-label-cell { font-size: 0.65rem !important; }
+      .section-divider { margin: 1rem 0 !important; }
+    }
+
+    /* === IMPRESSION / PDF === */
+    @media print {
+      body { background: white !important; padding: 0 !important; }
+      .no-print { display: none !important; }
+      .chart { break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      section { break-inside: avoid; }
+      .chart-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      /* Force toutes les zones expanded à être visibles en PDF */
+      .hidden-by-default { display: block !important; }
+      .expand-arrow { display: none !important; }
+      [onclick] { pointer-events: none; }
+      /* Bordures sobres en impression */
+      .border-2 { border-width: 1px !important; }
+    }
+    .pdf-rendering * { transition: none !important; }
+
+    /* Bar chart structure ------------------------------------------------- */
+    .chart {
+      background: #F1F5F9;
+      border: 1px solid #E2E8F0;
+      border-radius: 0.5rem;
+      padding: 1.25rem 1rem 0.5rem;
+      position: relative;
+    }
+    .chart-with-accent {
+      background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+      border: 1px solid #E2E8F0;
+    }
+    .chart-with-accent::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      border-radius: 0.5rem 0.5rem 0 0;
+    }
+    .chart-etat::before {
+      background: linear-gradient(90deg, #16A34A 0%, #F59E0B 50%, #DC2626 100%);
+    }
+    .chart-type::before {
+      background: linear-gradient(90deg, #0EA5E9 0%, #6366F1 33%, #A855F7 66%, #EC4899 100%);
+    }
+    .chart-title {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748B;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .chart-title-icon {
+      width: 1rem; height: 1rem;
+      border-radius: 0.25rem;
+    }
+    /* Stage : la zone où les barres grandissent, hauteur fixe + items-end pour ancrer au sol */
+    .chart-stage {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-around;
+      gap: 1rem;
+      height: 160px; /* zone disponible pour barre + valeur au-dessus */
+    }
+    .chart-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      max-width: 90px;
+      height: 100%;
+    }
+    .chart-value {
+      font-family: 'Fira Mono', monospace;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 0.25rem;
+    }
+    .chart-bar {
+      width: 100%;
+      border-radius: 0.25rem 0.25rem 0 0;
+      transition: height 0.35s ease, background-color 0.35s ease;
+      min-height: 3px;
+      box-shadow: inset 0 -2px 4px rgba(0,0,0,0.08);
+    }
+    /* Labels en-dehors du stage (sous la ligne de base) */
+    .chart-labels {
+      display: flex;
+      justify-content: space-around;
+      gap: 1rem;
+      margin-top: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid #CBD5E1;
+    }
+    .chart-label-cell {
+      flex: 1;
+      max-width: 90px;
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #475569;
+    }
+  </style>
+  <script>
+    // --- Palette type pour Recommandations (spectre cool : cyan/indigo/violet/rose)
+    // distincte des couleurs d'états (vert/orange/rouge) des Directives ---
+    const TYPE_COLORS = {
+      copil:    '#0EA5E9',  // sky-500 — cyan
+      cngi:     '#6366F1',  // indigo-500
+      reformes: '#A855F7',  // purple-500
+      autres:   '#EC4899'   // pink-500
+    };
+    const TYPE_GRADIENTS = {
+      copil:    'linear-gradient(180deg, #7DD3FC 0%, #0EA5E9 100%)',  // sky-300 → sky-500
+      cngi:     'linear-gradient(180deg, #A5B4FC 0%, #6366F1 100%)',  // indigo-300 → indigo-500
+      reformes: 'linear-gradient(180deg, #D8B4FE 0%, #A855F7 100%)',  // purple-300 → purple-500
+      autres:   'linear-gradient(180deg, #F9A8D4 0%, #EC4899 100%)'   // pink-300 → pink-500
+    };
+    const RECO_DATA = {
+      total:   { copil: 32, cngi: 14, reformes: 12, autres: 6 },
+      execute: { copil: 15, cngi: 7,  reformes: 3,  autres: 2 },
+      attente: { copil: 5,  cngi: 3,  reformes: 4,  autres: 1 },
+      cours:   { copil: 10, cngi: 4,  reformes: 5,  autres: 3 }
+    };
+    const MAX_BAR_HEIGHT = 130;
+
+    function toggleExpand(id) {
+      document.getElementById(id).classList.toggle('expanded');
+    }
+
+    // === Génération PDF ===
+    function generatePdf() {
+      const btn = document.getElementById('btn-pdf');
+      const originalLabel = btn.innerHTML;
+      btn.innerHTML = '<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Génération…';
+      btn.disabled = true;
+
+      // Ouvre tous les "Détail" pour que le PDF contienne TOUT
+      const wasExpanded = {};
+      ['card-directives', 'card-recos', 'card-activite'].forEach(id => {
+        const el = document.getElementById(id);
+        wasExpanded[id] = el.classList.contains('expanded');
+        el.classList.add('expanded');
+      });
+
+      document.body.classList.add('pdf-rendering');
+      const content = document.getElementById('pdf-content');
+      const today = new Date().toISOString().slice(0,10);
+
+      const opts = {
+        margin: [10, 10, 10, 10],
+        filename: `MHA-dashboard-vue-globale-${today}.pdf`,
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#F8FAFC' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+
+      html2pdf().set(opts).from(content).save().then(() => {
+        document.body.classList.remove('pdf-rendering');
+        // Restaure l'état initial des "Détail"
+        Object.keys(wasExpanded).forEach(id => {
+          const el = document.getElementById(id);
+          if (!wasExpanded[id]) el.classList.remove('expanded');
+        });
+        btn.innerHTML = originalLabel;
+        btn.disabled = false;
+      });
+    }
+    function setRecoMode(mode) {
+      document.querySelectorAll('[data-reco-mode]').forEach(btn => {
+        const isActive = btn.dataset.recoMode === mode;
+        btn.className = isActive
+          ? 'px-3 py-1.5 rounded-md text-xs font-medium bg-white text-slate-900 shadow-sm'
+          : 'px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900';
+      });
+      const values = RECO_DATA[mode];
+      const maxVal = Math.max(...Object.values(values));
+      ['copil','cngi','reformes','autres'].forEach(key => {
+        const v = values[key];
+        const h = maxVal > 0 ? (v / maxVal) * MAX_BAR_HEIGHT : 0;
+        const bar = document.getElementById('bar-' + key);
+        bar.style.height = Math.max(h, 4) + 'px';
+        bar.style.background = TYPE_GRADIENTS[key];
+        document.getElementById('value-' + key).textContent = v;
+      });
+    }
+  </script>
+</head>
+<body class="p-4 sm:p-6 md:p-8">
+  <div class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 no-print">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold text-slate-900">Dashboard Vue Globale</h1>
+        <p class="text-xs sm:text-sm text-slate-500 mt-1">Synthèse de l'activité du Bureau de Suivi · année 2026</p>
+      </div>
+      <div class="flex flex-wrap gap-2 text-xs items-center">
+        <button id="btn-pdf" onclick="generatePdf()" class="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-semibold shadow-md hover:shadow-lg transition-all text-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Générer PDF
+        </button>
+        <span class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-md font-medium hidden sm:inline">Layout : Executive</span>
+        <span class="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-md">2026</span>
+      </div>
+    </div>
+
+    <!-- Contenu capturé par le PDF -->
+    <div id="pdf-content" class="space-y-6">
+      <!-- En-tête visible UNIQUEMENT dans le PDF -->
+      <div class="hidden print:block" style="border-bottom: 2px solid #0F172A; padding-bottom: 12px; margin-bottom: 16px;">
+        <h1 style="font-size: 18px; font-weight: 700; color: #0F172A; margin: 0;">MHA · Bureau de Suivi — Vue Globale</h1>
+        <p style="font-size: 11px; color: #64748B; margin: 4px 0 0;">Synthèse Conseils + Recommandations + Activité · Année 2026 · Généré le <span id="pdf-date"></span></p>
+      </div>
+
+    <!-- ====================================================================== -->
+    <!-- SECTION 1 : DIRECTIVES PRÉSIDENTIELLES                                  -->
+    <!-- ====================================================================== -->
+    <section>
+      <div class="flex items-baseline gap-3 mb-3">
+        <h2 class="text-lg font-semibold text-slate-900">Directives présidentielles</h2>
+        <span class="text-xs text-slate-500">198 directives au total</span>
+      </div>
+
+      <div id="card-directives" class="bg-white rounded-xl border-2 border-slate-200 p-6 hover:border-slate-300 transition-colors">
+        <div class="flex items-start justify-between mb-5">
+          <div>
+            <h3 class="font-semibold text-base text-slate-900">Vue globale</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Conseil ministres + Inter-ministériel + Coordination SGG/SG</p>
+          </div>
+          <button onclick="toggleExpand('card-directives')" class="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline">
+            <span>Détail</span>
+            <svg class="expand-arrow w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+        </div>
+
+        <!-- 3 pourcentages -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
+          <div class="text-center p-3 rounded-lg bg-green-50 border border-green-100">
+            <div class="font-mono text-3xl font-bold text-green-700">86.9<span class="text-lg">%</span></div>
+            <div class="text-[11px] uppercase tracking-wider text-green-700 font-semibold mt-1">Exécuté</div>
+            <div class="text-[10px] text-slate-500 mt-0.5 font-mono">172 / 198</div>
+          </div>
+          <div class="text-center p-3 rounded-lg bg-orange-50 border border-orange-100">
+            <div class="font-mono text-3xl font-bold text-orange-600">1.0<span class="text-lg">%</span></div>
+            <div class="text-[11px] uppercase tracking-wider text-orange-700 font-semibold mt-1">En attente</div>
+            <div class="text-[10px] text-slate-500 mt-0.5 font-mono">2 / 198</div>
+          </div>
+          <div class="text-center p-3 rounded-lg bg-red-50 border border-red-100">
+            <div class="font-mono text-3xl font-bold text-red-600">8.1<span class="text-lg">%</span></div>
+            <div class="text-[11px] uppercase tracking-wider text-red-700 font-semibold mt-1">En cours</div>
+            <div class="text-[10px] text-slate-500 mt-0.5 font-mono">16 / 198</div>
+          </div>
+        </div>
+
+        <!-- Histogramme 3 barres (états) -->
+        <div class="chart">
+          <div class="chart-stage">
+            <div class="chart-col">
+              <div class="chart-value">172</div>
+              <div class="chart-bar" style="height: 130px; background: linear-gradient(180deg, #4ADE80 0%, #16A34A 100%);"></div>
+            </div>
+            <div class="chart-col">
+              <div class="chart-value">2</div>
+              <div class="chart-bar" style="height: 4px; background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 100%);"></div>
+            </div>
+            <div class="chart-col">
+              <div class="chart-value">16</div>
+              <div class="chart-bar" style="height: 14px; background: linear-gradient(180deg, #F87171 0%, #DC2626 100%);"></div>
+            </div>
+          </div>
+          <div class="chart-labels">
+            <div class="chart-label-cell" style="color: #16A34A;">Exécuté</div>
+            <div class="chart-label-cell" style="color: #F59E0B;">En attente</div>
+            <div class="chart-label-cell" style="color: #DC2626;">En cours</div>
+          </div>
+        </div>
+
+        <!-- ZONE EXPANDED -->
+        <div class="hidden-by-default mt-5 pt-5 border-t border-slate-200">
+          <p class="text-xs text-slate-500 italic mb-3">↓ Vue détaillée par type de rencontre</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="bg-slate-50 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-semibold text-sm">Conseil des ministres</h4>
+                <span class="font-mono text-xl font-bold text-slate-700">87%</span>
+              </div>
+              <div class="h-2 bg-slate-200 rounded-full mb-2 relative"><div class="h-full bg-blue-500 rounded-full" style="width: 87%"></div><div class="absolute top-0 h-2 w-px bg-slate-900" style="left: 90%"></div></div>
+              <div class="text-[11px] text-slate-500 font-mono">107/123 · ✓107 · 9 cours · 1 att · 1 retard</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-semibold text-sm">Conseil inter-ministériel</h4>
+                <span class="font-mono text-xl font-bold text-slate-700">84.6%</span>
+              </div>
+              <div class="h-2 bg-slate-200 rounded-full mb-2 relative"><div class="h-full bg-blue-500 rounded-full" style="width: 84.6%"></div><div class="absolute top-0 h-2 w-px bg-slate-900" style="left: 90%"></div></div>
+              <div class="text-[11px] text-slate-500 font-mono">55/65 · ✓55 · 7 cours · 1 att · 8 retard</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-semibold text-sm">Coordination SGG/SG</h4>
+                <span class="font-mono text-xl font-bold text-green-700">100%</span>
+              </div>
+              <div class="h-2 bg-slate-200 rounded-full mb-2 relative"><div class="h-full bg-green-500 rounded-full" style="width: 100%"></div></div>
+              <div class="text-[11px] text-slate-500 font-mono">10/10 · ✓10 · 0 cours · 0 att · 0 retard</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ====================================================================== -->
+    <!-- SECTION 2 : RECOMMANDATIONS MHA                                         -->
+    <!-- ====================================================================== -->
+    <section>
+      <div class="flex items-baseline gap-3 mb-3">
+        <h2 class="text-lg font-semibold text-slate-900">Recommandations MHA</h2>
+        <span class="text-xs text-slate-500">64 recommandations toutes catégories</span>
+      </div>
+
+      <div id="card-recos" class="bg-white rounded-xl border-2 border-slate-200 p-6 hover:border-slate-300 transition-colors">
+        <div class="flex items-start justify-between mb-5">
+          <div>
+            <h3 class="font-semibold text-base text-slate-900">Vue globale</h3>
+            <p class="text-xs text-slate-500 mt-0.5">COPIL + CNGI + Réformes + autres catégories</p>
+          </div>
+          <button onclick="toggleExpand('card-recos')" class="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline">
+            <span>Détail</span>
+            <svg class="expand-arrow w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5">
+          <div class="text-center p-3 rounded-lg bg-green-50 border border-green-100">
+            <div class="font-mono text-3xl font-bold text-green-700">42.2<span class="text-lg">%</span></div>
+            <div class="text-[11px] uppercase tracking-wider text-green-700 font-semibold mt-1">Exécuté</div>
+            <div class="text-[10px] text-slate-500 mt-0.5 font-mono">27 / 64</div>
+          </div>
+          <div class="text-center p-3 rounded-lg bg-orange-50 border border-orange-100">
+            <div class="font-mono text-3xl font-bold text-orange-600">20.3<span class="text-lg">%</span></div>
+            <div class="text-[11px] uppercase tracking-wider text-orange-700 font-semibold mt-1">En attente</div>
+            <div class="text-[10px] text-slate-500 mt-0.5 font-mono">13 / 64</div>
+          </div>
+          <div class="text-center p-3 rounded-lg bg-red-50 border border-red-100">
+            <div class="font-mono text-3xl font-bold text-red-600">34.4<span class="text-lg">%</span></div>
+            <div class="text-[11px] uppercase tracking-wider text-red-700 font-semibold mt-1">En cours</div>
+            <div class="text-[10px] text-slate-500 mt-0.5 font-mono">22 / 64</div>
+          </div>
+        </div>
+
+        <!-- 2 histogrammes côte à côte : Par état + Par type -->
+        <div class="grid grid-cols-1 lg:grid-cols-[5fr_7fr] gap-4 mt-1">
+
+          <!-- ========== HISTOGRAMME PAR ÉTAT (3 barres, palette sémantique) ========== -->
+          <div class="chart chart-with-accent chart-etat">
+            <div class="chart-title">
+              <span class="chart-title-icon" style="background: linear-gradient(135deg, #16A34A 0%, #F59E0B 50%, #DC2626 100%);"></span>
+              Par état d'avancement
+            </div>
+            <div class="chart-stage">
+              <div class="chart-col">
+                <div class="chart-value">27</div>
+                <div class="chart-bar" style="height: 130px; background: linear-gradient(180deg, #4ADE80 0%, #16A34A 100%);"></div>
+              </div>
+              <div class="chart-col">
+                <div class="chart-value">13</div>
+                <div class="chart-bar" style="height: 63px; background: linear-gradient(180deg, #FBBF24 0%, #F59E0B 100%);"></div>
+              </div>
+              <div class="chart-col">
+                <div class="chart-value">22</div>
+                <div class="chart-bar" style="height: 106px; background: linear-gradient(180deg, #F87171 0%, #DC2626 100%);"></div>
+              </div>
+            </div>
+            <div class="chart-labels">
+              <div class="chart-label-cell" style="color: #16A34A;">Exécuté</div>
+              <div class="chart-label-cell" style="color: #F59E0B;">En attente</div>
+              <div class="chart-label-cell" style="color: #DC2626;">En cours</div>
+            </div>
+          </div>
+
+          <!-- ========== HISTOGRAMME PAR TYPE (4 barres, palette cool, toggle) ========== -->
+          <div class="chart chart-with-accent chart-type">
+            <div class="flex items-center justify-between mb-3">
+              <div class="chart-title" style="margin-bottom: 0;">
+                <span class="chart-title-icon" style="background: linear-gradient(135deg, #0EA5E9 0%, #6366F1 33%, #A855F7 66%, #EC4899 100%);"></span>
+                Par type de catégorie
+              </div>
+              <div class="inline-flex gap-0.5 p-0.5 bg-slate-100 border border-slate-200 rounded-md">
+                <button data-reco-mode="total" onclick="setRecoMode('total')" class="px-2 py-1 rounded text-[11px] font-medium bg-white text-slate-900 shadow-sm">Total</button>
+                <button data-reco-mode="execute" onclick="setRecoMode('execute')" class="px-2 py-1 rounded text-[11px] font-medium text-slate-600 hover:text-slate-900">Exécuté</button>
+                <button data-reco-mode="attente" onclick="setRecoMode('attente')" class="px-2 py-1 rounded text-[11px] font-medium text-slate-600 hover:text-slate-900">Attente</button>
+                <button data-reco-mode="cours" onclick="setRecoMode('cours')" class="px-2 py-1 rounded text-[11px] font-medium text-slate-600 hover:text-slate-900">Cours</button>
+              </div>
+            </div>
+            <div class="chart-stage">
+              <div class="chart-col">
+                <div class="chart-value" id="value-copil">32</div>
+                <div class="chart-bar" id="bar-copil" style="height: 130px; background: linear-gradient(180deg, #7DD3FC 0%, #0EA5E9 100%);"></div>
+              </div>
+              <div class="chart-col">
+                <div class="chart-value" id="value-cngi">14</div>
+                <div class="chart-bar" id="bar-cngi" style="height: 57px; background: linear-gradient(180deg, #A5B4FC 0%, #6366F1 100%);"></div>
+              </div>
+              <div class="chart-col">
+                <div class="chart-value" id="value-reformes">12</div>
+                <div class="chart-bar" id="bar-reformes" style="height: 49px; background: linear-gradient(180deg, #D8B4FE 0%, #A855F7 100%);"></div>
+              </div>
+              <div class="chart-col">
+                <div class="chart-value" id="value-autres">6</div>
+                <div class="chart-bar" id="bar-autres" style="height: 24px; background: linear-gradient(180deg, #F9A8D4 0%, #EC4899 100%);"></div>
+              </div>
+            </div>
+            <div class="chart-labels">
+              <div class="chart-label-cell" style="color: #0EA5E9;">COPIL</div>
+              <div class="chart-label-cell" style="color: #6366F1;">CNGI</div>
+              <div class="chart-label-cell" style="color: #A855F7;">Réformes</div>
+              <div class="chart-label-cell" style="color: #EC4899;">Autres</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Légende couleurs des types -->
+        <div class="mt-3 flex flex-wrap gap-4 justify-center text-[11px] text-slate-600">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded" style="background: #0EA5E9"></span>COPIL · pilotage projets</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded" style="background: #6366F1"></span>CNGI · gestion inondations</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded" style="background: #A855F7"></span>Réformes · institutionnel/assainissement</span>
+          <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded" style="background: #EC4899"></span>Autres catégories</span>
+        </div>
+
+        <!-- ZONE EXPANDED -->
+        <div class="hidden-by-default mt-5 pt-5 border-t border-slate-200">
+          <p class="text-xs text-slate-500 italic mb-3">↓ Vue détaillée par catégorie (cible 60%)</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="bg-slate-50 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div><h4 class="font-semibold text-sm">COPIL</h4><p class="text-[11px] text-slate-500">5 matrices</p></div>
+                <span class="font-mono text-xl font-bold text-slate-700">47%</span>
+              </div>
+              <div class="h-2 bg-slate-200 rounded-full mb-2 relative"><div class="h-full rounded-full" style="width: 47%; background: #0EA5E9"></div><div class="absolute top-0 h-2 w-px bg-slate-900" style="left: 60%"></div></div>
+              <div class="text-[11px] text-slate-500 font-mono">32 reco · ✓15 · 10 cours · 5 att</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div><h4 class="font-semibold text-sm">CNGI</h4><p class="text-[11px] text-slate-500">1 matrice</p></div>
+                <span class="font-mono text-xl font-bold text-slate-700">50%</span>
+              </div>
+              <div class="h-2 bg-slate-200 rounded-full mb-2 relative"><div class="h-full rounded-full" style="width: 50%; background: #6366F1"></div><div class="absolute top-0 h-2 w-px bg-slate-900" style="left: 60%"></div></div>
+              <div class="text-[11px] text-slate-500 font-mono">14 reco · ✓7 · 4 cours · 3 att</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div><h4 class="font-semibold text-sm">Réformes</h4><p class="text-[11px] text-slate-500">2 matrices</p></div>
+                <span class="font-mono text-xl font-bold text-slate-700">25%</span>
+              </div>
+              <div class="h-2 bg-slate-200 rounded-full mb-2 relative"><div class="h-full rounded-full" style="width: 25%; background: #A855F7"></div><div class="absolute top-0 h-2 w-px bg-slate-900" style="left: 60%"></div></div>
+              <div class="text-[11px] text-slate-500 font-mono">12 reco · ✓3 · 5 cours · 4 att</div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-4">
+              <div class="flex items-center justify-between mb-2">
+                <div><h4 class="font-semibold text-sm">Autres</h4><p class="text-[11px] text-slate-500">1 matrice</p></div>
+                <span class="font-mono text-xl font-bold text-slate-700">33%</span>
+              </div>
+              <div class="h-2 bg-slate-200 rounded-full mb-2 relative"><div class="h-full rounded-full" style="width: 33%; background: #EC4899"></div><div class="absolute top-0 h-2 w-px bg-slate-900" style="left: 60%"></div></div>
+              <div class="text-[11px] text-slate-500 font-mono">6 reco · ✓2 · 3 cours · 1 att</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-divider"></div>
+
+    <!-- ====================================================================== -->
+    <!-- SECTION 3 : ACTIVITÉ DU MHA                                             -->
+    <!-- ====================================================================== -->
+    <section>
+      <div class="flex items-baseline gap-3 mb-3">
+        <h2 class="text-lg font-semibold text-slate-900">Activité du MHA</h2>
+        <span class="text-xs text-slate-500">Réunions + rencontres sur 4 trimestres roulants</span>
+      </div>
+
+      <div id="card-activite" class="bg-white rounded-xl border-2 border-slate-200 p-6 hover:border-slate-300 transition-colors">
+        <div class="flex items-start justify-between mb-5">
+          <div>
+            <h3 class="font-semibold text-base text-slate-900">Vue globale</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Réunions techniques + rencontres (CM, CIM, Coordination)</p>
+          </div>
+          <button onclick="toggleExpand('card-activite')" class="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline">
+            <span>Détail</span>
+            <svg class="expand-arrow w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Histogramme par trimestre -->
+          <div>
+            <p class="text-xs text-slate-500 mb-2 font-semibold uppercase tracking-wider">Activité par trimestre</p>
+            <div class="chart">
+              <div class="chart-stage">
+                <div class="chart-col">
+                  <div class="chart-value">8</div>
+                  <div class="chart-bar" style="height: 42px; background: linear-gradient(180deg, #BFDBFE 0%, #93C5FD 100%);"></div>
+                </div>
+                <div class="chart-col">
+                  <div class="chart-value">12</div>
+                  <div class="chart-bar" style="height: 62px; background: linear-gradient(180deg, #93C5FD 0%, #60A5FA 100%);"></div>
+                </div>
+                <div class="chart-col">
+                  <div class="chart-value">25</div>
+                  <div class="chart-bar" style="height: 130px; background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%);"></div>
+                </div>
+                <div class="chart-col">
+                  <div class="chart-value">5</div>
+                  <div class="chart-bar" style="height: 26px; background: linear-gradient(180deg, #DBEAFE 0%, #BFDBFE 100%);"></div>
+                </div>
+              </div>
+              <div class="chart-labels">
+                <div class="chart-label-cell" style="color: #1D4ED8;">2025-T4</div>
+                <div class="chart-label-cell" style="color: #1D4ED8;">2026-T1</div>
+                <div class="chart-label-cell" style="color: #1D4ED8; font-weight: 700;">2026-T2 ⭐</div>
+                <div class="chart-label-cell" style="color: #1D4ED8;">2026-T3</div>
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-2 text-center">50 réunions tenues · trimestre en cours : <b class="text-blue-700">2026-T2 (25)</b></p>
+          </div>
+
+          <!-- Map missions terrain -->
+          <div>
+            <p class="text-xs text-slate-500 mb-2 font-semibold uppercase tracking-wider">Carte des missions terrain</p>
+            <div style="height: 215px;" class="bg-gradient-to-br from-blue-50 via-green-50 to-yellow-50 rounded-lg border border-slate-200 relative overflow-hidden">
+              <svg viewBox="0 0 200 150" class="w-full h-full">
+                <path d="M 20 60 L 50 50 L 80 45 L 120 50 L 160 60 L 175 80 L 170 110 L 140 125 L 100 130 L 60 125 L 30 110 L 15 85 Z"
+                      fill="#FEFCE8" stroke="#94A3B8" stroke-width="1" stroke-dasharray="2"/>
+                <circle cx="38" cy="85" r="5" fill="#0284C7" stroke="white" stroke-width="2"/>
+                <circle cx="50" cy="80" r="5" fill="#0284C7" stroke="white" stroke-width="2"/>
+                <circle cx="42" cy="92" r="5" fill="#0284C7" stroke="white" stroke-width="2"/>
+                <circle cx="46" cy="88" r="5" fill="#0284C7" stroke="white" stroke-width="2"/>
+                <text x="60" y="82" font-size="7" fill="#0F172A">Keur Massar</text>
+                <text x="68" y="92" font-size="7" fill="#0F172A">Tivaouane P.</text>
+                <text x="60" y="100" font-size="7" fill="#0F172A">Thiaroye SM</text>
+                <text x="65" y="110" font-size="7" fill="#0F172A">APIX Mbao</text>
+              </svg>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-2 text-center">4 missions · 1 région (Dakar) · prochaine : <b class="text-slate-900">en attente</b></p>
+          </div>
+        </div>
+
+        <!-- ZONE EXPANDED -->
+        <div class="hidden-by-default mt-5 pt-5 border-t border-slate-200">
+          <p class="text-xs text-slate-500 italic mb-3">↓ Vue détaillée (MegaKpi + cartes + cartographie + répartition)</p>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+            <div class="bg-slate-50 rounded p-3 text-center"><div class="text-2xl font-mono font-bold text-slate-900">17</div><div class="text-[11px] text-slate-500">Réunions tenues</div></div>
+            <div class="bg-slate-50 rounded p-3 text-center"><div class="text-2xl font-mono font-bold text-slate-900">4</div><div class="text-[11px] text-slate-500">Missions effectuées</div></div>
+            <div class="bg-slate-50 rounded p-3 text-center"><div class="text-2xl font-mono font-bold text-slate-900">1/14</div><div class="text-[11px] text-slate-500">Régions couvertes</div></div>
+            <div class="bg-slate-50 rounded p-3 text-center"><div class="text-2xl font-mono font-bold text-slate-700">—</div><div class="text-[11px] text-slate-500">Prochaine mission</div></div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="bg-slate-50 rounded-lg p-4">
+              <h4 class="font-semibold text-sm mb-2">Répartition par sous-secteur</h4>
+              <div class="space-y-1.5 text-xs">
+                <div class="flex items-center gap-2"><span class="w-20 text-slate-600">Eau</span><div class="flex-1 h-2 bg-slate-200 rounded"><div class="h-full bg-blue-500 rounded" style="width: 65%"></div></div><span class="font-mono w-6 text-right">11</span></div>
+                <div class="flex items-center gap-2"><span class="w-20 text-slate-600">GIRE</span><div class="flex-1 h-2 bg-slate-200 rounded"><div class="h-full bg-cyan-500 rounded" style="width: 35%"></div></div><span class="font-mono w-6 text-right">6</span></div>
+                <div class="flex items-center gap-2"><span class="w-20 text-slate-600">Assainis.</span><div class="flex-1 h-2 bg-slate-200 rounded"><div class="h-full bg-teal-500 rounded" style="width: 20%"></div></div><span class="font-mono w-6 text-right">3</span></div>
+              </div>
+            </div>
+            <div class="bg-slate-50 rounded-lg p-4">
+              <h4 class="font-semibold text-sm mb-2">Répartition par COPIL</h4>
+              <div class="space-y-1.5 text-xs">
+                <div class="flex items-center gap-2"><span class="w-20 text-slate-600">PROGEP II</span><div class="flex-1 h-2 bg-slate-200 rounded"><div class="h-full bg-purple-500 rounded" style="width: 80%"></div></div><span class="font-mono w-6 text-right">8</span></div>
+                <div class="flex items-center gap-2"><span class="w-20 text-slate-600">PISEA</span><div class="flex-1 h-2 bg-slate-200 rounded"><div class="h-full bg-indigo-500 rounded" style="width: 50%"></div></div><span class="font-mono w-6 text-right">5</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    </div><!-- /#pdf-content -->
+
+    <!-- Footer info (exclu du PDF) -->
+    <div class="no-print bg-blue-50 border-l-4 border-blue-500 px-4 py-3 text-sm text-slate-700 rounded-r mt-8">
+      <b class="text-blue-700">📌 Mockup interactif :</b> click <b>"Détail"</b> sur chaque carte pour voir l'expand inline.
+      Pour la section Recommandations, click sur le toggle <b>"Total / Total exécuté / Total en attente / Total en cours"</b>
+      pour voir l'histogramme par type changer dynamiquement.
+      <br/><b class="text-blue-700">📱 Mobile :</b> la mise en page s'adapte automatiquement (3 colonnes → 1 colonne sur smartphone).
+      <br/><b class="text-blue-700">📄 PDF :</b> click <b>"Générer PDF"</b> en haut → télécharge un PDF avec tout le contenu (zones Détail dépliées incluses).
+    </div>
+
+  </div>
+
+  <script>
+    // Renseigne la date du jour pour l'en-tête PDF
+    document.addEventListener('DOMContentLoaded', () => {
+      const el = document.getElementById('pdf-date');
+      if (el) el.textContent = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+    });
+  </script>
+</body>
+</html>

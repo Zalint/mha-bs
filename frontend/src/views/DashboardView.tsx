@@ -1,5 +1,6 @@
-import { Landmark } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { FileDown, Landmark, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import type { MissionTerrain } from '@mha-bs/shared';
 
@@ -45,6 +46,36 @@ function loadInitialLayout(): Layout {
 export function DashboardView() {
   const [annee, setAnnee] = useState<number | null>(loadInitialAnnee);
   const [layout, setLayout] = useState<Layout>(loadInitialLayout);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const pdfContentRef = useRef<HTMLDivElement>(null);
+
+  const handleGeneratePdf = async (): Promise<void> => {
+    if (!pdfContentRef.current) return;
+    setGeneratingPdf(true);
+    try {
+      // Import dynamique pour ne pas alourdir le bundle initial
+      const html2pdf = (await import('html2pdf.js')).default;
+      const today = new Date().toISOString().slice(0, 10);
+      const filename = `MHA-dashboard-${anneeLabel.replace(/\s+/g, '-')}-${today}.pdf`;
+      // html2pdf().set() prend un objet d'options ; pagebreak est supporté mais
+      // pas typé dans @types/html2pdf.js. On caste pour s'en accommoder.
+      const opts: Record<string, unknown> = {
+        margin: [10, 10, 10, 10],
+        filename,
+        image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#F8FAFC' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (html2pdf() as any).set(opts).from(pdfContentRef.current).save();
+      toast.success(`PDF généré : ${filename}`);
+    } catch (err) {
+      toast.error(`Erreur génération PDF : ${err instanceof Error ? err.message : 'inconnue'}`);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
 
   useEffect(() => {
     window.localStorage.setItem(ANNEE_STORAGE_KEY, annee === null ? ALL_YEARS : String(annee));
@@ -117,17 +148,40 @@ export function DashboardView() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3 lg:gap-4 mb-5">
         <div>
           <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-primary-100 text-primary-700 rounded text-[11.5px] font-semibold uppercase tracking-wider mb-2">
             <Landmark className="w-3.5 h-3.5" /> Vue Secrétaire général
           </div>
-          <h1 className="text-2xl font-semibold text-fg leading-tight">Dashboard global</h1>
-          <p className="text-sm text-fg-muted mt-1">
+          <h1 className="text-xl sm:text-2xl font-semibold text-fg leading-tight">
+            Dashboard global
+          </h1>
+          <p className="text-xs sm:text-sm text-fg-muted mt-1">
             Synthèse de l&apos;activité du Bureau de Suivi · {anneeLabel}
           </p>
         </div>
-        <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex flex-wrap gap-2 sm:gap-3 items-center">
+          <button
+            type="button"
+            onClick={() => void handleGeneratePdf()}
+            disabled={generatingPdf}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg font-semibold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all',
+              'bg-gradient-to-r from-primary to-primary-700 text-white',
+              generatingPdf && 'opacity-70 cursor-wait',
+            )}
+            aria-label="Générer un PDF du dashboard"
+          >
+            {generatingPdf ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FileDown className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">
+              {generatingPdf ? 'Génération…' : 'Générer PDF'}
+            </span>
+            <span className="sm:hidden">PDF</span>
+          </button>
           <div className="flex bg-surface border border-border rounded-lg p-0.5">
             {LAYOUTS.map((l) => (
               <button
@@ -136,7 +190,7 @@ export function DashboardView() {
                 onClick={() => setLayout(l.key)}
                 title={l.hint}
                 className={cn(
-                  'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+                  'px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium rounded-md transition-colors',
                   layout === l.key
                     ? 'bg-primary text-white'
                     : 'text-fg-muted hover:text-fg hover:bg-muted',
@@ -146,7 +200,7 @@ export function DashboardView() {
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 text-sm text-fg-muted">
+          <label className="flex items-center gap-2 text-xs sm:text-sm text-fg-muted">
             Année
             <select
               value={annee === null ? ALL_YEARS : String(annee)}
@@ -154,7 +208,7 @@ export function DashboardView() {
                 const v = e.target.value;
                 setAnnee(v === ALL_YEARS ? null : Number(v));
               }}
-              className="rounded border border-border bg-surface px-3 py-1.5 text-sm font-mono text-fg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="rounded border border-border bg-surface px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-mono text-fg focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value={ALL_YEARS}>Toutes les années</option>
               {yearsToShow.map((y) => (
@@ -167,9 +221,11 @@ export function DashboardView() {
         </div>
       </div>
 
-      {layout === 'executive' && <DashboardSgExecutive {...childProps} />}
-      {layout === 'bento' && <DashboardSgBento {...childProps} />}
-      {layout === 'focus' && <DashboardSgFocus {...childProps} />}
+      <div ref={pdfContentRef}>
+        {layout === 'executive' && <DashboardSgExecutive {...childProps} />}
+        {layout === 'bento' && <DashboardSgBento {...childProps} />}
+        {layout === 'focus' && <DashboardSgFocus {...childProps} />}
+      </div>
     </div>
   );
 }

@@ -229,6 +229,15 @@ export interface MissionsTerrainSummary {
   prochaineLocalite: string | null;
 }
 
+export interface ActiviteParTrimestre {
+  // Format : "YYYY-Tx" (ex: "2026-T2") — 4 derniers trimestres roulants depuis aujourd'hui
+  trimestre: string;
+  // Total réunions techniques + rencontres (les rencontres sont aussi des réunions)
+  reunions: number;
+  rencontres: number;
+  total: number;
+}
+
 export interface CategorieRecommandationSummary {
   code: string;          // code de la catégorie (copil/reformes/cngi/autres/...)
   label: string;         // label de la catégorie
@@ -252,6 +261,8 @@ export interface SgSummary {
   recommandationsParCategorie: CategorieRecommandationSummary[];
   reunionsTechniques: ReunionsTechniquesSummary;
   missionsTerrain: MissionsTerrainSummary;
+  // Activité agrégée (réunions techniques + rencontres) par trimestre
+  activiteParTrimestre: ActiviteParTrimestre[];
 }
 
 /**
@@ -388,6 +399,51 @@ export async function getReunionsTechniquesSummary(
   };
 }
 
+/**
+ * Activité du MHA agrégée par trimestre — 4 derniers trimestres roulants
+ * depuis aujourd'hui. Somme `reunionsTechniques` (date) + `rencontres`
+ * (les rencontres sont aussi des réunions).
+ */
+export async function getActiviteParTrimestre(): Promise<ActiviteParTrimestre[]> {
+  // Calcule les 4 trimestres roulants en SQL via generate_series puis JOIN sur les 2 tables.
+  const rows = await queryAll<{ trimestre: string; reunions: string; rencontres: string }>(
+    `WITH trimestres AS (
+       SELECT
+         EXTRACT(YEAR FROM d)::INT  AS "year",
+         EXTRACT(QUARTER FROM d)::INT AS "q"
+       FROM generate_series(
+         DATE_TRUNC('quarter', CURRENT_DATE) - INTERVAL '9 months',
+         DATE_TRUNC('quarter', CURRENT_DATE),
+         INTERVAL '3 months'
+       ) AS d
+     )
+     SELECT
+       t."year" || '-T' || t."q" AS "trimestre",
+       COALESCE((
+         SELECT COUNT(*)::TEXT FROM "reunionsTechniques" r
+         WHERE EXTRACT(YEAR FROM r."dateReunion")::INT = t."year"
+           AND EXTRACT(QUARTER FROM r."dateReunion")::INT = t."q"
+       ), '0') AS "reunions",
+       COALESCE((
+         SELECT COUNT(*)::TEXT FROM "rencontres" rc
+         WHERE EXTRACT(YEAR FROM rc."dateRencontre")::INT = t."year"
+           AND EXTRACT(QUARTER FROM rc."dateRencontre")::INT = t."q"
+       ), '0') AS "rencontres"
+     FROM trimestres t
+     ORDER BY t."year" ASC, t."q" ASC`,
+  );
+  return rows.map((r) => {
+    const reunions = Number(r.reunions);
+    const rencontres = Number(r.rencontres);
+    return {
+      trimestre: r.trimestre,
+      reunions,
+      rencontres,
+      total: reunions + rencontres,
+    };
+  });
+}
+
 export async function getMissionsTerrainSummary(
   annee?: number,
 ): Promise<MissionsTerrainSummary> {
@@ -452,6 +508,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     recommandationsParCategorie,
     reunionsTechniques,
     missionsTerrain,
+    activiteParTrimestre,
   ] = await Promise.all([
     getAvailableYears(),
     getKpisByTypeRencontre('conseilMinistres', annee),
@@ -461,6 +518,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     getRecommandationsByCategorie(),
     getReunionsTechniquesSummary(annee),
     getMissionsTerrainSummary(annee),
+    getActiviteParTrimestre(),
   ]);
   return {
     annee: annee ?? null,
@@ -470,6 +528,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     recommandationsParCategorie,
     reunionsTechniques,
     missionsTerrain,
+    activiteParTrimestre,
   };
 }
 
