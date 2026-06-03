@@ -1112,7 +1112,7 @@ export async function importInterpellationsFromSheet(
       continue;
     }
 
-    // Trouve ou crée le député
+    // Trouve ou crée le député (groupeParlementaire NOT NULL → défaut 'Inconnu')
     let deputeId: string | null = null;
     const existingDepute = await queryOne<{ id: string }>(
       `SELECT "id" FROM "deputes" WHERE LOWER("nomComplet") = LOWER($1) LIMIT 1`,
@@ -1122,7 +1122,7 @@ export async function importInterpellationsFromSheet(
       deputeId = existingDepute.id;
     } else if (!opts.dryRun) {
       const created = await queryOne<{ id: string }>(
-        `INSERT INTO "deputes" ("nomComplet") VALUES ($1) RETURNING "id"`,
+        `INSERT INTO "deputes" ("nomComplet", "groupeParlementaire") VALUES ($1, 'Non renseigne') RETURNING "id"`,
         [deputeNom],
       );
       deputeId = created?.id ?? null;
