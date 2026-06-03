@@ -19,6 +19,7 @@ import { BsRecommandationNewView } from '../views/bs/BsRecommandationNewView.js'
 import { BsRencontreView } from '../views/bs/BsRencontreView.js';
 import { BsReunionMissionView } from '../views/bs/BsReunionMissionView.js';
 import { ConfigView } from '../views/ConfigView.js';
+import { GlossaireView } from '../views/GlossaireView.js';
 import { LoginView } from '../views/LoginView.js';
 import { InterpellationsView } from '../views/InterpellationsView.js';
 import { MissionsTerrainView } from '../views/MissionsTerrainView.js';
@@ -67,6 +68,7 @@ export const router = createBrowserRouter([
           { path: 'missions-terrain', element: <MissionsTerrainView /> },
           { path: 'par-direction', element: <ParDirectionView /> },
           { path: 'interpellations', element: <InterpellationsView /> },
+          { path: 'glossaire', element: <GlossaireView /> },
           { path: 'bs/liste', element: <BsListeView /> },
           { path: 'bs/alertes', element: <BsAlertesView /> },
           { path: 'bs/fiche', element: <DirectiveFicheView /> },

@@ -12,6 +12,7 @@ import {
   Grid3x3,
   Inbox,
   Landmark,
+  Library,
   LayoutDashboard,
   type LucideIcon,
   MapPin,
@@ -68,6 +69,7 @@ function buildNavSg(counts: NavCounts | null): NavItem[] {
     { id: 'missions', label: 'Suivi missions terrain', icon: MapPin, to: '/missions-terrain', badge: counts?.missionsTerrain },
     { id: 'interpellations', label: 'Interpellations parlementaires', icon: Mic, to: '/interpellations', badge: counts?.interpellations },
     { id: 'par-direction', label: 'Répartition par direction', icon: Building2, to: '/par-direction' },
+    { id: 'glossaire', label: 'Glossaire des projets', icon: Library, to: '/glossaire' },
     { id: 'guide', label: "Guide d'utilisation", icon: BookOpen, to: '/guide' },
   ];
 }
