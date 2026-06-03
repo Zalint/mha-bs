@@ -79,6 +79,11 @@ const REF_TYPES: RefType[] = [
     description: 'Regroupement des matrices pour les onglets de la page Recommandations (COPIL, Reformes, CNGI, Autres, ...).',
   },
   {
+    codeType: 'fileDeTravailTab',
+    label: 'Onglets File de travail',
+    description: 'Libelles et ordre des onglets d\'etat dans /bs/liste (A traiter, En attente, En retard, Cloturees, Ineligibles). Les codes restent fixes (logique de filtre).',
+  },
+  {
     codeType: 'typeInterpellation',
     label: "Types d'interpellation",
     description: 'Question orale, ecrite, interpellation en commission',

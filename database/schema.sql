@@ -771,6 +771,20 @@ VALUES
 ON CONFLICT ("dateMission", "localite") DO NOTHING;
 
 
+-- Onglets de la File de travail (configurables via /bs/config) — codes fixes,
+-- labels et ordre éditables. Les codes correspondent à la logique de filtre
+-- dans BsListeView (etat des items, ou règle spéciale pour 'retard').
+INSERT INTO "referentiels" ("codeType", "code", "label", "ordreAffichage", "description")
+VALUES
+  ('fileDeTravailTab', 'tous',       'Tous',         10, 'Tous les éléments sans filtre'),
+  ('fileDeTravailTab', 'enCours',    'À traiter',    20, 'Items avec etat = enCours (+ réunions/missions actifs)'),
+  ('fileDeTravailTab', 'attente',    'En attente',   30, 'Items avec etat = attente'),
+  ('fileDeTravailTab', 'retard',     'En retard',    40, 'Items dont échéance est dépassée'),
+  ('fileDeTravailTab', 'realisee',   'Clôturées',    50, 'Items avec etat = realisee'),
+  ('fileDeTravailTab', 'ineligible', 'Inéligibles',  60, 'Items avec etat = ineligible')
+ON CONFLICT ("codeType", "code") DO NOTHING;
+
+
 -- Députés (exemples)
 INSERT INTO "deputes" ("nomComplet", "sexe", "groupeParlementaire", "region")
 VALUES

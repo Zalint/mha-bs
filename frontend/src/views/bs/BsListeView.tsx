@@ -72,13 +72,34 @@ const TYPE_TABS: { value: TypeFilter; label: string; icon: LucideIcon }[] = [
   { value: 'mission', label: 'Missions', icon: MapPin },
 ];
 
-const STATE_TABS: { value: StateTab; label: string; icon: LucideIcon }[] = [
+// Defaults statiques utilisés en fallback si la config n'a pas été chargée
+const STATE_TABS_DEFAULT: { value: StateTab; label: string; icon: LucideIcon }[] = [
   { value: 'tous', label: 'Tous', icon: Inbox },
   { value: 'enCours', label: 'À traiter', icon: Inbox },
   { value: 'attente', label: 'En attente', icon: Clock },
   { value: 'retard', label: 'En retard', icon: AlertTriangle },
   { value: 'realisee', label: 'Clôturées', icon: Archive },
   { value: 'ineligible', label: 'Inéligibles', icon: CheckCircle2 },
+];
+
+// Mapping code → icône (fixe : la logique du filtre est liée au code)
+const STATE_TAB_ICONS: Record<StateTab, LucideIcon> = {
+  tous: Inbox,
+  enCours: Inbox,
+  attente: Clock,
+  retard: AlertTriangle,
+  realisee: Archive,
+  ineligible: CheckCircle2,
+};
+
+// Codes valides pour les onglets — toute autre valeur en base est ignorée
+const VALID_STATE_TAB_CODES: StateTab[] = [
+  'tous',
+  'enCours',
+  'attente',
+  'retard',
+  'realisee',
+  'ineligible',
 ];
 
 const ETAT_STYLES: Record<DirectiveEtat, string> = {
@@ -174,6 +195,29 @@ export function BsListeView() {
     () => api.get<PaginatedResponse<Directive>>('/directives', { query: { pageSize: 1000 } }),
     [],
   );
+
+  // Onglets dynamiques depuis le référentiel 'fileDeTravailTab'
+  const tabsConfigQuery = useApi(
+    () =>
+      api.get<{ items: { code: string; label: string; ordreAffichage: number; isActive: boolean }[] }>(
+        '/referentiels',
+        { query: { codeType: 'fileDeTravailTab' } },
+      ),
+    [],
+  );
+
+  const stateTabs = useMemo(() => {
+    const items = tabsConfigQuery.data?.items ?? [];
+    if (items.length === 0) return STATE_TABS_DEFAULT;
+    return items
+      .filter((it) => it.isActive && (VALID_STATE_TAB_CODES as string[]).includes(it.code))
+      .sort((a, b) => a.ordreAffichage - b.ordreAffichage)
+      .map((it) => ({
+        value: it.code as StateTab,
+        label: it.label,
+        icon: STATE_TAB_ICONS[it.code as StateTab] ?? Inbox,
+      }));
+  }, [tabsConfigQuery.data]);
   const recosQuery = useApi(
     () => api.get<{ items: RecommandationMatrice[] }>('/matrices'),
     [],
@@ -368,7 +412,7 @@ export function BsListeView() {
       {/* State tabs + search */}
       <div className="flex flex-wrap items-center gap-3 mb-3">
         <div className="inline-flex gap-0.5 p-1 bg-muted border border-border rounded-lg">
-          {STATE_TABS.map((t) => {
+          {stateTabs.map((t) => {
             const Icon = t.icon;
             const isActive = stateTab === t.value;
             const count =
