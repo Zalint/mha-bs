@@ -171,7 +171,7 @@ export function BsListeView() {
 
   // Fetch des 4 entités en parallèle (1ère page, large pageSize)
   const directivesQuery = useApi(
-    () => api.get<PaginatedResponse<Directive>>('/directives', { query: { pageSize: 500 } }),
+    () => api.get<PaginatedResponse<Directive>>('/directives', { query: { pageSize: 1000 } }),
     [],
   );
   const recosQuery = useApi(

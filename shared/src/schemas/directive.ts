@@ -59,6 +59,6 @@ export const directiveFiltersSchema = z.object({
   responsableId: z.coerce.number().int().optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
-  pageSize: z.coerce.number().int().positive().max(200).default(50),
+  pageSize: z.coerce.number().int().positive().max(1000).default(50),
 });
 export type DirectiveFilters = z.infer<typeof directiveFiltersSchema>;
