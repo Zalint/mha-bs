@@ -981,6 +981,242 @@ export async function importDirectivesFirstSheet(
 }
 
 // ---------------------------------------------------------------------------
+// Inspection interactive — utilisée par les imports dédiés (interpellations,
+// missions) pour proposer à l'utilisateur la feuille à importer.
+// ---------------------------------------------------------------------------
+
+export interface SheetPreview {
+  name: string;
+  rowCount: number;
+  headers: string[];
+  sampleRows: Array<Record<string, string | number | null>>;
+  suggestedHeaderRow: number;
+}
+
+export function inspectWorkbook(buffer: Buffer): SheetPreview[] {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  return workbook.SheetNames.map((name) => {
+    const sheet = workbook.Sheets[name];
+    if (!sheet) {
+      return { name, rowCount: 0, headers: [], sampleRows: [], suggestedHeaderRow: 0 };
+    }
+    const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null });
+
+    // Cherche la 1ère ligne avec ≥ 2 cellules non vides (heuristique header)
+    let suggestedHeaderRow = 0;
+    for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+      const row = allRows[i];
+      if (Array.isArray(row) && row.filter((c) => c !== null && String(c).trim() !== '').length >= 2) {
+        suggestedHeaderRow = i;
+        break;
+      }
+    }
+
+    const headerRow = allRows[suggestedHeaderRow] ?? [];
+    const headers = (Array.isArray(headerRow) ? headerRow : [])
+      .map((c, i) => (c !== null && String(c).trim() !== '' ? String(c).trim() : `col_${i + 1}`));
+
+    // 3 premières lignes de data
+    const sampleRows: Array<Record<string, string | number | null>> = [];
+    for (let i = suggestedHeaderRow + 1; i < Math.min(allRows.length, suggestedHeaderRow + 4); i++) {
+      const row = allRows[i];
+      if (!Array.isArray(row)) continue;
+      const record: Record<string, string | number | null> = {};
+      headers.forEach((h, idx) => {
+        const val = row[idx];
+        if (val === null || val === undefined) record[h] = null;
+        else if (typeof val === 'number') record[h] = val;
+        else record[h] = String(val).slice(0, 100);
+      });
+      sampleRows.push(record);
+    }
+
+    return {
+      name,
+      rowCount: Math.max(0, allRows.length - suggestedHeaderRow - 1),
+      headers,
+      sampleRows,
+      suggestedHeaderRow,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Imports dédiés — feuille choisie explicitement par l'utilisateur
+// ---------------------------------------------------------------------------
+
+export interface DedicatedImportSummary {
+  totalRows: number;
+  imported: number;
+  duplicatesSkipped: number;
+  skippedInvalid: number;
+}
+
+/**
+ * Importe les interpellations depuis une feuille choisie par l'utilisateur.
+ * Détecte/crée les députés à la volée s'ils n'existent pas.
+ */
+export async function importInterpellationsFromSheet(
+  buffer: Buffer,
+  sheetName: string,
+  opts: { dryRun?: boolean } = {},
+): Promise<DedicatedImportSummary> {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) {
+    return { totalRows: 0, imported: 0, duplicatesSkipped: 0, skippedInvalid: 0 };
+  }
+  const headerRange = detectHeaderRow(sheet);
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { range: headerRange });
+
+  let imported = 0;
+  let duplicatesSkipped = 0;
+  let skippedInvalid = 0;
+
+  for (let idx = 0; idx < rows.length; idx++) {
+    const r = rows[idx];
+    if (!r) continue;
+
+    const intitule = normalizeString(
+      pickColumn(r, 'Questions', 'Question', 'Intitulé', 'Intitule', 'INTITULE'),
+    );
+    const deputeNom = normalizeString(
+      pickColumn(r, 'Nom des Députés', 'Députés', 'Deputes', 'Député', 'Depute', 'NOM'),
+    );
+
+    if (!intitule || !deputeNom) {
+      skippedInvalid++;
+      continue;
+    }
+
+    // Trouve ou crée le député
+    let deputeId: string | null = null;
+    const existingDepute = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "deputes" WHERE LOWER("nomComplet") = LOWER($1) LIMIT 1`,
+      [deputeNom],
+    );
+    if (existingDepute) {
+      deputeId = existingDepute.id;
+    } else if (!opts.dryRun) {
+      const created = await queryOne<{ id: string }>(
+        `INSERT INTO "deputes" ("nomComplet") VALUES ($1) RETURNING "id"`,
+        [deputeNom],
+      );
+      deputeId = created?.id ?? null;
+    }
+
+    // Déduplication : (deputeId, intitule)
+    if (deputeId) {
+      const exists = await queryOne<{ id: string }>(
+        `SELECT "id" FROM "interpellations"
+         WHERE "deputeId" = $1 AND "intitule" = $2 LIMIT 1`,
+        [deputeId, intitule],
+      );
+      if (exists) {
+        duplicatesSkipped++;
+        continue;
+      }
+    }
+
+    const localite = normalizeString(pickColumn(r, 'Localité', 'Localite', 'LIEU'));
+    const sousSecteur = normalizeString(
+      pickColumn(r, 'Domaine/Thématique', 'Domaine', 'Thématique', 'Sous-secteur', 'SOUS-SECTEUR'),
+    );
+    const structureResp = normalizeString(
+      pickColumn(r, 'Structure Resp', 'Structure', 'Responsable'),
+    );
+
+    // Construit le contenu en agrégeant localité + structure
+    const contenuParts: string[] = [];
+    if (localite) contenuParts.push(`Localité : ${localite}`);
+    if (structureResp) contenuParts.push(`Structure responsable : ${structureResp}`);
+    const contenu = contenuParts.length > 0 ? contenuParts.join('\n') : null;
+
+    // Référence synthétique pour suivi
+    const reference = `IMP-${new Date().toISOString().slice(0, 10)}-${String(idx + 1).padStart(4, '0')}`;
+
+    if (!opts.dryRun && deputeId) {
+      await query(
+        `INSERT INTO "interpellations"
+           ("typeInterpellation", "intitule", "reference", "deputeId",
+            "sousSecteur", "contenu", "etat")
+         VALUES ('questionEcrite', $1, $2, $3, $4, $5, 'recue')`,
+        [intitule, reference, deputeId, sousSecteur, contenu],
+      );
+    }
+    imported++;
+  }
+
+  return { totalRows: rows.length, imported, duplicatesSkipped, skippedInvalid };
+}
+
+/**
+ * Importe les missions terrain depuis une feuille choisie par l'utilisateur.
+ */
+export async function importMissionsFromSheet(
+  buffer: Buffer,
+  sheetName: string,
+  opts: { dryRun?: boolean } = {},
+): Promise<DedicatedImportSummary> {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) {
+    return { totalRows: 0, imported: 0, duplicatesSkipped: 0, skippedInvalid: 0 };
+  }
+  const headerRange = detectHeaderRow(sheet);
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { range: headerRange });
+
+  let imported = 0;
+  let duplicatesSkipped = 0;
+  let skippedInvalid = 0;
+
+  for (const r of rows) {
+    if (!r) continue;
+    const localite = normalizeString(
+      pickColumn(r, 'Localité', 'Localite', 'LIEU', 'LIEUX', 'Lieu'),
+    );
+    const date = normalizeDate(
+      pickColumn(r, 'Date', 'Date mission', 'DATE'),
+    );
+    if (!localite || !date) {
+      skippedInvalid++;
+      continue;
+    }
+
+    // Déduplication : (date, localite)
+    const exists = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "missionsTerrain"
+       WHERE "dateMission" = $1 AND "localite" = $2 LIMIT 1`,
+      [date, localite],
+    );
+    if (exists) {
+      duplicatesSkipped++;
+      continue;
+    }
+
+    const constats = normalizeString(
+      pickColumn(r, "Description de l'activité", 'Description', 'Activité', 'Constats'),
+    );
+    const region = normalizeString(pickColumn(r, 'Région', 'Region'));
+    const projetRattache = normalizeString(
+      pickColumn(r, 'Projet rattaché', 'Projet', 'COPIL'),
+    );
+
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "missionsTerrain"
+           ("dateMission", "localite", "region", "projetRattache", "constats")
+         VALUES ($1, $2, $3, $4, $5)`,
+        [date, localite, region, projetRattache, constats],
+      );
+    }
+    imported++;
+  }
+
+  return { totalRows: rows.length, imported, duplicatesSkipped, skippedInvalid };
+}
+
+// ---------------------------------------------------------------------------
 // Migrations BACKUP COMPLET (feuilles supplémentaires du backup réimportable)
 // ---------------------------------------------------------------------------
 

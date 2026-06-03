@@ -5,7 +5,10 @@ import { authJwt } from '../../middlewares/authJwt.js';
 import { requireRole } from '../../middlewares/rbac.js';
 import {
   importDirectivesFirstSheet,
+  importInterpellationsFromSheet,
+  importMissionsFromSheet,
   importWorkbook,
+  inspectWorkbook,
 } from '../../services/excelImportService.js';
 
 export const importRoutes = Router();
@@ -92,6 +95,105 @@ importRoutes.post(
       res.json({
         filename: req.file.originalname,
         sizeBytes: req.file.size,
+        dryRun,
+        ...summary,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * POST /api/import/inspect
+ * Scanne le classeur sans rien insérer : retourne la liste des feuilles
+ * avec headers détectés et 3 lignes d'échantillon pour preview.
+ */
+importRoutes.post(
+  '/inspect',
+  authJwt,
+  requireRole('bs', 'admin'),
+  upload.single('file'),
+  (req, res, next) => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: 'Fichier manquant (champ "file")' });
+        return;
+      }
+      const sheets = inspectWorkbook(req.file.buffer);
+      res.json({
+        filename: req.file.originalname,
+        sizeBytes: req.file.size,
+        sheets,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * POST /api/import/interpellations?sheet=<sheetName>&dryRun=...
+ * Importe les interpellations depuis une feuille spécifique choisie par
+ * l'utilisateur. Crée le député à la volée si introuvable.
+ */
+importRoutes.post(
+  '/interpellations',
+  authJwt,
+  requireRole('bs', 'admin'),
+  upload.single('file'),
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: 'Fichier manquant (champ "file")' });
+        return;
+      }
+      const sheetName = String(req.query.sheet ?? '').trim();
+      if (!sheetName) {
+        res.status(400).json({ error: 'Paramètre "sheet" requis.' });
+        return;
+      }
+      const dryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+      const summary = await importInterpellationsFromSheet(req.file.buffer, sheetName, { dryRun });
+      res.json({
+        filename: req.file.originalname,
+        sizeBytes: req.file.size,
+        sheetName,
+        dryRun,
+        ...summary,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * POST /api/import/missions-terrain?sheet=<sheetName>&dryRun=...
+ * Importe les missions terrain depuis une feuille spécifique.
+ */
+importRoutes.post(
+  '/missions-terrain',
+  authJwt,
+  requireRole('bs', 'admin'),
+  upload.single('file'),
+  async (req, res, next) => {
+    try {
+      if (!req.file) {
+        res.status(400).json({ error: 'Fichier manquant (champ "file")' });
+        return;
+      }
+      const sheetName = String(req.query.sheet ?? '').trim();
+      if (!sheetName) {
+        res.status(400).json({ error: 'Paramètre "sheet" requis.' });
+        return;
+      }
+      const dryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
+      const summary = await importMissionsFromSheet(req.file.buffer, sheetName, { dryRun });
+      res.json({
+        filename: req.file.originalname,
+        sizeBytes: req.file.size,
+        sheetName,
         dryRun,
         ...summary,
       });

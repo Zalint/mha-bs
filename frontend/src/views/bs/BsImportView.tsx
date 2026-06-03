@@ -35,6 +35,32 @@ interface DirectivesOnlyResult {
   rencontresCreated: number;
 }
 
+interface SheetPreview {
+  name: string;
+  rowCount: number;
+  headers: string[];
+  sampleRows: Array<Record<string, string | number | null>>;
+  suggestedHeaderRow: number;
+}
+
+interface InspectResult {
+  filename: string;
+  sizeBytes: number;
+  sheets: SheetPreview[];
+}
+
+interface DedicatedResult {
+  filename: string;
+  sizeBytes: number;
+  sheetName: string;
+  totalRows: number;
+  imported: number;
+  duplicatesSkipped: number;
+  skippedInvalid: number;
+}
+
+type DedicatedMode = 'interpellations' | 'missions-terrain';
+
 const SHEETS_INFO: { sheet: string; description: string }[] = [
   // Format historique
   { sheet: 'PLAN', description: 'Directives présidentielles (avec leurs rencontres source)' },
@@ -72,6 +98,68 @@ export function BsImportView() {
   const [directivesPreview, setDirectivesPreview] = useState<DirectivesOnlyResult | null>(null);
   const [directivesResult, setDirectivesResult] = useState<DirectivesOnlyResult | null>(null);
   const [directivesSubmitting, setDirectivesSubmitting] = useState(false);
+
+  // Mode "Import dédié interactif" (interpellations / missions terrain)
+  const [dedicatedMode, setDedicatedMode] = useState<DedicatedMode | null>(null);
+  const [dedicatedSheets, setDedicatedSheets] = useState<SheetPreview[] | null>(null);
+  const [dedicatedSelectedSheet, setDedicatedSelectedSheet] = useState<string>('');
+  const [dedicatedResult, setDedicatedResult] = useState<DedicatedResult | null>(null);
+  const [dedicatedSubmitting, setDedicatedSubmitting] = useState(false);
+
+  const startDedicatedImport = async (mode: DedicatedMode): Promise<void> => {
+    if (!file) return;
+    setDedicatedSubmitting(true);
+    setError(null);
+    setDedicatedMode(mode);
+    setDedicatedSheets(null);
+    setDedicatedSelectedSheet('');
+    setDedicatedResult(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post<InspectResult>('/import/inspect', form);
+      setDedicatedSheets(res.sheets);
+      // Suggère automatiquement le 1er onglet qui ressemble au mode demandé
+      const guessName =
+        mode === 'interpellations'
+          ? res.sheets.find((s) => /député|deput|interpell/i.test(s.name))?.name
+          : res.sheets.find((s) => /mission|terrain/i.test(s.name))?.name;
+      setDedicatedSelectedSheet(guessName ?? res.sheets[0]?.name ?? '');
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Erreur d'analyse du fichier.");
+      setDedicatedMode(null);
+    } finally {
+      setDedicatedSubmitting(false);
+    }
+  };
+
+  const cancelDedicated = (): void => {
+    if (dedicatedSubmitting) return;
+    setDedicatedMode(null);
+    setDedicatedSheets(null);
+    setDedicatedSelectedSheet('');
+    setDedicatedResult(null);
+  };
+
+  const handleDedicatedConfirm = async (): Promise<void> => {
+    if (!file || !dedicatedMode || !dedicatedSelectedSheet) return;
+    setDedicatedSubmitting(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const url = `/import/${dedicatedMode}`;
+      const res = await api.post<DedicatedResult>(url, form, {
+        query: { sheet: dedicatedSelectedSheet },
+      });
+      setDedicatedResult(res);
+      setDedicatedSheets(null);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Erreur d'import.");
+    } finally {
+      setDedicatedSubmitting(false);
+    }
+  };
 
   const handleDirectivesPreview = async (): Promise<void> => {
     if (!file) return;
@@ -283,16 +371,38 @@ export function BsImportView() {
           type="button"
           className="btn btn-secondary"
           onClick={() => void handleDirectivesPreview()}
-          disabled={!file || submitting || directivesSubmitting}
+          disabled={!file || submitting || directivesSubmitting || dedicatedSubmitting}
           title="Lit uniquement le 1er onglet, déduplique par CODE DIRECTIVE"
         >
-          {directivesSubmitting ? 'Analyse…' : '📋 Importer Directives (1er onglet)'}
+          {directivesSubmitting ? 'Analyse…' : '📋 Directives (1er onglet)'}
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => void startDedicatedImport('interpellations')}
+          disabled={!file || submitting || directivesSubmitting || dedicatedSubmitting}
+          title="Scanne les onglets et propose celui à importer comme interpellations parlementaires"
+        >
+          {dedicatedSubmitting && dedicatedMode === 'interpellations'
+            ? 'Scan…'
+            : '🎤 Interpellations'}
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => void startDedicatedImport('missions-terrain')}
+          disabled={!file || submitting || directivesSubmitting || dedicatedSubmitting}
+          title="Scanne les onglets et propose celui à importer comme missions terrain"
+        >
+          {dedicatedSubmitting && dedicatedMode === 'missions-terrain'
+            ? 'Scan…'
+            : '📍 Missions terrain'}
         </button>
         <button
           type="button"
           className="btn btn-primary"
           onClick={() => void handlePreview()}
-          disabled={!file || submitting || directivesSubmitting}
+          disabled={!file || submitting || directivesSubmitting || dedicatedSubmitting}
           title="Détecte tous les onglets reconnus (PLAN, COPIL, CNGI, etc.)"
         >
           {submitting ? 'Analyse…' : 'Analyser tout le fichier'}
@@ -474,6 +584,195 @@ export function BsImportView() {
                 {directivesSubmitting ? 'Import…' : "Confirmer l'import"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale interactive de choix d'onglet (interpellations / missions) */}
+      {dedicatedMode && dedicatedSheets && !dedicatedResult && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={cancelDedicated}
+        >
+          <div
+            className="bg-surface rounded-xl border border-border w-full max-w-3xl shadow-xl max-h-[90vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between px-5 py-4 border-b border-border sticky top-0 bg-surface">
+              <div>
+                <h2 className="text-base font-semibold">
+                  {dedicatedMode === 'interpellations'
+                    ? '🎤 Importer Interpellations'
+                    : '📍 Importer Missions terrain'}
+                </h2>
+                <p className="text-xs text-fg-muted mt-1">
+                  {dedicatedSheets.length} onglet
+                  {dedicatedSheets.length > 1 ? 's' : ''} détecté
+                  {dedicatedSheets.length > 1 ? 's' : ''} · choisis celui à importer
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={cancelDedicated}
+                disabled={dedicatedSubmitting}
+                className="p-1 text-fg-muted hover:text-fg rounded hover:bg-muted"
+                aria-label="Annuler"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              {dedicatedSheets.map((s) => {
+                const isSelected = dedicatedSelectedSheet === s.name;
+                return (
+                  <button
+                    key={s.name}
+                    type="button"
+                    onClick={() => setDedicatedSelectedSheet(s.name)}
+                    className={cn(
+                      'w-full text-left border rounded-lg p-3 transition-colors',
+                      isSelected
+                        ? 'border-primary bg-primary-100/40'
+                        : 'border-border hover:border-fg-muted',
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div>
+                        <div className="font-semibold text-sm flex items-center gap-2">
+                          {isSelected && <span className="text-primary">✓</span>}
+                          {s.name}
+                        </div>
+                        <div className="text-[11px] text-fg-muted font-mono mt-0.5">
+                          {s.rowCount} ligne{s.rowCount > 1 ? 's' : ''} · {s.headers.length}{' '}
+                          colonne{s.headers.length > 1 ? 's' : ''} · en-tête L
+                          {s.suggestedHeaderRow + 1}
+                        </div>
+                      </div>
+                      {isSelected && (
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-primary bg-primary-100 px-2 py-0.5 rounded">
+                          Sélectionné
+                        </span>
+                      )}
+                    </div>
+                    {/* Headers */}
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {s.headers.slice(0, 10).map((h, i) => (
+                        <span
+                          key={`${s.name}-h-${i}`}
+                          className="text-[10px] font-mono bg-muted text-fg-2 px-1.5 py-0.5 rounded"
+                        >
+                          {h}
+                        </span>
+                      ))}
+                    </div>
+                    {/* Sample rows */}
+                    {s.sampleRows.length > 0 && (
+                      <div className="overflow-x-auto">
+                        <table className="text-[10.5px] w-full border-collapse">
+                          <thead>
+                            <tr className="bg-muted/50">
+                              {s.headers.slice(0, 4).map((h, i) => (
+                                <th
+                                  key={`th-${i}`}
+                                  className="text-left font-semibold text-fg-2 px-1.5 py-1 border border-border"
+                                >
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {s.sampleRows.map((row, ri) => (
+                              <tr key={`sr-${ri}`}>
+                                {s.headers.slice(0, 4).map((h, ci) => (
+                                  <td
+                                    key={`td-${ri}-${ci}`}
+                                    className="px-1.5 py-1 border border-border text-fg-muted truncate max-w-[160px]"
+                                  >
+                                    {row[h] === null || row[h] === undefined
+                                      ? '—'
+                                      : String(row[h])}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2 sticky bottom-0 bg-surface">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={cancelDedicated}
+                disabled={dedicatedSubmitting}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void handleDedicatedConfirm()}
+                disabled={!dedicatedSelectedSheet || dedicatedSubmitting}
+              >
+                {dedicatedSubmitting
+                  ? 'Import…'
+                  : `Importer la feuille "${dedicatedSelectedSheet}"`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Résultat import dédié */}
+      {dedicatedResult && (
+        <div className="mt-5 bg-success-bg border border-success text-success rounded-lg p-5">
+          <div className="flex items-start gap-2.5 mb-3">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-semibold text-base">
+                Import {dedicatedMode === 'interpellations' ? 'interpellations' : 'missions'} réussi
+                · {dedicatedResult.imported} nouvelle{dedicatedResult.imported > 1 ? 's' : ''}
+              </div>
+              <div className="text-xs mt-0.5 opacity-80 font-mono">
+                Feuille « {dedicatedResult.sheetName} » · {dedicatedResult.filename}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <ResultCell label="Lignes analysées" value={dedicatedResult.totalRows} />
+            <ResultCell label="Importées" value={dedicatedResult.imported} />
+            <ResultCell label="Doublons ignorés" value={dedicatedResult.duplicatesSkipped} />
+            <ResultCell label="Invalides (skip)" value={dedicatedResult.skippedInvalid} />
+          </div>
+          <div className="mt-4 flex gap-3 text-sm">
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  dedicatedMode === 'interpellations' ? '/interpellations' : '/missions-terrain',
+                )
+              }
+              className="text-white bg-success rounded px-3 py-1.5 font-medium hover:opacity-90"
+            >
+              Voir {dedicatedMode === 'interpellations' ? 'les interpellations' : 'les missions'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFile(null);
+                cancelDedicated();
+              }}
+              className="text-success hover:underline"
+            >
+              Importer un autre fichier
+            </button>
           </div>
         </div>
       )}
