@@ -138,32 +138,101 @@ function inferCopil(text: string): string | null {
 // Migrations
 // ---------------------------------------------------------------------------
 
+/**
+ * Cherche la feuille PLAN dans le classeur. Stratégie :
+ *   1. Feuille nommée 'PLAN' (format historique)
+ *   2. Sinon la 1ère feuille du classeur (format simplifié, "lire le 1er onglet")
+ */
+function findPlanSheet(workbook: XLSX.WorkBook): XLSX.WorkSheet | null {
+  if (workbook.Sheets['PLAN']) return workbook.Sheets['PLAN'];
+  const firstName = workbook.SheetNames[0];
+  if (firstName && workbook.Sheets[firstName]) {
+    logger.info({ sheetName: firstName }, 'Feuille "PLAN" absente — fallback sur la 1ère feuille');
+    return workbook.Sheets[firstName];
+  }
+  return null;
+}
+
+/**
+ * Auto-détecte la ligne d'en-tête en cherchant la 1ère ligne qui contient
+ * une cellule "DIRECTIVES" ou "DIRECTIVE". Retourne le `range` à utiliser
+ * (équivalent au nombre de lignes à skipper avant l'en-tête).
+ */
+function detectHeaderRow(sheet: XLSX.WorkSheet): number {
+  const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null });
+  for (let i = 0; i < Math.min(allRows.length, 15); i++) {
+    const row = allRows[i];
+    if (!Array.isArray(row)) continue;
+    const cells = row.map((c) => String(c ?? '').toUpperCase().trim());
+    if (cells.some((c) => c === 'DIRECTIVES' || c === 'DIRECTIVE')) {
+      return i;
+    }
+  }
+  return 4; // fallback : format historique = header en L5 (range 4)
+}
+
+/**
+ * Récupère une valeur dans la ligne en testant plusieurs noms de colonnes
+ * possibles (synonymes / variantes de casse / typos courantes).
+ */
+function pickColumn(row: UnknownRow, ...candidates: string[]): unknown {
+  for (const key of candidates) {
+    if (key in row) return row[key];
+    // Cherche aussi en case-insensitive
+    const matchKey = Object.keys(row).find((k) => k.toUpperCase() === key.toUpperCase());
+    if (matchKey) return row[matchKey];
+  }
+  return undefined;
+}
+
 async function migratePlan(
   workbook: XLSX.WorkBook,
   opts: { dryRun?: boolean } = {},
 ): Promise<{ rencontres: number; directives: number }> {
-  const planSheet = workbook.Sheets['PLAN'];
+  const planSheet = findPlanSheet(workbook);
   if (!planSheet) {
-    logger.warn('Feuille "PLAN" absente, skip');
+    logger.warn('Aucune feuille trouvée dans le classeur, skip');
     return { rencontres: 0, directives: 0 };
   }
-  const rows = XLSX.utils.sheet_to_json<UnknownRow>(planSheet, { range: 4 });
+  const headerRange = detectHeaderRow(planSheet);
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(planSheet, { range: headerRange });
 
   let rencCount = 0;
   let dirCount = 0;
   const rencCache = new Map<string, string>();
 
-  for (const r of rows) {
-    const typeRaw = normalizeString(r['TYPE RENCONTRE']);
-    const codeRenc = normalizeString(r['CODE RENCONTRE']);
-    const intitule = normalizeString(r['RENCONTRE']);
-    const dateRenc = normalizeDate(r['DATE RENCONTRE']);
-    const codeDir = normalizeString(r['CODE DIRECTIVE']);
-    const texteDir = normalizeString(r['DIRECTIVES']);
+  for (let idx = 0; idx < rows.length; idx++) {
+    const r = rows[idx];
+    if (!r) continue;
 
-    if (!codeRenc || !codeDir || !texteDir || !intitule || !dateRenc) continue;
-    const typeRencontre = TYPE_RENCONTRE_MAP[typeRaw ?? ''] ?? null;
-    if (!typeRencontre) continue;
+    const texteDir = normalizeString(pickColumn(r, 'DIRECTIVES', 'DIRECTIVE', 'Directive'));
+    if (!texteDir) continue;
+
+    // Date : essaie DATE RENCONTRE puis DATE RECONTRE (typo courante)
+    // puis ECHEANCE en dernier recours
+    const dateRenc =
+      normalizeDate(pickColumn(r, 'DATE RENCONTRE', 'DATE RECONTRE', 'DATE')) ??
+      normalizeDate(pickColumn(r, 'ECHEANCE')) ??
+      new Date().toISOString().slice(0, 10);
+
+    // Type de rencontre — défaut conseilMinistres si absent
+    const typeRaw = normalizeString(pickColumn(r, 'TYPE RENCONTRE', 'TYPE'));
+    const typeRencontre = TYPE_RENCONTRE_MAP[typeRaw ?? ''] ?? 'conseilMinistres';
+
+    // Code rencontre : synthétique basé sur type + date si absent
+    const codeRenc =
+      normalizeString(pickColumn(r, 'CODE RENCONTRE')) ??
+      `${typeRencontre.slice(0, 3).toUpperCase()}-${dateRenc.replace(/-/g, '')}`;
+
+    // Intitulé : synthétique basé sur la date si absent
+    const intitule =
+      normalizeString(pickColumn(r, 'RENCONTRE', 'INTITULE', 'INTITULÉ')) ??
+      `Rencontre du ${dateRenc}`;
+
+    // Code directive : synthétique basé sur index si absent
+    const codeDir =
+      normalizeString(pickColumn(r, 'CODE DIRECTIVE', 'CODE DIR')) ??
+      `MD-${String(idx + 1).padStart(4, '0')}-${dateRenc.replace(/-/g, '')}`;
 
     let rencontreId = rencCache.get(codeRenc);
     if (!rencontreId) {
@@ -177,7 +246,9 @@ async function migratePlan(
         if (opts.dryRun) {
           rencontreId = `dryrun-${codeRenc}`;
         } else {
-          const annee = normalizeInt(r['ANNEE']) ?? Number(dateRenc.slice(0, 4));
+          const annee =
+            normalizeInt(pickColumn(r, 'ANNEE', 'ANNÉE', 'YEAR')) ??
+            Number(dateRenc.slice(0, 4));
           const created = await queryOne<{ id: string }>(
             `INSERT INTO "rencontres" ("typeRencontre", "codeRencontre", "intitule", "dateRencontre", "annee")
              VALUES ($1, $2, $3, $4, $5)
@@ -199,17 +270,27 @@ async function migratePlan(
     );
     if (exists) continue;
 
-    const etat = ETAT_MAP[normalizeString(r['ETAT']) ?? ''] ?? 'attente';
-    const echeance = normalizeDate(r['ECHEANCE']);
-    const debutExecution = normalizeDate(r['DEBUT EXECUTION']);
-    const finExecution = normalizeDate(r['FIN EXECUTION']);
-    const joursPrevu = normalizeInt(r['NOMBRE JOUR DE TRAITEMENT PREVU']);
-    const joursReel = normalizeInt(r['NOMBRE JOUR DE TRAITEMENT REEL']);
-    const joursRetardDemarrage = normalizeInt(r['NOMBRE JOUR RETARD DEMARRAGE']);
-    const derniereDateTraitement = normalizeDate(r['Dernière date Traitement']);
-    const commentaires = normalizeString(r['Commentaires']);
-    const typeCause = normalizeString(r['TYPE CAUSE']);
-    const ministeresRaw = normalizeString(r['MINISTERES ASSOCIES']) ?? '';
+    const etat = ETAT_MAP[normalizeString(pickColumn(r, 'ETAT', 'ÉTAT', 'STATE')) ?? ''] ?? 'attente';
+    const echeance = normalizeDate(pickColumn(r, 'ECHEANCE', 'ÉCHÉANCE'));
+    const debutExecution = normalizeDate(pickColumn(r, 'DEBUT EXECUTION', 'DÉBUT EXÉCUTION', 'DEBUT'));
+    const finExecution = normalizeDate(pickColumn(r, 'FIN EXECUTION', 'FIN EXÉCUTION', 'FIN'));
+    const joursPrevu = normalizeInt(
+      pickColumn(r, 'NOMBRE JOUR DE TRAITEMENT PREVU', 'NOMBRE JOUR DE TRAITEMENT PRÉVU', 'JOURS PREVU'),
+    );
+    const joursReel = normalizeInt(
+      pickColumn(r, 'NOMBRE JOUR DE TRAITEMENT REEL', 'NOMBRE JOUR DE TRAITEMENT RÉEL', 'JOURS REEL'),
+    );
+    const joursRetardDemarrage = normalizeInt(
+      pickColumn(r, 'NOMBRE JOUR RETARD DEMARRAGE', 'NOMBRE JOUR RETARD DÉMARRAGE', 'JOURS RETARD'),
+    );
+    const derniereDateTraitement = normalizeDate(
+      pickColumn(r, 'Dernière date Traitement', 'DERNIERE DATE TRAITEMENT'),
+    );
+    const commentaires = normalizeString(pickColumn(r, 'Commentaires', 'COMMENTAIRES'));
+    const typeCause = normalizeString(pickColumn(r, 'TYPE CAUSE', 'CAUSE'));
+    const ministeresRaw =
+      normalizeString(pickColumn(r, 'MINISTERES ASSOCIES', 'MINISTÈRES ASSOCIÉS', 'MINISTERES')) ??
+      '';
     const ministeres = ministeresRaw
       .split(',')
       .map((m) => m.trim())

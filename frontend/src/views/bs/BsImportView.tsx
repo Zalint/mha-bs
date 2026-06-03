@@ -117,16 +117,25 @@ export function BsImportView() {
   return (
     <div className="max-w-4xl">
       <h1 className="text-2xl font-semibold text-fg leading-tight">Importer Excel</h1>
-      <p className="text-sm text-fg-muted mt-1 mb-6">
-        Charge un fichier XLSX contenant les directives, recommandations et réunions techniques.
-        Import idempotent — les lignes déjà en base ne sont pas réinsérées.
+      <p className="text-sm text-fg-muted mt-1 mb-3">
+        Charge un fichier XLSX. <b>Par défaut, le 1er onglet est lu comme des directives.</b>
+        {' '}Si d'autres onglets sont reconnus (PLAN, Suivi Recom Copil, CNGI, etc.),
+        leur contenu est aussi importé. Import idempotent — pas de doublons.
       </p>
+
+      <div className="bg-info-bg border-l-4 border-primary px-4 py-2.5 text-xs text-fg-2 rounded-r mb-5">
+        <b className="text-primary-700">Mode permissif :</b> le parser détecte
+        automatiquement la ligne d'en-tête et accepte les colonnes manquantes
+        (CODE DIRECTIVE, CODE RENCONTRE, ANNEE, etc. sont auto-générés si absents).
+        Colonnes minimales requises : <code className="font-mono bg-muted px-1 rounded">DIRECTIVES</code>
+        {' '}et une date (DATE RENCONTRE, DATE RECONTRE ou ECHEANCE).
+      </div>
 
       {/* Format attendu */}
       <details className="bg-surface border border-border rounded-lg p-4 mb-5">
         <summary className="cursor-pointer text-sm font-semibold flex items-center gap-2">
           <FileSpreadsheet className="w-4 h-4 text-primary" />
-          Format de fichier attendu
+          Formats de feuilles reconnus (optionnels)
         </summary>
         <div className="mt-3 space-y-1.5">
           {SHEETS_INFO.map((s) => (
@@ -137,7 +146,8 @@ export function BsImportView() {
           ))}
         </div>
         <p className="text-xs text-fg-muted mt-3 italic">
-          Toutes les feuilles sont optionnelles — on importe celles qu'on trouve.
+          Toutes les feuilles sont optionnelles. Si aucune feuille ne porte ces noms,
+          le 1er onglet du classeur est lu comme des directives.
         </p>
       </details>
 
