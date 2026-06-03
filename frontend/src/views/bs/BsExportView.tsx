@@ -96,6 +96,7 @@ export function BsExportView() {
     'idle',
   );
   const [wipeConfirmation, setWipeConfirmation] = useState('');
+  const [wipeSecretCode, setWipeSecretCode] = useState('');
   const [wipeResult, setWipeResult] = useState<WipeResult | null>(null);
 
   const downloadExport = async (scope: Scope): Promise<string | null> => {
@@ -158,16 +159,22 @@ export function BsExportView() {
     if (wipeStep === 'wiping') return;
     setWipeStep('idle');
     setWipeConfirmation('');
+    setWipeSecretCode('');
     setWipeResult(null);
   };
 
   const handleConfirmWipe = async (): Promise<void> => {
     if (wipeConfirmation !== 'VIDER') return;
+    if (!wipeSecretCode) return;
     setWipeStep('wiping');
     try {
-      const res = await api.post<WipeResult>('/admin/wipe-database', { confirmation: 'VIDER' });
+      const res = await api.post<WipeResult>('/admin/wipe-database', {
+        confirmation: 'VIDER',
+        code: wipeSecretCode,
+      });
       setWipeResult(res);
       setWipeStep('done');
+      setWipeSecretCode('');
       toast.success(`Base vidée · ${res.totalDeleted} lignes supprimées`);
     } catch (err) {
       toast.error(err instanceof ApiClientError ? err.message : 'Échec du wipe.');
@@ -333,7 +340,10 @@ export function BsExportView() {
                 </div>
               </div>
               <p className="text-sm text-fg-2">
-                Pour confirmer, tape <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-danger font-bold">VIDER</code>{' '}
+                <b>Étape 1/2</b> — Tape{' '}
+                <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-danger font-bold">
+                  VIDER
+                </code>{' '}
                 dans le champ ci-dessous :
               </p>
               <input
@@ -345,7 +355,23 @@ export function BsExportView() {
                 autoFocus
                 className="w-full px-3 py-2 border-2 border-danger/50 rounded font-mono text-center text-lg focus:border-danger focus:outline-none disabled:opacity-50"
               />
-              <ul className="text-xs text-fg-muted space-y-1 mt-2">
+              <p className="text-sm text-fg-2 mt-3">
+                <b>Étape 2/2</b> — Entre le <b>code de sécurité administrateur</b> :
+              </p>
+              <input
+                type="password"
+                value={wipeSecretCode}
+                onChange={(e) => setWipeSecretCode(e.target.value)}
+                disabled={wipeStep === 'wiping' || wipeConfirmation !== 'VIDER'}
+                placeholder="••••••••••"
+                autoComplete="off"
+                className="w-full px-3 py-2 border-2 border-danger/50 rounded font-mono text-center text-lg focus:border-danger focus:outline-none disabled:opacity-50 disabled:bg-muted"
+              />
+              <p className="text-[11px] text-fg-muted italic">
+                Le code est connu uniquement de votre administrateur référent. Il est validé
+                côté serveur (hash SHA-256 en temps constant).
+              </p>
+              <ul className="text-xs text-fg-muted space-y-1 mt-3 pt-3 border-t border-border">
                 <li>• Directives + rencontres seront supprimées</li>
                 <li>• Toutes les recommandations matrices seront supprimées</li>
                 <li>• Réunions techniques + missions terrain + interpellations seront supprimées</li>
@@ -367,7 +393,11 @@ export function BsExportView() {
                 type="button"
                 className="btn bg-danger text-white hover:bg-danger/90 disabled:opacity-50"
                 onClick={() => void handleConfirmWipe()}
-                disabled={wipeConfirmation !== 'VIDER' || wipeStep === 'wiping'}
+                disabled={
+                  wipeConfirmation !== 'VIDER' ||
+                  !wipeSecretCode ||
+                  wipeStep === 'wiping'
+                }
               >
                 <Trash2 className="w-4 h-4" />
                 {wipeStep === 'wiping' ? 'Suppression…' : 'Confirmer le vidage'}

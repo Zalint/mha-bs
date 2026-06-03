@@ -1,11 +1,29 @@
+import * as crypto from 'node:crypto';
+
 import { Router } from 'express';
 import { z } from 'zod';
 
+import { ForbiddenError } from '../../lib/errors.js';
+import { logger } from '../../lib/logger.js';
 import { authJwt } from '../../middlewares/authJwt.js';
 import { requireRole } from '../../middlewares/rbac.js';
 import { validate } from '../../middlewares/validate.js';
-import { logger } from '../../lib/logger.js';
 import { wipeDatabase } from '../../services/wipeService.js';
+
+/**
+ * Hash SHA-256 du code secret requis pour valider un wipe.
+ * Le code en clair n'apparaît JAMAIS dans le code source — seul son hash.
+ * Pour changer le code : exécuter `node -e "console.log(require('crypto')
+ * .createHash('sha256').update('NouveauCode').digest('hex'))"` et remplacer.
+ */
+const WIPE_SECRET_HASH = '456d930e0fe0fd01afa3c3c8ea3843b4c9943ae04b956910f5d113e75fb309fc';
+
+function isValidWipeCode(plaintext: string): boolean {
+  const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
+  // Comparaison en temps constant pour éviter les attaques par timing
+  if (hash.length !== WIPE_SECRET_HASH.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(WIPE_SECRET_HASH));
+}
 
 export const adminRoutes = Router();
 
@@ -25,12 +43,23 @@ const wipeBodySchema = z.object({
   confirmation: z.literal('VIDER', {
     errorMap: () => ({ message: 'Le champ "confirmation" doit valoir exactement "VIDER".' }),
   }),
+  code: z.string().min(1, 'Le code de sécurité est requis.'),
 });
 
 adminRoutes.post('/wipe-database', validate(wipeBodySchema), async (req, res, next) => {
   try {
     const userId = req.user?.userId ?? 'inconnu';
-    logger.warn({ userId }, '⚠️ WIPE DATABASE déclenché');
+    const { code } = req.body as z.infer<typeof wipeBodySchema>;
+
+    // === Validation du code de sécurité ===
+    if (!isValidWipeCode(code)) {
+      logger.warn({ userId }, '🛡  WIPE DATABASE rejeté — code de sécurité invalide');
+      throw new ForbiddenError(
+        'Code de sécurité invalide. Contactez votre administrateur référent.',
+      );
+    }
+
+    logger.warn({ userId }, '⚠️ WIPE DATABASE déclenché (code valide)');
 
     const result = await wipeDatabase();
 
