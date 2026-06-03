@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup C+ · Bento dense (light)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+    body { font-family: 'Inter', sans-serif; background: #F8FAFC; color: #0F172A; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .card {
+      background: #FFFFFF;
+      border: 1px solid #E2E8F0;
+      border-radius: 14px;
+      padding: 1rem;
+      transition: all 0.2s;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+    .card:hover {
+      border-color: #CBD5E1;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.05);
+    }
+    .card-accent-green { border-left: 3px solid #16A34A; }
+    .card-accent-amber { border-left: 3px solid #D97706; }
+    .card-accent-rose  { border-left: 3px solid #E11D48; }
+    .card-accent-cyan  { border-left: 3px solid #0891B2; }
+    .card-accent-purple{ border-left: 3px solid #9333EA; }
+    .stat-label {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748B;
+      font-weight: 600;
+    }
+    .stat-value { font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+    .pulse-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #16A34A;
+      box-shadow: 0 0 6px #16A34A;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  </style>
+</head>
+<body class="p-4 md:p-6">
+  <div class="max-w-7xl mx-auto space-y-4">
+
+    <!-- Header compact -->
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-extrabold text-white shadow-md">M</div>
+        <div>
+          <div class="text-[10px] font-bold text-cyan-700 uppercase tracking-widest">Mockup C+ · Bento dense (light)</div>
+          <h1 class="text-xl font-bold text-slate-900">Vue Globale · MHA</h1>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="px-2.5 py-1 rounded-md bg-white border border-slate-200 font-mono text-slate-700 shadow-sm"><span class="pulse-dot mr-1.5"></span>Live · 2026</span>
+        <button class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-semibold shadow-md hover:shadow-lg transition-all">↓ PDF</button>
+      </div>
+    </div>
+
+    <!-- ====== BENTO GRID ====== -->
+    <div class="grid grid-cols-12 gap-3">
+
+      <!-- LARGE : Directives globale -->
+      <div class="card card-accent-green col-span-12">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="stat-label flex items-center gap-2"><span class="pulse-dot"></span>Directives présidentielles</div>
+            <div class="text-[11px] text-slate-500 mt-0.5 font-mono">198 directives · 3 types de Conseil</div>
+          </div>
+          <button class="text-xs font-semibold text-cyan-700 hover:text-cyan-900">Détail →</button>
+        </div>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <div class="text-[10px] uppercase text-slate-500 font-semibold mb-1">Exécuté</div>
+            <div class="text-3xl stat-value text-emerald-600">86.9<span class="text-base">%</span></div>
+            <div class="text-[10px] text-slate-500 font-mono">172/198</div>
+          </div>
+          <div>
+            <div class="text-[10px] uppercase text-slate-500 font-semibold mb-1">Attente</div>
+            <div class="text-3xl stat-value text-amber-600">1.0<span class="text-base">%</span></div>
+            <div class="text-[10px] text-slate-500 font-mono">2/198</div>
+          </div>
+          <div>
+            <div class="text-[10px] uppercase text-slate-500 font-semibold mb-1">Cours</div>
+            <div class="text-3xl stat-value text-rose-600">8.1<span class="text-base">%</span></div>
+            <div class="text-[10px] text-slate-500 font-mono">16/198</div>
+          </div>
+        </div>
+        <!-- Stacked bar minimaliste -->
+        <div class="flex h-1.5 rounded-full overflow-hidden mt-4 bg-slate-100">
+          <div class="bg-emerald-500" style="width: 86.9%"></div>
+          <div class="bg-amber-500" style="width: 1.0%"></div>
+          <div class="bg-rose-500" style="width: 8.1%"></div>
+          <div class="bg-slate-300" style="width: 4.0%"></div>
+        </div>
+      </div>
+
+      <!-- LARGE : Recommandations -->
+      <div class="card card-accent-cyan col-span-12">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="stat-label flex items-center gap-2"><span class="pulse-dot" style="background: #0891B2; box-shadow: 0 0 6px #0891B2"></span>Recommandations MHA</div>
+            <div class="text-[11px] text-slate-500 mt-0.5 font-mono">64 reco · 4 catégories</div>
+          </div>
+          <button class="text-xs font-semibold text-cyan-700 hover:text-cyan-900">Détail →</button>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-7 gap-3 items-center">
+          <!-- KPI compacts -->
+          <div class="col-span-2 md:col-span-3">
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <div class="text-[10px] uppercase text-emerald-700 font-bold">Exécuté</div>
+                <div class="text-2xl stat-value text-emerald-600">42.2<span class="text-xs">%</span></div>
+                <div class="text-[9px] text-slate-500 font-mono">27/64</div>
+              </div>
+              <div>
+                <div class="text-[10px] uppercase text-amber-700 font-bold">Attente</div>
+                <div class="text-2xl stat-value text-amber-600">20.3<span class="text-xs">%</span></div>
+                <div class="text-[9px] text-slate-500 font-mono">13/64</div>
+              </div>
+              <div>
+                <div class="text-[10px] uppercase text-rose-700 font-bold">Cours</div>
+                <div class="text-2xl stat-value text-rose-600">34.4<span class="text-xs">%</span></div>
+                <div class="text-[9px] text-slate-500 font-mono">22/64</div>
+              </div>
+            </div>
+          </div>
+          <!-- Bars catégories -->
+          <div class="col-span-2 md:col-span-4">
+            <div class="text-[10px] uppercase text-slate-500 font-semibold mb-2">Par catégorie</div>
+            <div class="space-y-1.5">
+              <div class="flex items-center gap-2">
+                <span class="w-16 text-xs text-cyan-700 font-semibold">COPIL</span>
+                <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-gradient-to-r from-cyan-300 to-cyan-500" style="width: 100%"></div></div>
+                <span class="w-6 text-right text-xs stat-value text-slate-900">32</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-16 text-xs text-indigo-700 font-semibold">CNGI</span>
+                <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-gradient-to-r from-indigo-300 to-indigo-500" style="width: 44%"></div></div>
+                <span class="w-6 text-right text-xs stat-value text-slate-900">14</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-16 text-xs text-purple-700 font-semibold">Réformes</span>
+                <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-gradient-to-r from-purple-300 to-purple-500" style="width: 38%"></div></div>
+                <span class="w-6 text-right text-xs stat-value text-slate-900">12</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-16 text-xs text-pink-700 font-semibold">Autres</span>
+                <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden"><div class="h-full bg-gradient-to-r from-pink-300 to-pink-500" style="width: 19%"></div></div>
+                <span class="w-6 text-right text-xs stat-value text-slate-900">6</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- COPIL : avancement par projet (sous Recommandations) -->
+      <div class="card card-accent-cyan col-span-12">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="stat-label flex items-center gap-2">
+              <span class="pulse-dot" style="background: #0891B2; box-shadow: 0 0 6px #0891B2"></span>
+              COPIL · avancement par projet
+            </div>
+            <div class="text-[11px] text-slate-500 mt-0.5 font-mono">5 projets pilotés · cible 60%</div>
+          </div>
+          <button class="text-xs font-semibold text-cyan-700 hover:text-cyan-900">Détail →</button>
+        </div>
+        <div class="space-y-2">
+          <!-- PROGEP II : 65% (cible atteinte) -->
+          <div class="flex items-center gap-2.5">
+            <span class="w-20 text-xs font-semibold text-slate-800">PROGEP II</span>
+            <div class="flex-1 relative h-4 bg-slate-100 rounded">
+              <div class="absolute inset-y-0 left-0 rounded bg-gradient-to-r from-emerald-400 to-emerald-500" style="width: 65%"></div>
+              <div class="absolute inset-y-0 w-px bg-slate-900/40" style="left: 60%"></div>
+            </div>
+            <span class="w-12 text-right stat-value text-sm text-emerald-700">65%</span>
+            <span class="text-[10px] text-slate-500 font-mono w-10 text-right">9/14</span>
+          </div>
+          <!-- PISEA : 48% -->
+          <div class="flex items-center gap-2.5">
+            <span class="w-20 text-xs font-semibold text-slate-800">PISEA</span>
+            <div class="flex-1 relative h-4 bg-slate-100 rounded">
+              <div class="absolute inset-y-0 left-0 rounded bg-gradient-to-r from-amber-400 to-amber-500" style="width: 48%"></div>
+              <div class="absolute inset-y-0 w-px bg-slate-900/40" style="left: 60%"></div>
+            </div>
+            <span class="w-12 text-right stat-value text-sm text-amber-700">48%</span>
+            <span class="text-[10px] text-slate-500 font-mono w-10 text-right">4/8</span>
+          </div>
+          <!-- PASEA-RD : 42% -->
+          <div class="flex items-center gap-2.5">
+            <span class="w-20 text-xs font-semibold text-slate-800">PASEA-RD</span>
+            <div class="flex-1 relative h-4 bg-slate-100 rounded">
+              <div class="absolute inset-y-0 left-0 rounded bg-gradient-to-r from-amber-400 to-amber-500" style="width: 42%"></div>
+              <div class="absolute inset-y-0 w-px bg-slate-900/40" style="left: 60%"></div>
+            </div>
+            <span class="w-12 text-right stat-value text-sm text-amber-700">42%</span>
+            <span class="text-[10px] text-slate-500 font-mono w-10 text-right">5/12</span>
+          </div>
+          <!-- PDBH : 71% -->
+          <div class="flex items-center gap-2.5">
+            <span class="w-20 text-xs font-semibold text-slate-800">PDBH</span>
+            <div class="flex-1 relative h-4 bg-slate-100 rounded">
+              <div class="absolute inset-y-0 left-0 rounded bg-gradient-to-r from-emerald-400 to-emerald-500" style="width: 71%"></div>
+              <div class="absolute inset-y-0 w-px bg-slate-900/40" style="left: 60%"></div>
+            </div>
+            <span class="w-12 text-right stat-value text-sm text-emerald-700">71%</span>
+            <span class="text-[10px] text-slate-500 font-mono w-10 text-right">5/7</span>
+          </div>
+          <!-- PROMOREN : 35% -->
+          <div class="flex items-center gap-2.5">
+            <span class="w-20 text-xs font-semibold text-slate-800">PROMOREN</span>
+            <div class="flex-1 relative h-4 bg-slate-100 rounded">
+              <div class="absolute inset-y-0 left-0 rounded bg-gradient-to-r from-rose-400 to-rose-500" style="width: 35%"></div>
+              <div class="absolute inset-y-0 w-px bg-slate-900/40" style="left: 60%"></div>
+            </div>
+            <span class="w-12 text-right stat-value text-sm text-rose-700">35%</span>
+            <span class="text-[10px] text-slate-500 font-mono w-10 text-right">3/9</span>
+          </div>
+        </div>
+        <div class="flex items-center justify-between text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-100">
+          <span class="flex items-center gap-1.5">
+            <span class="inline-block w-2 h-2 bg-emerald-500 rounded-sm"></span>cible atteinte (≥60%)
+            <span class="inline-block w-2 h-2 bg-amber-500 rounded-sm ml-2"></span>en progression
+            <span class="inline-block w-2 h-2 bg-rose-500 rounded-sm ml-2"></span>à relancer
+          </span>
+          <span class="font-mono">| ligne cible 60%</span>
+        </div>
+      </div>
+
+      <!-- Missions -->
+      <div class="card card-accent-cyan col-span-12 lg:col-span-6">
+        <div class="stat-label mb-2">Missions terrain</div>
+        <div class="flex items-baseline gap-2 mb-2">
+          <span class="text-3xl stat-value text-cyan-600">4</span>
+          <span class="text-xs text-slate-500">sites · 1 région</span>
+        </div>
+        <div class="space-y-1 text-[11px] font-mono">
+          <div class="flex items-center gap-2 text-slate-700"><span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>Keur Massar · PROGEP II</div>
+          <div class="flex items-center gap-2 text-slate-700"><span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>Tivaouane Peulh · PISEA</div>
+          <div class="flex items-center gap-2 text-slate-700"><span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>Thiaroye SM · ONAS</div>
+          <div class="flex items-center gap-2 text-slate-700"><span class="w-1.5 h-1.5 rounded-full bg-cyan-500"></span>APIX Mbao · DPGI</div>
+        </div>
+      </div>
+
+      <!-- Mini map -->
+      <div class="card col-span-12 lg:col-span-6">
+        <div class="stat-label mb-2">Carte nationale</div>
+        <div class="rounded-md overflow-hidden bg-gradient-to-br from-blue-50 via-cyan-50 to-emerald-50 h-32 relative border border-slate-200">
+          <svg viewBox="0 0 200 150" class="w-full h-full">
+            <path d="M 20 60 L 50 50 L 80 45 L 120 50 L 160 60 L 175 80 L 170 110 L 140 125 L 100 130 L 60 125 L 30 110 L 15 85 Z"
+                  fill="white" stroke="#94A3B8" stroke-width="1"/>
+            <circle cx="40" cy="86" r="6" fill="#0891B2" stroke="white" stroke-width="2" style="filter: drop-shadow(0 1px 3px rgba(8,145,178,0.4))"/>
+            <text x="50" y="89" font-size="6" fill="#0891B2" font-family="JetBrains Mono">Dakar · 4</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Trimestre courant (déplacé en bas, sous Missions + Carte) -->
+      <div class="card card-accent-cyan col-span-12">
+        <div class="flex items-start justify-between mb-3">
+          <div>
+            <div class="stat-label flex items-center gap-2">
+              <span class="pulse-dot" style="background: #0891B2; box-shadow: 0 0 6px #0891B2"></span>
+              Activité trimestrielle
+            </div>
+            <div class="text-[11px] text-slate-500 mt-0.5 font-mono">
+              Réunions techniques + rencontres · 4 trimestres roulants
+            </div>
+          </div>
+          <div class="flex items-baseline gap-2">
+            <span class="text-cyan-700 text-[10px] font-mono">⏱ trimestre courant 2026-T2 ·</span>
+            <span class="text-2xl stat-value text-cyan-600">4</span>
+            <span class="text-xs text-slate-500">activités</span>
+          </div>
+        </div>
+        <!-- Histogramme trimestres en pleine largeur -->
+        <div class="flex items-end justify-around gap-3 h-32 bg-slate-50 rounded-md px-4 pt-2 pb-2 border border-slate-100">
+          <div class="flex-1 flex flex-col items-center justify-end h-full">
+            <div class="text-xs font-mono text-slate-600 font-semibold mb-1">5</div>
+            <div class="w-full max-w-[60px] rounded-t bg-gradient-to-b from-slate-300 to-slate-400" style="height: 36px"></div>
+          </div>
+          <div class="flex-1 flex flex-col items-center justify-end h-full">
+            <div class="text-xs font-mono text-slate-600 font-semibold mb-1">5</div>
+            <div class="w-full max-w-[60px] rounded-t bg-gradient-to-b from-slate-300 to-slate-400" style="height: 36px"></div>
+          </div>
+          <div class="flex-1 flex flex-col items-center justify-end h-full">
+            <div class="text-xs font-mono text-cyan-700 font-bold mb-1">14</div>
+            <div class="w-full max-w-[60px] rounded-t bg-gradient-to-b from-cyan-400 to-cyan-600 shadow-md" style="height: 100px"></div>
+          </div>
+          <div class="flex-1 flex flex-col items-center justify-end h-full">
+            <div class="text-xs font-mono text-cyan-700 font-bold mb-1">4</div>
+            <div class="w-full max-w-[60px] rounded-t bg-gradient-to-b from-cyan-200 to-cyan-400" style="height: 28px"></div>
+          </div>
+        </div>
+        <div class="flex justify-around text-xs text-slate-500 mt-2 font-mono font-semibold">
+          <span>2025-T3</span>
+          <span>2025-T4</span>
+          <span class="text-cyan-700">2026-T1</span>
+          <span class="text-cyan-700">2026-T2 ★</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

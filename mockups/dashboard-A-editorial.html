@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mockup A · Editorial sobre</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+Pro:wght@400;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+    body { font-family: 'Inter', sans-serif; background: #FAFAF7; color: #1A1A1A; }
+    .font-serif { font-family: 'Source Serif Pro', serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .rule { border-top: 1px solid #D4D4D0; }
+    .rule-double { border-top: 3px double #1A1A1A; }
+    .stat-rule { border-bottom: 1px solid #1A1A1A; padding-bottom: 2px; }
+  </style>
+</head>
+<body class="p-6 md:p-10">
+  <div class="max-w-5xl mx-auto">
+
+    <!-- Header style éditorial -->
+    <div class="border-b-4 border-black pb-3 mb-6 flex items-end justify-between">
+      <div>
+        <div class="text-[11px] uppercase tracking-[0.2em] text-stone-500 font-semibold mb-1">Mockup A · Editorial sobre</div>
+        <h1 class="font-serif text-3xl font-bold leading-tight">Bureau de Suivi · Vue Globale</h1>
+        <p class="text-sm text-stone-600 mt-1 italic">Synthèse exécutive de l'activité ministérielle · année 2026</p>
+      </div>
+      <button class="border-2 border-black bg-white hover:bg-black hover:text-white transition px-4 py-2 text-xs font-semibold uppercase tracking-wider">
+        📄 Exporter PDF
+      </button>
+    </div>
+
+    <!-- SECTION 1 : DIRECTIVES -->
+    <section class="mb-10">
+      <div class="flex items-baseline gap-3 mb-3">
+        <h2 class="font-serif text-2xl font-bold">I. Directives présidentielles</h2>
+        <span class="text-xs text-stone-500 font-mono">198 ÉLÉMENTS</span>
+      </div>
+      <div class="rule mb-5"></div>
+
+      <!-- Stats inline éditoriales -->
+      <div class="grid grid-cols-3 gap-8 mb-6">
+        <div>
+          <div class="stat-rule mb-1">
+            <span class="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Exécuté</span>
+          </div>
+          <div class="font-serif text-5xl font-bold leading-none">86<span class="text-2xl">,9</span><span class="text-xl">%</span></div>
+          <p class="text-[11px] text-stone-500 font-mono mt-1">172 / 198</p>
+        </div>
+        <div>
+          <div class="stat-rule mb-1">
+            <span class="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">En attente</span>
+          </div>
+          <div class="font-serif text-5xl font-bold leading-none text-stone-700">1<span class="text-2xl">,0</span><span class="text-xl">%</span></div>
+          <p class="text-[11px] text-stone-500 font-mono mt-1">2 / 198</p>
+        </div>
+        <div>
+          <div class="stat-rule mb-1">
+            <span class="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">En cours</span>
+          </div>
+          <div class="font-serif text-5xl font-bold leading-none text-stone-700">8<span class="text-2xl">,1</span><span class="text-xl">%</span></div>
+          <p class="text-[11px] text-stone-500 font-mono mt-1">16 / 198</p>
+        </div>
+      </div>
+
+      <!-- Barre horizontale empilée (au lieu du 3-bar vertical) -->
+      <div class="flex h-3 w-full overflow-hidden border border-black">
+        <div class="bg-emerald-600" style="width: 86.9%"></div>
+        <div class="bg-amber-500" style="width: 1.0%"></div>
+        <div class="bg-rose-700" style="width: 8.1%"></div>
+        <div class="bg-stone-300" style="width: 4.0%"></div>
+      </div>
+      <div class="flex justify-between text-[10px] text-stone-600 font-mono mt-1 uppercase tracking-wider">
+        <span>0%</span>
+        <span class="text-emerald-700">█ Exécuté</span>
+        <span class="text-amber-600">█ Attente</span>
+        <span class="text-rose-700">█ Cours</span>
+        <span class="text-stone-400">█ Inéligible</span>
+        <span>100%</span>
+      </div>
+
+      <!-- Détail par type de Conseil -->
+      <div class="mt-6 grid grid-cols-3 gap-6 pt-5 rule">
+        <div>
+          <h3 class="font-serif font-bold text-base mb-2">Conseil des ministres</h3>
+          <div class="font-mono text-2xl">107<span class="text-sm text-stone-500">/123</span></div>
+          <div class="text-[11px] text-stone-500 italic">87,0% d'exécution · 1 retard</div>
+          <div class="h-1 bg-stone-200 mt-2"><div class="h-full bg-black" style="width: 87%"></div></div>
+        </div>
+        <div>
+          <h3 class="font-serif font-bold text-base mb-2">Conseil inter-ministériel</h3>
+          <div class="font-mono text-2xl">55<span class="text-sm text-stone-500">/65</span></div>
+          <div class="text-[11px] text-stone-500 italic">84,6% d'exécution · 8 retards</div>
+          <div class="h-1 bg-stone-200 mt-2"><div class="h-full bg-black" style="width: 84.6%"></div></div>
+        </div>
+        <div>
+          <h3 class="font-serif font-bold text-base mb-2">Coordination SGG/SG</h3>
+          <div class="font-mono text-2xl">10<span class="text-sm text-stone-500">/10</span></div>
+          <div class="text-[11px] text-emerald-700 italic">100% · cible atteinte</div>
+          <div class="h-1 bg-stone-200 mt-2"><div class="h-full bg-emerald-600" style="width: 100%"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="rule-double mb-8"></div>
+
+    <!-- SECTION 2 : RECOMMANDATIONS -->
+    <section class="mb-10">
+      <div class="flex items-baseline gap-3 mb-3">
+        <h2 class="font-serif text-2xl font-bold">II. Recommandations MHA</h2>
+        <span class="text-xs text-stone-500 font-mono">64 ÉLÉMENTS · 4 CATÉGORIES</span>
+      </div>
+      <div class="rule mb-5"></div>
+
+      <div class="grid grid-cols-3 gap-8 mb-6">
+        <div>
+          <div class="stat-rule mb-1"><span class="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">Exécuté</span></div>
+          <div class="font-serif text-5xl font-bold leading-none">42<span class="text-2xl">,2</span><span class="text-xl">%</span></div>
+          <p class="text-[11px] text-stone-500 font-mono mt-1">27 / 64</p>
+        </div>
+        <div>
+          <div class="stat-rule mb-1"><span class="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">En attente</span></div>
+          <div class="font-serif text-5xl font-bold leading-none text-stone-700">20<span class="text-2xl">,3</span><span class="text-xl">%</span></div>
+          <p class="text-[11px] text-stone-500 font-mono mt-1">13 / 64</p>
+        </div>
+        <div>
+          <div class="stat-rule mb-1"><span class="text-[10px] uppercase tracking-wider text-stone-500 font-semibold">En cours</span></div>
+          <div class="font-serif text-5xl font-bold leading-none text-stone-700">34<span class="text-2xl">,4</span><span class="text-xl">%</span></div>
+          <p class="text-[11px] text-stone-500 font-mono mt-1">22 / 64</p>
+        </div>
+      </div>
+
+      <!-- Tableau éditorial par type -->
+      <div class="border border-black">
+        <div class="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 bg-black text-white px-4 py-2 text-[10px] uppercase tracking-wider font-semibold">
+          <span>Type de catégorie</span>
+          <span class="text-right">Total</span>
+          <span class="text-right">Exécuté</span>
+          <span class="text-right">Attente</span>
+          <span class="text-right">Cours</span>
+        </div>
+        <div class="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-3 border-b border-stone-300 hover:bg-stone-50">
+          <span class="font-serif font-bold">COPIL <span class="text-xs font-normal text-stone-500">· pilotage projets</span></span>
+          <span class="text-right font-mono text-lg">32</span>
+          <span class="text-right font-mono">15</span>
+          <span class="text-right font-mono">5</span>
+          <span class="text-right font-mono">10</span>
+        </div>
+        <div class="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-3 border-b border-stone-300 hover:bg-stone-50">
+          <span class="font-serif font-bold">CNGI <span class="text-xs font-normal text-stone-500">· inondations</span></span>
+          <span class="text-right font-mono text-lg">14</span>
+          <span class="text-right font-mono">7</span>
+          <span class="text-right font-mono">3</span>
+          <span class="text-right font-mono">4</span>
+        </div>
+        <div class="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-3 border-b border-stone-300 hover:bg-stone-50">
+          <span class="font-serif font-bold">Réformes <span class="text-xs font-normal text-stone-500">· institutionnel/ass.</span></span>
+          <span class="text-right font-mono text-lg">12</span>
+          <span class="text-right font-mono">3</span>
+          <span class="text-right font-mono">4</span>
+          <span class="text-right font-mono">5</span>
+        </div>
+        <div class="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-3 hover:bg-stone-50">
+          <span class="font-serif font-bold">Autres catégories</span>
+          <span class="text-right font-mono text-lg">6</span>
+          <span class="text-right font-mono">2</span>
+          <span class="text-right font-mono">1</span>
+          <span class="text-right font-mono">3</span>
+        </div>
+        <div class="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-2 bg-stone-100 text-[11px] font-semibold border-t border-black">
+          <span class="font-mono uppercase tracking-wider">Total</span>
+          <span class="text-right font-mono">64</span>
+          <span class="text-right font-mono text-emerald-700">27</span>
+          <span class="text-right font-mono text-amber-700">13</span>
+          <span class="text-right font-mono text-rose-700">22</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="rule-double mb-8"></div>
+
+    <!-- SECTION 3 : ACTIVITÉ -->
+    <section>
+      <div class="flex items-baseline gap-3 mb-3">
+        <h2 class="font-serif text-2xl font-bold">III. Activité du MHA</h2>
+        <span class="text-xs text-stone-500 font-mono">RÉUNIONS + RENCONTRES · 4 TRIMESTRES</span>
+      </div>
+      <div class="rule mb-5"></div>
+
+      <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-6">
+        <!-- Trimestres en tableau éditorial -->
+        <div>
+          <h3 class="font-serif font-bold mb-3">Cadence trimestrielle</h3>
+          <div class="space-y-2.5">
+            <div class="grid grid-cols-[80px_1fr_40px] gap-3 items-center">
+              <span class="font-mono text-sm">2025-T3</span>
+              <div class="h-5 bg-stone-100 relative"><div class="absolute inset-y-0 left-0 bg-stone-700" style="width: 36%"></div></div>
+              <span class="font-mono text-right text-sm font-bold">5</span>
+            </div>
+            <div class="grid grid-cols-[80px_1fr_40px] gap-3 items-center">
+              <span class="font-mono text-sm">2025-T4</span>
+              <div class="h-5 bg-stone-100 relative"><div class="absolute inset-y-0 left-0 bg-stone-700" style="width: 36%"></div></div>
+              <span class="font-mono text-right text-sm font-bold">5</span>
+            </div>
+            <div class="grid grid-cols-[80px_1fr_40px] gap-3 items-center">
+              <span class="font-mono text-sm font-bold">2026-T1</span>
+              <div class="h-5 bg-stone-100 relative"><div class="absolute inset-y-0 left-0 bg-black" style="width: 100%"></div></div>
+              <span class="font-mono text-right text-sm font-bold">14</span>
+            </div>
+            <div class="grid grid-cols-[80px_1fr_40px] gap-3 items-center">
+              <span class="font-mono text-sm">2026-T2 <span class="text-[9px] text-stone-500">en cours</span></span>
+              <div class="h-5 bg-stone-100 relative"><div class="absolute inset-y-0 left-0 bg-stone-700" style="width: 29%"></div></div>
+              <span class="font-mono text-right text-sm font-bold">4</span>
+            </div>
+          </div>
+          <p class="text-[11px] text-stone-500 mt-3 italic">— Total cumulé : 28 activités sur 12 mois glissants</p>
+        </div>
+
+        <!-- Carte stylisée minimaliste -->
+        <div>
+          <h3 class="font-serif font-bold mb-3">Missions terrain · localisation</h3>
+          <div class="border border-stone-300 bg-stone-50 h-44 relative overflow-hidden">
+            <svg viewBox="0 0 200 150" class="w-full h-full">
+              <path d="M 20 60 L 50 50 L 80 45 L 120 50 L 160 60 L 175 80 L 170 110 L 140 125 L 100 130 L 60 125 L 30 110 L 15 85 Z" fill="white" stroke="black" stroke-width="1"/>
+              <circle cx="42" cy="88" r="3" fill="black"/>
+              <text x="50" y="91" font-size="7" font-family="JetBrains Mono">Dakar (4 sites)</text>
+            </svg>
+          </div>
+          <div class="mt-2 text-[11px] text-stone-600 space-y-1 font-mono">
+            <div>· Keur Massar — PROGEP II</div>
+            <div>· Tivaouane Peulh — PISEA/SFI</div>
+            <div>· Thiaroye sur Mer — ONAS</div>
+            <div>· APIX Mbao — DPGI</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer éditorial -->
+    <div class="rule mt-8 pt-4 flex justify-between text-[10px] text-stone-500 uppercase tracking-wider font-mono">
+      <span>République du Sénégal · MHA · Bureau de Suivi</span>
+      <span>Édition du <span id="today"></span></span>
+    </div>
+  </div>
+  <script>
+    document.getElementById('today').textContent = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+  </script>
+</body>
+</html>

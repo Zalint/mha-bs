@@ -238,6 +238,16 @@ export interface ActiviteParTrimestre {
   total: number;
 }
 
+export interface CopilProjetSummary {
+  code: string;            // ex: 'copilProgepIi'
+  label: string;           // ex: 'PROGEP II'
+  total: number;
+  nbRealisees: number;
+  nbEnCours: number;
+  nbAttente: number;
+  tauxExecution: number;   // pourcentage avec 1 décimale
+}
+
 export interface CategorieRecommandationSummary {
   code: string;          // code de la catégorie (copil/reformes/cngi/autres/...)
   label: string;         // label de la catégorie
@@ -263,6 +273,8 @@ export interface SgSummary {
   missionsTerrain: MissionsTerrainSummary;
   // Activité agrégée (réunions techniques + rencontres) par trimestre
   activiteParTrimestre: ActiviteParTrimestre[];
+  // Avancement par projet COPIL (PROGEP II, PISEA, etc.)
+  copilProjets: CopilProjetSummary[];
 }
 
 /**
@@ -400,6 +412,52 @@ export async function getReunionsTechniquesSummary(
 }
 
 /**
+ * Avancement par projet COPIL (matrice individuelle).
+ * Lit `recommandationsMatrice` groupée par `typeMatrice` filtrée sur
+ * `parentCode = 'copil'` du référentiel typeMatrice. Joint avec referentiels
+ * pour récupérer le label lisible (PROGEP II, PISEA, etc.).
+ * Ordre : taux d'exécution décroissant (le mieux exécuté en haut).
+ */
+export async function getCopilProjets(): Promise<CopilProjetSummary[]> {
+  const rows = await queryAll<{
+    code: string;
+    label: string;
+    total: string;
+    nbRealisees: string;
+    nbEnCours: string;
+    nbAttente: string;
+  }>(
+    `SELECT
+       r."code"                                                       AS "code",
+       r."label"                                                      AS "label",
+       COUNT(m.*)::TEXT                                               AS "total",
+       COUNT(m.*) FILTER (WHERE m."etat" = 'realisee')::TEXT          AS "nbRealisees",
+       COUNT(m.*) FILTER (WHERE m."etat" = 'enCours')::TEXT           AS "nbEnCours",
+       COUNT(m.*) FILTER (WHERE m."etat" = 'attente')::TEXT           AS "nbAttente"
+     FROM "referentiels" r
+     LEFT JOIN "recommandationsMatrice" m ON m."typeMatrice" = r."code"
+     WHERE r."codeType" = 'typeMatrice'
+       AND r."isActive" = TRUE
+       AND (COALESCE(r."parentCode", '') = 'copil' OR r."code" LIKE 'copil%')
+     GROUP BY r."code", r."label", r."ordreAffichage"
+     ORDER BY r."ordreAffichage" ASC, r."label" ASC`,
+  );
+  return rows.map((r) => {
+    const total = Number(r.total);
+    const realisees = Number(r.nbRealisees);
+    return {
+      code: r.code,
+      label: r.label,
+      total,
+      nbRealisees: realisees,
+      nbEnCours: Number(r.nbEnCours),
+      nbAttente: Number(r.nbAttente),
+      tauxExecution: total > 0 ? Math.round((realisees / total) * 1000) / 10 : 0,
+    };
+  });
+}
+
+/**
  * Activité du MHA agrégée par trimestre — 4 derniers trimestres roulants
  * depuis aujourd'hui. Somme `reunionsTechniques` (date) + `rencontres`
  * (les rencontres sont aussi des réunions).
@@ -509,6 +567,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     reunionsTechniques,
     missionsTerrain,
     activiteParTrimestre,
+    copilProjets,
   ] = await Promise.all([
     getAvailableYears(),
     getKpisByTypeRencontre('conseilMinistres', annee),
@@ -519,6 +578,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     getReunionsTechniquesSummary(annee),
     getMissionsTerrainSummary(annee),
     getActiviteParTrimestre(),
+    getCopilProjets(),
   ]);
   return {
     annee: annee ?? null,
@@ -529,6 +589,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     reunionsTechniques,
     missionsTerrain,
     activiteParTrimestre,
+    copilProjets,
   };
 }
 

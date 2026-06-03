@@ -54,6 +54,16 @@ export interface SgSummaryResponse {
     rencontres: number;
     total: number;
   }[];
+  // Avancement par projet COPIL (PROGEP II, PISEA, PASEA-RD, …)
+  copilProjets: {
+    code: string;
+    label: string;
+    total: number;
+    nbRealisees: number;
+    nbEnCours: number;
+    nbAttente: number;
+    tauxExecution: number;
+  }[];
 }
 
 export interface DashboardViewProps {
