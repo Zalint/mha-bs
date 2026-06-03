@@ -174,6 +174,29 @@ function detectHeaderRow(sheet: XLSX.WorkSheet): number {
 }
 
 /**
+ * Détecte génériquement la ligne d'en-tête : la 1ère ligne qui contient
+ * au moins 2 cellules non vides ressemblant à des libellés (chaînes courtes,
+ * pas que des nombres). Utilisé pour les imports dédiés (interpellations,
+ * missions) où le format de fichier varie.
+ */
+function detectGenericHeaderRow(sheet: XLSX.WorkSheet): number {
+  const allRows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null });
+  for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+    const row = allRows[i];
+    if (!Array.isArray(row)) continue;
+    const nonEmpty = row.filter((c) => c !== null && String(c).trim() !== '');
+    // Au moins 2 cellules non vides, et au moins une chaîne (pas que des numéros)
+    if (
+      nonEmpty.length >= 2 &&
+      nonEmpty.some((c) => typeof c === 'string' && c.length > 0 && c.length < 100)
+    ) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+/**
  * Récupère une valeur dans la ligne en testant plusieurs noms de colonnes
  * possibles (synonymes / variantes de casse / typos courantes).
  */
@@ -1066,7 +1089,7 @@ export async function importInterpellationsFromSheet(
   if (!sheet) {
     return { totalRows: 0, imported: 0, duplicatesSkipped: 0, skippedInvalid: 0 };
   }
-  const headerRange = detectHeaderRow(sheet);
+  const headerRange = detectGenericHeaderRow(sheet);
   const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { range: headerRange });
 
   let imported = 0;
@@ -1165,7 +1188,7 @@ export async function importMissionsFromSheet(
   if (!sheet) {
     return { totalRows: 0, imported: 0, duplicatesSkipped: 0, skippedInvalid: 0 };
   }
-  const headerRange = detectHeaderRow(sheet);
+  const headerRange = detectGenericHeaderRow(sheet);
   const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { range: headerRange });
 
   let imported = 0;
