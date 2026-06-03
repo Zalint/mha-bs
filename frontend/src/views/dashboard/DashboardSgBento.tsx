@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { BarList } from '../../components/dashboard/BarList.js';
 import { MegaKpi } from '../../components/dashboard/MegaKpi.js';
-import { SenegalMiniMap } from '../../components/dashboard/SenegalMiniMap.js';
+import { DashboardMissionsMap } from '../../components/dashboard/DashboardMissionsMap.js';
 import { cn } from '../../lib/cn.js';
 import { formatShort } from '../../lib/formatDate.js';
 import {
@@ -17,7 +17,7 @@ import {
 const DIRECTIVE_TARGET = 90;
 const RECO_TARGET = 60;
 
-export function DashboardSgBento({ data, missions, anneeLabel }: DashboardViewProps) {
+export function DashboardSgBento({ data, missions, anneeLabel, forPrint = false }: DashboardViewProps) {
   const navigate = useNavigate();
   const aggregate = computeAggregate(data.directives);
   const recoAggregate = computeRecommandationsAggregate(data.recommandationsParCategorie);
@@ -221,7 +221,7 @@ export function DashboardSgBento({ data, missions, anneeLabel }: DashboardViewPr
             </button>
           </div>
           <div className="grid gap-3 grid-cols-1 lg:grid-cols-[1.6fr_1fr]">
-          <SenegalMiniMap items={missions} height={420} />
+          <DashboardMissionsMap items={missions} height={420} forPrint={forPrint} />
           <div className="bg-surface rounded-lg border border-border overflow-hidden flex flex-col">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <h4 className="font-semibold text-sm">Sites visités</h4>

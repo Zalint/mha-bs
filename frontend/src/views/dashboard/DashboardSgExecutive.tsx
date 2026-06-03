@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { BulletChart } from '../../components/dashboard/BulletChart.js';
-import { SenegalMiniMap } from '../../components/dashboard/SenegalMiniMap.js';
+import { DashboardMissionsMap } from '../../components/dashboard/DashboardMissionsMap.js';
 import { cn } from '../../lib/cn.js';
 import {
   computeAggregate,
@@ -41,7 +41,7 @@ const CATEGORY_PALETTE: { from: string; to: string; text: string }[] = [
 // Composant principal
 // =============================================================================
 
-export function DashboardSgExecutive({ data, missions, anneeLabel }: DashboardViewProps) {
+export function DashboardSgExecutive({ data, missions, anneeLabel, forPrint = false }: DashboardViewProps) {
   const navigate = useNavigate();
   const aggregate = computeAggregate(data.directives);
   const recoAggregate = computeRecommandationsAggregate(data.recommandationsParCategorie);
@@ -115,7 +115,7 @@ export function DashboardSgExecutive({ data, missions, anneeLabel }: DashboardVi
           onAction={() => navigate('/missions-terrain')}
         >
           <div className="rounded-md overflow-hidden border border-border h-44">
-            <SenegalMiniMap items={missions} height={176} />
+            <DashboardMissionsMap items={missions} height={176} forPrint={forPrint} />
           </div>
           <p className="text-[11px] text-fg-muted mt-2 text-center">
             {missions.length} mission{missions.length > 1 ? 's' : ''} ·{' '}

@@ -22,35 +22,60 @@
 import type { MissionTerrain } from '@mha-bs/shared';
 
 /**
- * Polygone simplifié du Sénégal (longitude, latitude) — environ 14 points,
- * dans le sens horaire en partant du Nord-Ouest. Précision suffisante pour
- * un dessin à ~200px, on n'a pas besoin du contour exact.
+ * Polygone détaillé du Sénégal (longitude, latitude) — ~36 points, dans le sens
+ * horaire en partant du Nord-Ouest. Coords saisies à la main depuis les contours
+ * OSM/Wikipedia. Encoche de la Gambie correctement formée (un slit horizontal).
+ * Précision suffisante pour un dessin de 200 à 600px de large.
  */
 const SENEGAL_POLYGON: ReadonlyArray<readonly [number, number]> = [
-  [-16.5, 16.6], // NW Saint-Louis embouchure
-  [-15.9, 16.6], // N — frontière Mauritanie (vallée fleuve Sénégal)
-  [-14.6, 16.4], // N
-  [-13.8, 16.0], // NE
-  [-13.0, 14.9], // E — Bakel
-  [-12.0, 14.7], // E
-  [-11.5, 13.0], // SE — Kedougou
-  [-12.0, 12.5], // S (Falémé)
-  [-13.0, 12.7], // S
-  [-14.5, 12.7], // S — Sédhiou
-  [-16.0, 12.3], // SW — Casamance
-  [-16.7, 12.5], // SW — Cap Skirring
-  [-16.7, 13.5], // W — frontière Gambie sud
-  // Encoche Gambie (allongée d'ouest en est) — on la dessine en montant un peu
-  [-13.8, 13.5], // E entrée Gambie
-  [-13.8, 13.8], // remonte
-  [-16.7, 13.8], // W sortie Gambie
-  // Ouest puis remonte Dakar
-  [-16.8, 14.3], // W — Saloum
-  [-17.1, 14.3], // W
-  [-17.5, 14.7], // NW — Almadies
-  [-16.9, 15.1], // N de Dakar
-  [-16.5, 16.0], // remonte vers St-Louis
-  [-16.5, 16.6], // boucle
+  // Côte nord & vallée du Sénégal (frontière Mauritanie)
+  [-16.51, 16.07], // Saint-Louis embouchure
+  [-16.43, 16.55], // Nord SL
+  [-15.98, 16.50], // Rosso côté SN
+  [-15.10, 16.45], // Dagana
+  [-14.65, 16.43], // entre Dagana et Podor
+  [-14.06, 16.16], // Podor
+  [-13.32, 15.85], // Matam nord
+  [-12.84, 15.65], // Ourossogui
+  [-12.24, 14.95], // Bakel / Kidira
+  // Frontière est avec Mali (la Falémé)
+  [-12.05, 14.50],
+  [-12.18, 13.78],
+  [-11.46, 12.81], // Kedougou (point le plus à l'est)
+  // Frontière sud avec Guinée
+  [-12.05, 12.36],
+  [-12.86, 12.45],
+  [-13.65, 12.50],
+  [-14.16, 12.61], // sud Tambacounda
+  [-14.96, 12.43], // sud Kolda
+  [-15.32, 12.62],
+  [-15.65, 12.39], // sud Sédhiou
+  [-16.10, 12.37], // Casamance
+  // Côte atlantique sud (frontière Bissau)
+  [-16.78, 12.36], // Cap Skirring
+  [-16.77, 12.75],
+  [-16.74, 13.05], // frontière sud Gambie (Diouloulou)
+  // === Encoche Gambie (slit horizontal d'est en ouest puis retour) ===
+  [-16.70, 13.13], // entrée encoche W
+  [-15.55, 13.13], // limite Karang
+  [-13.79, 13.21], // intérieur Gambie est
+  [-13.79, 13.79], // remonte (border N-S de Niani-Maro)
+  [-15.55, 13.79], // sortie Gambie côté E vers W
+  [-16.68, 13.79], // sortie côté ouest
+  // === Reprise côte atlantique au nord de la Gambie ===
+  [-16.74, 13.85],
+  [-16.85, 14.07], // Sokone area
+  [-16.74, 14.27], // Joal
+  [-16.96, 14.41], // Mbour
+  [-17.03, 14.55], // Popenguine
+  [-17.41, 14.59], // Almadies entrance
+  [-17.54, 14.69], // Cap Vert / Pointe des Almadies
+  [-17.46, 14.78], // Yoff
+  [-17.20, 14.91], // Cap Mboro
+  [-17.06, 15.06], // Kayar
+  [-16.95, 15.50], // Lompoul
+  [-16.55, 15.95], // Léona
+  [-16.51, 16.07], // boucle → Saint-Louis
 ];
 
 /** Bounding box Sénégal — large pour avoir de la marge. */

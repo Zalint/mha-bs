@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { BarList } from '../../components/dashboard/BarList.js';
 import { MiniHistogram } from '../../components/dashboard/MiniHistogram.js';
-import { SenegalMiniMap } from '../../components/dashboard/SenegalMiniMap.js';
+import { DashboardMissionsMap } from '../../components/dashboard/DashboardMissionsMap.js';
 import { StatStrip, type StatCell } from '../../components/ui/StatStrip.js';
 import { cn } from '../../lib/cn.js';
 import { formatShort } from '../../lib/formatDate.js';
@@ -32,7 +32,7 @@ interface ChipDef {
   badge: number;
 }
 
-export function DashboardSgFocus({ data, missions, anneeLabel }: DashboardViewProps) {
+export function DashboardSgFocus({ data, missions, anneeLabel, forPrint = false }: DashboardViewProps) {
   const navigate = useNavigate();
   const [active, setActive] = useState<ActiveKey>('dir:conseilMinistres');
 
@@ -260,7 +260,7 @@ export function DashboardSgFocus({ data, missions, anneeLabel }: DashboardViewPr
             />
             <div className="mt-4">
               <h3 className="text-md font-semibold mb-2">Carte nationale</h3>
-              <SenegalMiniMap items={missions} height={420} />
+              <DashboardMissionsMap items={missions} height={420} forPrint={forPrint} />
             </div>
           </Panel>
         )}

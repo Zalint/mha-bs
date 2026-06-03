@@ -71,6 +71,12 @@ export interface DashboardViewProps {
   missions: MissionTerrain[];
   annee: number | null;       // null = toutes les années
   anneeLabel: string;         // affichage : "année 2026" ou "toutes années"
+  /**
+   * true pendant la generation du PDF — declenche le swap Leaflet -> SVG
+   * statique pour la carte des missions (Leaflet ne se capture pas dans
+   * html2canvas). Voir DashboardMissionsMap.
+   */
+  forPrint?: boolean;
 }
 
 export function pct(numerator: number, denominator: number): number {

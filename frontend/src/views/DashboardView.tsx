@@ -70,6 +70,12 @@ export function DashboardView() {
   const handleGeneratePdf = async (): Promise<void> => {
     if (!pdfContentRef.current) return;
     setGeneratingPdf(true);
+    // Laisse React faire un re-render (passage Leaflet -> SVG dans les layouts)
+    // avant de demander a html2canvas de capturer le DOM. Deux frames =
+    // 1 re-render React + 1 layout/paint navigateur.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
     try {
       // Import dynamique pour ne pas alourdir le bundle initial
       const html2pdf = (await import('html2pdf.js')).default;
@@ -250,9 +256,9 @@ export function DashboardView() {
       </div>
 
       <div ref={pdfContentRef}>
-        {layout === 'executive' && <DashboardSgExecutive {...childProps} />}
-        {layout === 'bento' && <DashboardSgBento {...childProps} />}
-        {layout === 'focus' && <DashboardSgFocus {...childProps} />}
+        {layout === 'executive' && <DashboardSgExecutive {...childProps} forPrint={generatingPdf} />}
+        {layout === 'bento' && <DashboardSgBento {...childProps} forPrint={generatingPdf} />}
+        {layout === 'focus' && <DashboardSgFocus {...childProps} forPrint={generatingPdf} />}
       </div>
     </div>
   );
