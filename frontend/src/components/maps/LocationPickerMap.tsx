@@ -80,7 +80,9 @@ export function LocationPickerMap({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"
+      // z-[1100] — au-dessus du modal d'edition de mission (z-[1000]) et donc
+      // a fortiori au-dessus des panes/controls Leaflet de la carte principale.
+      className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/55 p-4"
       onClick={onCancel}
     >
       <div

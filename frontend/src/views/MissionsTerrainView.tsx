@@ -390,7 +390,9 @@ function MissionEditModal({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4"
+      // z-[1000] — au-dessus des panes/controls Leaflet (qui montent jusqu'à 800).
+      // Le picker carte (autre modal) doit etre encore au-dessus (cf. z-[1100]).
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4"
       onClick={onCancel}
     >
       <div
