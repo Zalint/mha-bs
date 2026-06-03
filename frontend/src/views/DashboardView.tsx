@@ -1,4 +1,4 @@
-import { FileDown, Landmark, Loader2 } from 'lucide-react';
+import { FileDown, Landmark, Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -48,6 +48,24 @@ export function DashboardView() {
   const [layout, setLayout] = useState<Layout>(loadInitialLayout);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const pdfContentRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Hard refresh : recharge la page en bypassant tout cache (équivalent
+   * Ctrl+Shift+R). Ajoute un cache-buster `?_=timestamp` à l'URL avant
+   * de recharger pour forcer le navigateur à re-fetch les ressources.
+   */
+  const handleHardRefresh = (): void => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('_', Date.now().toString());
+      // window.location.reload() ne bypass pas toujours le HTTP cache —
+      // l'ajout du timestamp + assignement à href force un fetch frais.
+      window.location.href = url.toString();
+    } catch {
+      // fallback simple si URL pas dispo (très anciens browsers)
+      window.location.reload();
+    }
+  };
 
   const handleGeneratePdf = async (): Promise<void> => {
     if (!pdfContentRef.current) return;
@@ -161,6 +179,16 @@ export function DashboardView() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2 sm:gap-3 items-center">
+          <button
+            type="button"
+            onClick={handleHardRefresh}
+            className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg font-medium text-xs sm:text-sm border border-border bg-surface hover:bg-muted text-fg-2 hover:text-fg transition-colors"
+            aria-label="Rafraîchir la page (hard refresh)"
+            title="Hard refresh (équivalent Ctrl+Shift+R)"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden sm:inline">Rafraîchir</span>
+          </button>
           <button
             type="button"
             onClick={() => void handleGeneratePdf()}
