@@ -20,6 +20,16 @@ interface ImportResult {
   missions: number;
 }
 
+interface DirectivesOnlyResult {
+  filename: string;
+  sizeBytes: number;
+  totalRows: number;
+  imported: number;
+  duplicatesSkipped: number;
+  skippedNoText: number;
+  rencontresCreated: number;
+}
+
 const SHEETS_INFO: { sheet: string; description: string }[] = [
   // Format historique
   { sheet: 'PLAN', description: 'Directives présidentielles (avec leurs rencontres source)' },
@@ -52,6 +62,53 @@ export function BsImportView() {
   // Preview (dry-run) avant insertion
   const [preview, setPreview] = useState<ImportResult | null>(null);
   const [confirming, setConfirming] = useState(false);
+
+  // Mode "Importer Directives uniquement"
+  const [directivesPreview, setDirectivesPreview] = useState<DirectivesOnlyResult | null>(null);
+  const [directivesResult, setDirectivesResult] = useState<DirectivesOnlyResult | null>(null);
+  const [directivesSubmitting, setDirectivesSubmitting] = useState(false);
+
+  const handleDirectivesPreview = async (): Promise<void> => {
+    if (!file) return;
+    setDirectivesSubmitting(true);
+    setError(null);
+    setDirectivesResult(null);
+    setDirectivesPreview(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post<DirectivesOnlyResult>('/import/directives', form, {
+        query: { dryRun: 'true' },
+      });
+      setDirectivesPreview(res);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Erreur d'analyse.");
+    } finally {
+      setDirectivesSubmitting(false);
+    }
+  };
+
+  const handleDirectivesConfirm = async (): Promise<void> => {
+    if (!file) return;
+    setDirectivesSubmitting(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post<DirectivesOnlyResult>('/import/directives', form);
+      setDirectivesResult(res);
+      setDirectivesPreview(null);
+    } catch (e) {
+      setError(e instanceof ApiClientError ? e.message : "Erreur d'import.");
+    } finally {
+      setDirectivesSubmitting(false);
+    }
+  };
+
+  const cancelDirectivesPreview = (): void => {
+    if (directivesSubmitting) return;
+    setDirectivesPreview(null);
+  };
 
   const handlePreview = async (): Promise<void> => {
     if (!file) return;
@@ -203,22 +260,32 @@ export function BsImportView() {
         )}
       </div>
 
-      <div className="flex justify-end mt-4 gap-3">
+      <div className="flex flex-wrap justify-end mt-4 gap-2 sm:gap-3">
         <button
           type="button"
           className="btn btn-ghost"
           onClick={() => navigate('/bs/liste')}
-          disabled={submitting}
+          disabled={submitting || directivesSubmitting}
         >
           Annuler
         </button>
         <button
           type="button"
+          className="btn btn-secondary"
+          onClick={() => void handleDirectivesPreview()}
+          disabled={!file || submitting || directivesSubmitting}
+          title="Lit uniquement le 1er onglet, déduplique par CODE DIRECTIVE"
+        >
+          {directivesSubmitting ? 'Analyse…' : '📋 Importer Directives (1er onglet)'}
+        </button>
+        <button
+          type="button"
           className="btn btn-primary"
           onClick={() => void handlePreview()}
-          disabled={!file || submitting}
+          disabled={!file || submitting || directivesSubmitting}
+          title="Détecte tous les onglets reconnus (PLAN, COPIL, CNGI, etc.)"
         >
-          {submitting ? 'Analyse en cours…' : 'Analyser le fichier'}
+          {submitting ? 'Analyse…' : 'Analyser tout le fichier'}
         </button>
       </div>
 
@@ -275,6 +342,128 @@ export function BsImportView() {
             >
               Importer un autre fichier
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Résultat mode "Directives uniquement" */}
+      {directivesResult && (
+        <div className="mt-5 bg-success-bg border border-success text-success rounded-lg p-5">
+          <div className="flex items-start gap-2.5 mb-3">
+            <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-semibold text-base">
+                Import directives réussi · {directivesResult.imported} nouvelle
+                {directivesResult.imported > 1 ? 's' : ''}
+              </div>
+              <div className="text-xs mt-0.5 opacity-80 font-mono">
+                {directivesResult.filename} · {formatBytes(directivesResult.sizeBytes)}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <ResultCell label="Lignes analysées" value={directivesResult.totalRows} />
+            <ResultCell label="Importées" value={directivesResult.imported} />
+            <ResultCell label="Doublons ignorés" value={directivesResult.duplicatesSkipped} />
+            <ResultCell label="Sans texte (skip)" value={directivesResult.skippedNoText} />
+          </div>
+          <div className="mt-4 flex gap-3 text-sm">
+            <button
+              type="button"
+              onClick={() => navigate('/bs/liste')}
+              className="text-white bg-success rounded px-3 py-1.5 font-medium hover:opacity-90"
+            >
+              Voir la file de travail
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFile(null);
+                setDirectivesResult(null);
+              }}
+              className="text-success hover:underline"
+            >
+              Importer un autre fichier
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modale de confirmation mode "Directives uniquement" */}
+      {directivesPreview && (
+        <div
+          className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+          onClick={cancelDirectivesPreview}
+        >
+          <div
+            className="bg-surface rounded-xl border border-border w-full max-w-xl shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between px-5 py-4 border-b border-border">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center flex-shrink-0">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold">Confirmer l&apos;import directives</h2>
+                  <p className="text-xs text-fg-muted mt-1">
+                    {directivesPreview.filename} · {formatBytes(directivesPreview.sizeBytes)}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={cancelDirectivesPreview}
+                disabled={directivesSubmitting}
+                className="p-1 text-fg-muted hover:text-fg rounded hover:bg-muted"
+                aria-label="Fermer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-sm text-fg-2 mb-3">
+                Mode strict — 1er onglet uniquement · déduplication par <code className="font-mono bg-muted px-1 rounded">CODE DIRECTIVE</code> :
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <PreviewCell label="Analysées" value={directivesPreview.totalRows} />
+                <PreviewCell
+                  label="Nouvelles"
+                  value={directivesPreview.imported}
+                  highlight
+                />
+                <PreviewCell
+                  label="Doublons ignorés"
+                  value={directivesPreview.duplicatesSkipped}
+                />
+                <PreviewCell label="Sans texte" value={directivesPreview.skippedNoText} />
+              </div>
+              {directivesPreview.imported === 0 && (
+                <div className="mt-3 bg-warning-bg border-l-4 border-warning px-3 py-2 text-xs text-fg-2 rounded-r">
+                  <AlertTriangle className="inline w-3.5 h-3.5 mr-1 text-warning" />
+                  Aucune nouvelle directive. Soit toutes sont déjà en base, soit la colonne
+                  DIRECTIVES est manquante / vide.
+                </div>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-border flex justify-end gap-2">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={cancelDirectivesPreview}
+                disabled={directivesSubmitting}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void handleDirectivesConfirm()}
+                disabled={directivesSubmitting}
+              >
+                {directivesSubmitting ? 'Import…' : "Confirmer l'import"}
+              </button>
+            </div>
           </div>
         </div>
       )}

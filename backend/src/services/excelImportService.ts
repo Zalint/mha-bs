@@ -27,6 +27,8 @@
  * codeRencontre, codeDirective, (typeMatrice, numOrdre), (dateReunion, theme),
  * (dateMission, localite)).
  */
+import * as crypto from 'node:crypto';
+
 import * as XLSX from 'xlsx';
 
 import { query, queryAll, queryOne } from '../db/query.js';
@@ -797,6 +799,185 @@ export interface ImportSummary {
   reunions: number;
   missions: number;
 }
+
+// ---------------------------------------------------------------------------
+// Mode DIRECTIVES UNIQUEMENT — lit strictement le 1er onglet
+// ---------------------------------------------------------------------------
+
+export interface DirectivesOnlyImportSummary {
+  filename?: string;
+  totalRows: number;          // lignes totales analysées
+  imported: number;            // nouvelles directives insérées
+  duplicatesSkipped: number;   // lignes ignorées car codeDirective déjà en base
+  skippedNoText: number;       // lignes ignorées car texte manquant
+  rencontresCreated: number;   // rencontres synthétiques créées
+}
+
+/**
+ * Mode STRICT "Importer Directives" — lit le 1er onglet uniquement,
+ * sans fallback PLAN, sans détection d'autres feuilles.
+ *
+ * Cle de deduplication : CODE DIRECTIVE si présent. Sinon hash SHA1
+ * stable basé sur le texte de la directive (les memes textes
+ * produisent le meme code → idempotence garantie).
+ *
+ * Génère une rencontre synthétique unique par date trouvée pour
+ * rattacher les directives.
+ */
+export async function importDirectivesFirstSheet(
+  buffer: Buffer,
+  opts: { dryRun?: boolean } = {},
+): Promise<DirectivesOnlyImportSummary> {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) {
+    return {
+      totalRows: 0,
+      imported: 0,
+      duplicatesSkipped: 0,
+      skippedNoText: 0,
+      rencontresCreated: 0,
+    };
+  }
+  const sheet = workbook.Sheets[firstSheetName];
+  if (!sheet) {
+    return {
+      totalRows: 0,
+      imported: 0,
+      duplicatesSkipped: 0,
+      skippedNoText: 0,
+      rencontresCreated: 0,
+    };
+  }
+
+  const headerRange = detectHeaderRow(sheet);
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { range: headerRange });
+
+  let imported = 0;
+  let duplicatesSkipped = 0;
+  let skippedNoText = 0;
+  let rencontresCreated = 0;
+  const rencCache = new Map<string, string>();
+
+  for (let idx = 0; idx < rows.length; idx++) {
+    const r = rows[idx];
+    if (!r) continue;
+
+    const texteDir = normalizeString(pickColumn(r, 'DIRECTIVES', 'DIRECTIVE', 'Directive'));
+    if (!texteDir) {
+      skippedNoText++;
+      continue;
+    }
+
+    // === Clé de déduplication : CODE DIRECTIVE en priorité ===
+    const codeDirRaw = normalizeString(pickColumn(r, 'CODE DIRECTIVE', 'CODE DIR'));
+    const codeDir =
+      codeDirRaw ?? `MD-AUTO-${crypto.createHash('sha1').update(texteDir).digest('hex').slice(0, 12).toUpperCase()}`;
+
+    // === Détection de doublon par codeDirective ===
+    const exists = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "directives" WHERE "codeDirective" = $1`,
+      [codeDir],
+    );
+    if (exists) {
+      duplicatesSkipped++;
+      continue;
+    }
+
+    // === Date pour rattacher la directive à une rencontre ===
+    const dateRenc =
+      normalizeDate(pickColumn(r, 'DATE RENCONTRE', 'DATE RECONTRE', 'DATE')) ??
+      normalizeDate(pickColumn(r, 'ECHEANCE')) ??
+      new Date().toISOString().slice(0, 10);
+
+    // === Rencontre synthétique : une par date ===
+    let rencontreId = rencCache.get(dateRenc);
+    if (!rencontreId) {
+      const codeRenc = `IMP-${dateRenc.replace(/-/g, '')}`;
+      const existingRenc = await queryOne<{ id: string }>(
+        `SELECT "id" FROM "rencontres" WHERE "codeRencontre" = $1`,
+        [codeRenc],
+      );
+      if (existingRenc) {
+        rencontreId = existingRenc.id;
+      } else if (opts.dryRun) {
+        rencontreId = `dryrun-${codeRenc}`;
+      } else {
+        const annee = Number(dateRenc.slice(0, 4));
+        const created = await queryOne<{ id: string }>(
+          `INSERT INTO "rencontres" ("typeRencontre", "codeRencontre", "intitule", "dateRencontre", "annee")
+           VALUES ('conseilMinistres', $1, $2, $3, $4)
+           ON CONFLICT ("codeRencontre") DO UPDATE SET "intitule" = EXCLUDED."intitule"
+           RETURNING "id"`,
+          [codeRenc, `Import du ${dateRenc}`, dateRenc, annee],
+        );
+        rencontreId = created?.id;
+        if (rencontreId) rencontresCreated++;
+      }
+      if (rencontreId) rencCache.set(dateRenc, rencontreId);
+    }
+    if (!rencontreId) continue;
+
+    // === Champs optionnels ===
+    const etat = ETAT_MAP[normalizeString(pickColumn(r, 'ETAT', 'ÉTAT')) ?? ''] ?? 'attente';
+    const echeance = normalizeDate(pickColumn(r, 'ECHEANCE', 'ÉCHÉANCE'));
+    const debutExecution = normalizeDate(pickColumn(r, 'DEBUT EXECUTION', 'DÉBUT EXÉCUTION'));
+    const finExecution = normalizeDate(pickColumn(r, 'FIN EXECUTION', 'FIN EXÉCUTION'));
+    const joursPrevu = normalizeInt(pickColumn(r, 'NOMBRE JOUR DE TRAITEMENT PREVU', 'JOURS PREVU'));
+    const joursReel = normalizeInt(pickColumn(r, 'NOMBRE JOUR DE TRAITEMENT REEL', 'JOURS REEL'));
+    const joursRetardDemarrage = normalizeInt(
+      pickColumn(r, 'NOMBRE JOUR RETARD DEMARRAGE', 'JOURS RETARD'),
+    );
+    const typeCause = normalizeString(pickColumn(r, 'TYPE CAUSE', 'CAUSE'));
+    const commentaires = normalizeString(pickColumn(r, 'Commentaires', 'COMMENTAIRES'));
+    const ministeresRaw =
+      normalizeString(pickColumn(r, 'MINISTERES ASSOCIES', 'MINISTÈRES ASSOCIÉS')) ?? '';
+    const ministeres = ministeresRaw
+      .split(',')
+      .map((m) => m.trim())
+      .filter(Boolean);
+
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "directives" (
+           "rencontreId", "codeDirective", "texteDirective", "ministeresAssocies",
+           "echeance", "debutExecution", "finExecution", "etat", "typeCause",
+           "joursPrevu", "joursReel", "joursRetardDemarrage", "commentaires",
+           "statutValidation"
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'valide')`,
+        [
+          rencontreId,
+          codeDir,
+          texteDir,
+          ministeres,
+          echeance,
+          debutExecution,
+          finExecution,
+          etat,
+          typeCause,
+          joursPrevu,
+          joursReel,
+          joursRetardDemarrage,
+          commentaires,
+        ],
+      );
+    }
+    imported++;
+  }
+
+  return {
+    totalRows: rows.length,
+    imported,
+    duplicatesSkipped,
+    skippedNoText,
+    rencontresCreated,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mode COMPLET (toutes feuilles reconnues)
+// ---------------------------------------------------------------------------
 
 export async function importWorkbook(
   buffer: Buffer,
