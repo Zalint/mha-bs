@@ -43,10 +43,12 @@ export function ConfirmDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 bg-fg/40 backdrop-blur-sm z-50 animate-fade-up" />
+        {/* z-[1200] : au-dessus des panes/controls Leaflet (jusqu'a 800), du
+            modal d'edition mission (1000) et du LocationPickerMap (1100). */}
+        <Dialog.Overlay className="fixed inset-0 bg-fg/40 backdrop-blur-sm z-[1200] animate-fade-up" />
         <Dialog.Content
           className={cn(
-            'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
+            'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[1200]',
             'w-[min(90vw,440px)] bg-surface rounded-lg shadow-lg border border-border',
             'p-6 animate-fade-up',
           )}

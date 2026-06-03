@@ -15,6 +15,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
 import { useReferentiel } from '../hooks/useReferentiel.js';
@@ -217,33 +218,57 @@ export function InterpellationsView() {
     }
   };
 
-  const deleteOne = async (id: string): Promise<void> => {
-    if (!window.confirm('Supprimer cette interpellation ?')) return;
-    try {
-      await api.delete(`/interpellations/${id}`);
-      toast.success('Interpellation supprimée');
-      listQuery.refetch();
-      statsQuery.refetch();
-    } catch (err) {
-      toast.error(err instanceof ApiClientError ? err.message : 'Erreur de suppression');
-    }
+  // === Confirm dialog state ===
+  // On gere une seule instance de ConfirmDialog parametrable par un state
+  // — plus simple que de nester 2 dialogues et evite les conflits de focus.
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    description?: string;
+    variant?: 'default' | 'danger';
+    confirmLabel?: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+
+  const deleteOne = (id: string, titre: string): void => {
+    setConfirmState({
+      title: 'Supprimer cette interpellation ?',
+      description: `« ${titre.length > 80 ? titre.slice(0, 80) + '…' : titre} » sera définitivement supprimée.`,
+      variant: 'danger',
+      confirmLabel: 'Supprimer',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/interpellations/${id}`);
+          toast.success('Interpellation supprimée');
+          listQuery.refetch();
+          statsQuery.refetch();
+        } catch (err) {
+          toast.error(err instanceof ApiClientError ? err.message : 'Erreur de suppression');
+        }
+      },
+    });
   };
 
-  const bulkDelete = async (): Promise<void> => {
+  const bulkDelete = (): void => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`Supprimer ${selectedIds.size} interpellation(s) ? Action irréversible.`))
-      return;
-    try {
-      const res = await api.post<{ deleted: number }>('/interpellations/bulk-delete', {
-        ids: Array.from(selectedIds),
-      });
-      toast.success(`${res.deleted} interpellation(s) supprimée(s)`);
-      setSelectedIds(new Set());
-      listQuery.refetch();
-      statsQuery.refetch();
-    } catch (err) {
-      toast.error(err instanceof ApiClientError ? err.message : 'Erreur de suppression');
-    }
+    setConfirmState({
+      title: `Supprimer ${selectedIds.size} interpellation(s) ?`,
+      description: 'Action irréversible. Toutes les interpellations sélectionnées seront supprimées.',
+      variant: 'danger',
+      confirmLabel: `Supprimer ${selectedIds.size}`,
+      onConfirm: async () => {
+        try {
+          const res = await api.post<{ deleted: number }>('/interpellations/bulk-delete', {
+            ids: Array.from(selectedIds),
+          });
+          toast.success(`${res.deleted} interpellation(s) supprimée(s)`);
+          setSelectedIds(new Set());
+          listQuery.refetch();
+          statsQuery.refetch();
+        } catch (err) {
+          toast.error(err instanceof ApiClientError ? err.message : 'Erreur de suppression');
+        }
+      },
+    });
   };
 
   const handleExport = async (): Promise<void> => {
@@ -306,7 +331,7 @@ export function InterpellationsView() {
           {isAdmin && selectedIds.size > 0 && (
             <button
               type="button"
-              onClick={() => void bulkDelete()}
+              onClick={bulkDelete}
               className="btn bg-danger text-white hover:bg-danger/90"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -742,7 +767,7 @@ export function InterpellationsView() {
                               {isAdmin && (
                                 <button
                                   type="button"
-                                  onClick={() => void deleteOne(i.id)}
+                                  onClick={() => deleteOne(i.id, i.titre)}
                                   className="text-fg-muted hover:text-danger p-1"
                                   aria-label="Supprimer"
                                   title="Supprimer"
@@ -771,6 +796,21 @@ export function InterpellationsView() {
           className="text-primary hover:underline"
         >Configuration</button>.
       </p>
+
+      {/* Dialogue de confirmation (delete unitaire + bulk) — remplace window.confirm */}
+      <ConfirmDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmState(null);
+        }}
+        title={confirmState?.title ?? ''}
+        description={confirmState?.description}
+        variant={confirmState?.variant}
+        confirmLabel={confirmState?.confirmLabel}
+        onConfirm={async () => {
+          if (confirmState) await confirmState.onConfirm();
+        }}
+      />
     </div>
   );
 }

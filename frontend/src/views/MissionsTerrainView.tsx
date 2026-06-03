@@ -24,6 +24,7 @@ import type { MissionTerrain } from '@mha-bs/shared';
 import { REGIONS_SENEGAL } from '@mha-bs/shared';
 
 import { LocationPickerMap } from '../components/maps/LocationPickerMap.js';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { KpiCard } from '../components/ui/KpiCard.js';
 import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
@@ -118,16 +119,27 @@ export function MissionsTerrainView() {
     }
   };
 
-  const deleteMission = async (m: MissionTerrain): Promise<void> => {
-    if (!window.confirm(`Supprimer la mission de ${m.localite} (${formatShort(m.dateMission)}) ?`))
-      return;
-    try {
-      await api.delete(`/missions/${m.id}`);
-      toast.success('Mission supprimée');
-      query.refetch();
-    } catch (err) {
-      toast.error(err instanceof ApiClientError ? err.message : 'Erreur de suppression');
-    }
+  // === Confirm dialog (remplace window.confirm) ===
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    description?: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+
+  const deleteMission = (m: MissionTerrain): void => {
+    setConfirmState({
+      title: 'Supprimer cette mission ?',
+      description: `Mission du ${formatShort(m.dateMission)} à ${m.localite}${m.projetRattache ? ` (${m.projetRattache})` : ''}. Action irréversible.`,
+      onConfirm: async () => {
+        try {
+          await api.delete(`/missions/${m.id}`);
+          toast.success('Mission supprimée');
+          query.refetch();
+        } catch (err) {
+          toast.error(err instanceof ApiClientError ? err.message : 'Erreur de suppression');
+        }
+      },
+    });
   };
 
   const regions = useMemo(() => {
@@ -302,7 +314,7 @@ export function MissionsTerrainView() {
                       {isAdmin && (
                         <button
                           type="button"
-                          onClick={() => void deleteMission(m)}
+                          onClick={() => deleteMission(m)}
                           className="text-fg-muted hover:text-danger p-1.5 rounded"
                           aria-label="Supprimer"
                           title="Supprimer"
@@ -359,6 +371,21 @@ export function MissionsTerrainView() {
           }}
         />
       )}
+
+      {/* Dialogue de confirmation pour la suppression d'une mission */}
+      <ConfirmDialog
+        open={confirmState !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmState(null);
+        }}
+        title={confirmState?.title ?? ''}
+        description={confirmState?.description}
+        variant="danger"
+        confirmLabel="Supprimer"
+        onConfirm={async () => {
+          if (confirmState) await confirmState.onConfirm();
+        }}
+      />
     </div>
   );
 }
