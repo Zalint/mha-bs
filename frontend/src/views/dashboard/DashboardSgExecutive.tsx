@@ -278,45 +278,84 @@ interface DirectivesContentProps {
 }
 
 function DirectivesContent({ aggregate, totalDirectives }: DirectivesContentProps) {
+  const max = Math.max(aggregate.nbRealisees, aggregate.nbAttente, aggregate.nbEnCours, 1);
+  const etats = [
+    {
+      label: 'Exécuté',
+      value: aggregate.nbRealisees,
+      gradient: 'from-emerald-300 to-emerald-500',
+      text: 'text-emerald-700',
+    },
+    {
+      label: 'Attente',
+      value: aggregate.nbAttente,
+      gradient: 'from-amber-300 to-amber-500',
+      text: 'text-amber-700',
+    },
+    {
+      label: 'En cours',
+      value: aggregate.nbEnCours,
+      gradient: 'from-rose-300 to-rose-500',
+      text: 'text-rose-700',
+    },
+  ];
   return (
-    <>
-      <div className="grid grid-cols-3 gap-3">
-        <PercentStat
-          label="Exécuté"
-          percent={aggregate.tauxExecution}
-          ratioNum={aggregate.nbRealisees}
-          ratioDen={totalDirectives}
-          variant="exec"
-        />
-        <PercentStat
-          label="Attente"
-          percent={pctSafe(aggregate.nbAttente, totalDirectives)}
-          ratioNum={aggregate.nbAttente}
-          ratioDen={totalDirectives}
-          variant="attente"
-        />
-        <PercentStat
-          label="Cours"
-          percent={pctSafe(aggregate.nbEnCours, totalDirectives)}
-          ratioNum={aggregate.nbEnCours}
-          ratioDen={totalDirectives}
-          variant="cours"
-        />
+    <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-center">
+      {/* Gauche : 3 % */}
+      <div className="md:col-span-3">
+        <div className="grid grid-cols-3 gap-2">
+          <PercentStat
+            label="Exécuté"
+            percent={aggregate.tauxExecution}
+            ratioNum={aggregate.nbRealisees}
+            ratioDen={totalDirectives}
+            variant="exec"
+            compact
+          />
+          <PercentStat
+            label="Attente"
+            percent={pctSafe(aggregate.nbAttente, totalDirectives)}
+            ratioNum={aggregate.nbAttente}
+            ratioDen={totalDirectives}
+            variant="attente"
+            compact
+          />
+          <PercentStat
+            label="Cours"
+            percent={pctSafe(aggregate.nbEnCours, totalDirectives)}
+            ratioNum={aggregate.nbEnCours}
+            ratioDen={totalDirectives}
+            variant="cours"
+            compact
+          />
+        </div>
       </div>
-      <StackedStatusBar
-        executed={aggregate.nbRealisees}
-        attente={aggregate.nbAttente}
-        enCours={aggregate.nbEnCours}
-        other={Math.max(
-          totalDirectives -
-            aggregate.nbRealisees -
-            aggregate.nbAttente -
-            aggregate.nbEnCours,
-          0,
-        )}
-        total={totalDirectives}
-      />
-    </>
+      {/* Droite : barres horizontales par état (style "Par catégorie") */}
+      <div className="md:col-span-4">
+        <div className="text-[10px] uppercase tracking-wider text-fg-muted font-semibold mb-2">
+          Par état
+        </div>
+        <div className="space-y-1.5">
+          {etats.map((e) => {
+            const widthPct = Math.max((e.value / max) * 100, 2);
+            return (
+              <div key={e.label} className="flex items-center gap-2">
+                <span className={cn('w-16 text-xs font-semibold', e.text)}>{e.label}</span>
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={cn('h-full rounded-full bg-gradient-to-r', e.gradient)}
+                    style={{ width: `${widthPct}%` }}
+                  />
+                </div>
+                <span className="w-8 text-right text-xs font-mono font-bold text-fg">
+                  {e.value}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -714,30 +753,6 @@ function PercentStat({ label, percent, ratioNum, ratioDen, variant, compact }: P
       >
         {ratioNum}/{ratioDen}
       </div>
-    </div>
-  );
-}
-
-interface StackedStatusBarProps {
-  executed: number;
-  attente: number;
-  enCours: number;
-  other: number;
-  total: number;
-}
-
-function StackedStatusBar({ executed, attente, enCours, other, total }: StackedStatusBarProps) {
-  if (total <= 0) return null;
-  const pctExec = (executed / total) * 100;
-  const pctAtt = (attente / total) * 100;
-  const pctCours = (enCours / total) * 100;
-  const pctOther = (other / total) * 100;
-  return (
-    <div className="flex h-1.5 rounded-full overflow-hidden mt-4 bg-muted">
-      <div className="bg-emerald-500" style={{ width: `${pctExec}%` }} title="Exécuté" />
-      <div className="bg-amber-500" style={{ width: `${pctAtt}%` }} title="Attente" />
-      <div className="bg-rose-500" style={{ width: `${pctCours}%` }} title="En cours" />
-      <div className="bg-slate-300" style={{ width: `${pctOther}%` }} title="Autre" />
     </div>
   );
 }
