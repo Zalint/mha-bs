@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { BarList } from '../../components/dashboard/BarList.js';
 import { MegaKpi } from '../../components/dashboard/MegaKpi.js';
-import { MissionsMap } from '../../components/dashboard/MissionsMap.js';
+import { SenegalMiniMap } from '../../components/dashboard/SenegalMiniMap.js';
 import { cn } from '../../lib/cn.js';
 import { formatShort } from '../../lib/formatDate.js';
 import {
@@ -221,7 +221,7 @@ export function DashboardSgBento({ data, missions, anneeLabel }: DashboardViewPr
             </button>
           </div>
           <div className="grid gap-3 grid-cols-1 lg:grid-cols-[1.6fr_1fr]">
-          <MissionsMap items={missions} height={420} />
+          <SenegalMiniMap items={missions} height={420} />
           <div className="bg-surface rounded-lg border border-border overflow-hidden flex flex-col">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <h4 className="font-semibold text-sm">Sites visités</h4>

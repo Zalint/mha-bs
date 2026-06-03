@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { BulletChart } from '../../components/dashboard/BulletChart.js';
-import { MissionsMap } from '../../components/dashboard/MissionsMap.js';
+import { SenegalMiniMap } from '../../components/dashboard/SenegalMiniMap.js';
 import { cn } from '../../lib/cn.js';
 import {
   computeAggregate,
@@ -115,7 +115,7 @@ export function DashboardSgExecutive({ data, missions, anneeLabel }: DashboardVi
           onAction={() => navigate('/missions-terrain')}
         >
           <div className="rounded-md overflow-hidden border border-border h-44">
-            <MissionsMap items={missions} height={176} />
+            <SenegalMiniMap items={missions} height={176} />
           </div>
           <p className="text-[11px] text-fg-muted mt-2 text-center">
             {missions.length} mission{missions.length > 1 ? 's' : ''} ·{' '}
