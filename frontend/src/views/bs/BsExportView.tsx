@@ -35,16 +35,24 @@ interface CardDef {
 const CARDS: CardDef[] = [
   {
     scope: 'all',
-    title: 'Tout exporter (format historique)',
+    title: 'Backup complet (réimportable)',
     description:
-      "Classeur au format historique du BS MHA — 6 onglets directement réimportables : directives, recommandations COPIL/CNGI/Réformes et réunions techniques.",
+      "Classeur complet de l'application — toutes les données nécessaires pour un re-import : directives, recommandations COPIL/CNGI/Réformes, réunions, missions, interpellations, députés, sessions, directions et tous les référentiels de configuration. Sommaire en première page.",
     sheets: [
+      'Sommaire',
       'PLAN',
       'Suivi Recom Copil',
       'Suivi Recom CNGI',
       "Réf sur l'ASS",
       'Sui FeuilleR Ref Inst',
       'Suivi Rtechnique',
+      'Missions terrain',
+      'Ouvrages visités',
+      'Interpellations',
+      'Députés',
+      'Sessions parlementaires',
+      'Directions',
+      'Référentiels',
     ],
     icon: Package,
     accent: 'bg-primary-100 text-primary-700 border-primary',

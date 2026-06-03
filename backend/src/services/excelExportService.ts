@@ -617,6 +617,335 @@ async function addSuiviRtechniqueSheet(wb: ExcelJS.Workbook): Promise<number> {
 }
 
 // =============================================================================
+// Feuilles supplémentaires pour le BACKUP COMPLET (scope 'all')
+// =============================================================================
+
+/**
+ * Applique le style header navy+bold sur la première ligne d'une feuille,
+ * fige la 1ère ligne et active les bordures fines. Utilisé pour les
+ * feuilles secondaires du backup complet.
+ */
+function styleHeaderRow(ws: ExcelJS.Worksheet): void {
+  const header = ws.getRow(1);
+  header.height = 24;
+  header.eachCell((cell) => {
+    cell.fill = HEADER_FILL;
+    cell.font = HEADER_FONT;
+    cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    cell.border = BORDER_THIN;
+  });
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+}
+
+async function addMissionsSheet(wb: ExcelJS.Workbook): Promise<number> {
+  const rows = await queryAll<{
+    dateMission: Date;
+    localite: string;
+    region: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    projetRattache: string | null;
+    constats: string | null;
+    recommandations: string | null;
+  }>(
+    `SELECT "dateMission", "localite", "region", "latitude", "longitude",
+            "projetRattache", "constats", "recommandations"
+     FROM "missionsTerrain" ORDER BY "dateMission" DESC`,
+  );
+  const ws = wb.addWorksheet('Missions terrain', {
+    properties: { tabColor: { argb: 'FFDC2626' } },
+  });
+  ws.columns = [
+    { header: 'Date', key: 'dateMission', width: 12 },
+    { header: 'Localité', key: 'localite', width: 26 },
+    { header: 'Région', key: 'region', width: 16 },
+    { header: 'Latitude', key: 'latitude', width: 12 },
+    { header: 'Longitude', key: 'longitude', width: 12 },
+    { header: 'Projet rattaché', key: 'projetRattache', width: 22 },
+    { header: 'Constats', key: 'constats', width: 50 },
+    { header: 'Recommandations', key: 'recommandations', width: 50 },
+  ];
+  for (const r of rows) {
+    ws.addRow({
+      dateMission: ymdFr(r.dateMission),
+      localite: r.localite,
+      region: r.region,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      projetRattache: r.projetRattache,
+      constats: r.constats,
+      recommandations: r.recommandations,
+    });
+  }
+  styleHeaderRow(ws);
+  return rows.length;
+}
+
+async function addInterpellationsSheet(wb: ExcelJS.Workbook): Promise<number> {
+  const rows = await queryAll<{
+    typeInterpellation: string;
+    intitule: string;
+    reference: string | null;
+    dateInterpellation: Date | null;
+    depute: string | null;
+    sessionIntitule: string | null;
+    sousSecteur: string | null;
+    etat: string | null;
+    dateReponse: Date | null;
+    contenu: string | null;
+  }>(
+    `SELECT i."typeInterpellation", i."intitule", i."reference", i."dateInterpellation",
+            d."nomComplet" AS "depute",
+            s."intitule" AS "sessionIntitule",
+            i."sousSecteur", i."etat", i."dateReponse", i."contenu"
+     FROM "interpellations" i
+     LEFT JOIN "deputes" d ON d."id" = i."deputeId"
+     LEFT JOIN "sessionsParlementaires" s ON s."id" = i."sessionId"
+     ORDER BY i."dateInterpellation" DESC NULLS LAST`,
+  );
+  const ws = wb.addWorksheet('Interpellations', {
+    properties: { tabColor: { argb: 'FF7C2D12' } },
+  });
+  ws.columns = [
+    { header: 'Type', key: 'typeInterpellation', width: 14 },
+    { header: 'Référence', key: 'reference', width: 18 },
+    { header: 'Date', key: 'dateInterpellation', width: 12 },
+    { header: 'Intitulé', key: 'intitule', width: 60 },
+    { header: 'Député', key: 'depute', width: 26 },
+    { header: 'Session', key: 'sessionIntitule', width: 30 },
+    { header: 'Sous-secteur', key: 'sousSecteur', width: 18 },
+    { header: 'État', key: 'etat', width: 14 },
+    { header: 'Date réponse', key: 'dateReponse', width: 12 },
+    { header: 'Contenu', key: 'contenu', width: 60 },
+  ];
+  for (const r of rows) {
+    ws.addRow({
+      typeInterpellation: r.typeInterpellation,
+      reference: r.reference,
+      dateInterpellation: ymdFr(r.dateInterpellation),
+      intitule: r.intitule,
+      depute: r.depute,
+      sessionIntitule: r.sessionIntitule,
+      sousSecteur: r.sousSecteur,
+      etat: r.etat,
+      dateReponse: ymdFr(r.dateReponse),
+      contenu: r.contenu,
+    });
+  }
+  styleHeaderRow(ws);
+  return rows.length;
+}
+
+async function addDeputesSheet(wb: ExcelJS.Workbook): Promise<number> {
+  const rows = await queryAll<{
+    nomComplet: string;
+    sexe: string | null;
+    groupeParlementaire: string | null;
+    region: string | null;
+    email: string | null;
+    telephone: string | null;
+  }>(
+    `SELECT "nomComplet", "sexe", "groupeParlementaire", "region", "email", "telephone"
+     FROM "deputes" ORDER BY "nomComplet"`,
+  );
+  const ws = wb.addWorksheet('Députés', {
+    properties: { tabColor: { argb: 'FF166534' } },
+  });
+  ws.columns = [
+    { header: 'Nom complet', key: 'nomComplet', width: 30 },
+    { header: 'Sexe', key: 'sexe', width: 8 },
+    { header: 'Groupe parlementaire', key: 'groupeParlementaire', width: 22 },
+    { header: 'Région', key: 'region', width: 18 },
+    { header: 'Email', key: 'email', width: 26 },
+    { header: 'Téléphone', key: 'telephone', width: 16 },
+  ];
+  for (const r of rows) {
+    ws.addRow(r);
+  }
+  styleHeaderRow(ws);
+  return rows.length;
+}
+
+async function addSessionsSheet(wb: ExcelJS.Workbook): Promise<number> {
+  const rows = await queryAll<{
+    intitule: string;
+    typeSession: string | null;
+    dateDebut: Date | null;
+    dateFin: Date | null;
+  }>(
+    `SELECT "intitule", "typeSession", "dateDebut", "dateFin"
+     FROM "sessionsParlementaires" ORDER BY "dateDebut" DESC NULLS LAST`,
+  );
+  const ws = wb.addWorksheet('Sessions parlementaires', {
+    properties: { tabColor: { argb: 'FF166534' } },
+  });
+  ws.columns = [
+    { header: 'Intitulé', key: 'intitule', width: 40 },
+    { header: 'Type', key: 'typeSession', width: 16 },
+    { header: 'Date début', key: 'dateDebut', width: 12 },
+    { header: 'Date fin', key: 'dateFin', width: 12 },
+  ];
+  for (const r of rows) {
+    ws.addRow({
+      intitule: r.intitule,
+      typeSession: r.typeSession,
+      dateDebut: ymdFr(r.dateDebut),
+      dateFin: ymdFr(r.dateFin),
+    });
+  }
+  styleHeaderRow(ws);
+  return rows.length;
+}
+
+async function addDirectionsSheet(wb: ExcelJS.Workbook): Promise<number> {
+  const rows = await queryAll<{
+    code: string;
+    fullName: string;
+    typeEntite: string | null;
+    color: string | null;
+    ordreAffichage: number | null;
+  }>(
+    `SELECT "code", "fullName", "typeEntite", "color", "ordreAffichage"
+     FROM "directions" ORDER BY "ordreAffichage" NULLS LAST, "code"`,
+  );
+  const ws = wb.addWorksheet('Directions', {
+    properties: { tabColor: { argb: 'FF1E40AF' } },
+  });
+  ws.columns = [
+    { header: 'Code', key: 'code', width: 12 },
+    { header: 'Nom complet', key: 'fullName', width: 60 },
+    { header: 'Type entité', key: 'typeEntite', width: 14 },
+    { header: 'Couleur', key: 'color', width: 12 },
+    { header: 'Ordre', key: 'ordreAffichage', width: 8 },
+  ];
+  for (const r of rows) {
+    ws.addRow(r);
+  }
+  styleHeaderRow(ws);
+  return rows.length;
+}
+
+async function addReferentielsSheet(wb: ExcelJS.Workbook): Promise<number> {
+  const rows = await queryAll<{
+    codeType: string;
+    code: string;
+    label: string;
+    description: string | null;
+    parentCode: string | null;
+    ordreAffichage: number | null;
+    isActive: boolean;
+  }>(
+    `SELECT "codeType", "code", "label", "description", "parentCode",
+            "ordreAffichage", "isActive"
+     FROM "referentiels" ORDER BY "codeType", "ordreAffichage" NULLS LAST, "code"`,
+  );
+  const ws = wb.addWorksheet('Référentiels', {
+    properties: { tabColor: { argb: 'FF7C3AED' } },
+  });
+  ws.columns = [
+    { header: 'codeType', key: 'codeType', width: 22 },
+    { header: 'code', key: 'code', width: 22 },
+    { header: 'label', key: 'label', width: 40 },
+    { header: 'description', key: 'description', width: 50 },
+    { header: 'parentCode', key: 'parentCode', width: 18 },
+    { header: 'ordreAffichage', key: 'ordreAffichage', width: 12 },
+    { header: 'isActive', key: 'isActive', width: 10 },
+  ];
+  for (const r of rows) {
+    ws.addRow(r);
+  }
+  styleHeaderRow(ws);
+  return rows.length;
+}
+
+async function addOuvragesSheet(wb: ExcelJS.Workbook): Promise<number> {
+  const rows = await queryAll<{
+    missionLocalite: string;
+    missionDate: Date;
+    nomOuvrage: string;
+    typeOuvrage: string | null;
+    etatOuvrage: string;
+    observations: string | null;
+  }>(
+    `SELECT m."localite" AS "missionLocalite",
+            m."dateMission" AS "missionDate",
+            o."nomOuvrage", o."typeOuvrage", o."etatOuvrage", o."observations"
+     FROM "ouvragesVisites" o
+     JOIN "missionsTerrain" m ON m."id" = o."missionId"
+     ORDER BY m."dateMission" DESC, o."nomOuvrage"`,
+  );
+  const ws = wb.addWorksheet('Ouvrages visités', {
+    properties: { tabColor: { argb: 'FFB45309' } },
+  });
+  ws.columns = [
+    { header: 'Mission · Localité', key: 'missionLocalite', width: 26 },
+    { header: 'Mission · Date', key: 'missionDate', width: 12 },
+    { header: "Nom de l'ouvrage", key: 'nomOuvrage', width: 32 },
+    { header: 'Type', key: 'typeOuvrage', width: 18 },
+    { header: 'État', key: 'etatOuvrage', width: 16 },
+    { header: 'Observations', key: 'observations', width: 50 },
+  ];
+  for (const r of rows) {
+    ws.addRow({ ...r, missionDate: ymdFr(r.missionDate) });
+  }
+  styleHeaderRow(ws);
+  return rows.length;
+}
+
+async function addSommaireBackup(
+  wb: ExcelJS.Workbook,
+  counts: Record<string, number>,
+): Promise<void> {
+  const ws = wb.addWorksheet('Sommaire', {
+    properties: { tabColor: { argb: 'FF0F172A' } },
+  });
+  ws.columns = [
+    { header: 'Entité', key: 'entite', width: 30 },
+    { header: 'Total', key: 'total', width: 12 },
+    { header: 'Feuille', key: 'feuille', width: 28 },
+  ];
+  ws.addRow(['MHA · Bureau de Suivi — BACKUP COMPLET', '', '']);
+  ws.addRow([`Date export : ${new Date().toISOString().slice(0, 10)}`, '', '']);
+  ws.addRow([]);
+  ws.addRow(['Entité', 'Total', 'Feuille']);
+
+  const sections: { entite: string; key: keyof typeof counts; feuille: string }[] = [
+    { entite: 'Directives présidentielles', key: 'directives', feuille: 'PLAN' },
+    { entite: 'Recommandations COPIL', key: 'copil', feuille: 'Suivi Recom Copil' },
+    { entite: 'Recommandations CNGI', key: 'cngi', feuille: 'Suivi Recom CNGI' },
+    { entite: 'Recommandations Réf. ASS', key: 'refAss', feuille: "Réf sur l'ASS" },
+    { entite: 'Recommandations Réf. Inst', key: 'refInst', feuille: 'Sui FeuilleR Ref Inst' },
+    { entite: 'Réunions techniques', key: 'reunions', feuille: 'Suivi Rtechnique' },
+    { entite: 'Missions terrain', key: 'missions', feuille: 'Missions terrain' },
+    { entite: 'Ouvrages visités', key: 'ouvrages', feuille: 'Ouvrages visités' },
+    { entite: 'Interpellations', key: 'interpellations', feuille: 'Interpellations' },
+    { entite: 'Députés', key: 'deputes', feuille: 'Députés' },
+    { entite: 'Sessions parlementaires', key: 'sessions', feuille: 'Sessions parlementaires' },
+    { entite: 'Directions', key: 'directions', feuille: 'Directions' },
+    { entite: 'Référentiels (config)', key: 'referentiels', feuille: 'Référentiels' },
+  ];
+  for (const s of sections) {
+    ws.addRow([s.entite, counts[s.key] ?? 0, s.feuille]);
+  }
+
+  // Style titre + header
+  ws.mergeCells('A1:C1');
+  ws.mergeCells('A2:C2');
+  ws.getRow(1).height = 28;
+  ws.getRow(1).getCell(1).font = { bold: true, size: 14, color: { argb: 'FF0F172A' } };
+  ws.getRow(2).getCell(1).font = { italic: true, color: { argb: 'FF64748B' } };
+  const header = ws.getRow(4);
+  header.height = 24;
+  header.eachCell((c) => {
+    c.fill = HEADER_FILL;
+    c.font = HEADER_FONT;
+    c.border = BORDER_THIN;
+  });
+  // Réorganise le sommaire en premier
+  wb.worksheets.unshift(wb.worksheets.pop() as ExcelJS.Worksheet);
+}
+
+// =============================================================================
 // Builder principal
 // =============================================================================
 
@@ -636,9 +965,11 @@ export async function buildExportWorkbook(
   let directives = 0;
   let recommandations = 0;
   let reunions = 0;
+  const backupCounts: Record<string, number> = {};
 
   if (scope === 'all' || scope === 'directives') {
     directives = await addPlanSheet(wb, exporterName);
+    backupCounts.directives = directives;
   }
   if (scope === 'all' || scope === 'recommandations') {
     const nCopil = await addSuiviRecomCopilSheet(wb);
@@ -646,13 +977,36 @@ export async function buildExportWorkbook(
     const nRefAss = await addRefSurAssSheet(wb);
     const nRefInst = await addRefInstSheet(wb);
     recommandations = nCopil + nCngi + nRefAss + nRefInst;
+    Object.assign(backupCounts, {
+      copil: nCopil,
+      cngi: nCngi,
+      refAss: nRefAss,
+      refInst: nRefInst,
+    });
   }
   if (scope === 'all' || scope === 'activite') {
     reunions = await addSuiviRtechniqueSheet(wb);
+    backupCounts.reunions = reunions;
+  }
+
+  // === Backup complet : entités supplémentaires uniquement en mode 'all' ===
+  if (scope === 'all') {
+    backupCounts.missions = await addMissionsSheet(wb);
+    backupCounts.ouvrages = await addOuvragesSheet(wb);
+    backupCounts.interpellations = await addInterpellationsSheet(wb);
+    backupCounts.deputes = await addDeputesSheet(wb);
+    backupCounts.sessions = await addSessionsSheet(wb);
+    backupCounts.directions = await addDirectionsSheet(wb);
+    backupCounts.referentiels = await addReferentielsSheet(wb);
+    // Sommaire en première position
+    await addSommaireBackup(wb, backupCounts);
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const filename = `mha-export-${scope}-${today}.xlsx`;
+  const filename =
+    scope === 'all'
+      ? `mha-BACKUP-COMPLET-${today}.xlsx`
+      : `mha-export-${scope}-${today}.xlsx`;
   const arrayBuffer = await wb.xlsx.writeBuffer();
   return {
     buffer: Buffer.from(arrayBuffer as ArrayBuffer),
