@@ -4,6 +4,7 @@ import { appConfig } from '../config/index.js';
 import { authApiKey } from '../middlewares/authApiKey.js';
 
 import { adminRoutes } from './api/adminRoutes.js';
+import { alerteRoutes } from './api/alerteRoutes.js';
 import { authRoutes } from './api/authRoutes.js';
 import { dashboardRoutes } from './api/dashboardRoutes.js';
 import { deputeRoutes } from './api/deputeRoutes.js';
@@ -41,6 +42,7 @@ apiRouter.use('/import', importRoutes);
 apiRouter.use('/interpellations', interpellationRoutes);
 apiRouter.use('/users', userRoutes);
 apiRouter.use('/admin', adminRoutes);
+apiRouter.use('/alertes', alerteRoutes);
 
 // --- API externe (x-api-key) ---
 if (appConfig.externalApi.enabled) {

@@ -98,6 +98,11 @@ interface SidebarProps {
 export function Sidebar({ mode, onModeChange, isOpen = false, onClose }: SidebarProps) {
   const userRole = useAuthStore((s) => s.user?.role);
   const location = useLocation();
+  // Compteur alertes non-lues pour le badge BS
+  const alertesUnread = useApi(
+    () => api.get<{ unread: number }>('/alertes/count-unread'),
+    [location.pathname],
+  );
   // Refetch des compteurs nav à chaque navigation pour rester cohérent
   // après un wipe / import / suppression.
   const counts = useApi(
@@ -105,11 +110,19 @@ export function Sidebar({ mode, onModeChange, isOpen = false, onClose }: Sidebar
     [location.pathname],
   );
   const baseItems = mode === 'sg' ? buildNavSg(counts.data) : NAV_BS;
+  // Injection dynamique : badge alertes non-lues sur 'bs-alertes'
+  const unreadAlertes = alertesUnread.data?.unread ?? 0;
+  const itemsWithBadges = baseItems.map((it) => {
+    if ('id' in it && it.id === 'bs-alertes' && unreadAlertes > 0) {
+      return { ...it, badge: unreadAlertes } as typeof it;
+    }
+    return it;
+  });
   // Filtres role-based des entrees de menu :
   //  - bs-users     -> admin uniquement
   //  - bs-config    -> admin + bs
   //  - sg-validation -> admin + sg
-  const navItems = baseItems.filter((it) => {
+  const navItems = itemsWithBadges.filter((it) => {
     if ('id' in it && it.id === 'bs-users') return userRole === 'admin';
     if ('id' in it && it.id === 'bs-config') return userRole === 'admin' || userRole === 'bs';
     if ('id' in it && it.id === 'sg-validation') return userRole === 'admin' || userRole === 'sg';

@@ -457,10 +457,21 @@ CREATE TABLE IF NOT EXISTS "alertes" (
   "titre"               VARCHAR(255) NOT NULL,
   "description"         TEXT,
   "sourceEntiteType"    VARCHAR(30),
-  "sourceEntiteId"      UUID,
+  "sourceEntiteId"      VARCHAR(100),
   "lue"                 BOOLEAN     NOT NULL DEFAULT FALSE,
   "createdAt"           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration : sourceEntiteId était initialement UUID, mais on doit pouvoir y
+-- mettre aussi des codes (ex: 'copilProgepIi'). On le passe en VARCHAR.
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'alertes' AND column_name = 'sourceEntiteId' AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE "alertes" ALTER COLUMN "sourceEntiteId" TYPE VARCHAR(100) USING "sourceEntiteId"::TEXT;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS "idxAlertesUser"   ON "alertes" ("userId", "lue");
 CREATE INDEX IF NOT EXISTS "idxAlertesDate"   ON "alertes" ("createdAt");

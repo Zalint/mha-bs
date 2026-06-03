@@ -9,6 +9,7 @@ import { ConseilInterMinisterielView } from '../views/directives/ConseilInterMin
 import { ConseilMinistresView } from '../views/directives/ConseilMinistresView.js';
 import { CoordinationSgView } from '../views/directives/CoordinationSgView.js';
 import { DirectivesPresidentiellesView } from '../views/directives/DirectivesPresidentiellesView.js';
+import { BsAlertesView } from '../views/bs/BsAlertesView.js';
 import { BsExportView } from '../views/bs/BsExportView.js';
 import { BsImportView } from '../views/bs/BsImportView.js';
 import { BsInterpellationNewView } from '../views/bs/BsInterpellationNewView.js';
@@ -67,6 +68,7 @@ export const router = createBrowserRouter([
           { path: 'par-direction', element: <ParDirectionView /> },
           { path: 'interpellations', element: <InterpellationsView /> },
           { path: 'bs/liste', element: <BsListeView /> },
+          { path: 'bs/alertes', element: <BsAlertesView /> },
           { path: 'bs/fiche', element: <DirectiveFicheView /> },
           { path: 'bs/fiche/:id', element: <DirectiveFicheView /> },
           { path: 'bs/rencontre', element: <BsRencontreView /> },
