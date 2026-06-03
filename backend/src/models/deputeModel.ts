@@ -1,4 +1,4 @@
-import { queryAll, queryOne } from '../db/query.js';
+import { query, queryAll, queryOne } from '../db/query.js';
 
 export interface DeputeRow {
   id: string;
@@ -64,4 +64,49 @@ export async function createDepute(input: CreateDeputeInput): Promise<PublicDepu
   );
   if (!row) throw new Error('Échec création député');
   return toPublic(row);
+}
+
+export interface UpdateDeputeInput {
+  nomComplet?: string;
+  sexe?: 'M' | 'F' | null;
+  groupeParlementaire?: string;
+  region?: string | null;
+  isActive?: boolean;
+}
+
+/**
+ * Update partiel d'un député. Seules les colonnes présentes dans `patch` sont
+ * touchées — un objet vide jette une erreur. Renvoie la ligne fraîche, ou null
+ * si l'id n'existe pas.
+ */
+export async function updateDepute(
+  id: string,
+  patch: UpdateDeputeInput,
+): Promise<PublicDepute | null> {
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  const push = (col: string, value: unknown): void => {
+    params.push(value);
+    sets.push(`"${col}" = $${params.length}`);
+  };
+  if (patch.nomComplet !== undefined) push('nomComplet', patch.nomComplet);
+  if (patch.sexe !== undefined) push('sexe', patch.sexe);
+  if (patch.groupeParlementaire !== undefined) push('groupeParlementaire', patch.groupeParlementaire);
+  if (patch.region !== undefined) push('region', patch.region);
+  if (patch.isActive !== undefined) push('isActive', patch.isActive);
+
+  if (sets.length === 0) throw new Error('Aucun champ à mettre à jour');
+  params.push(id);
+  const row = await queryOne<DeputeRow>(
+    `UPDATE "deputes" SET ${sets.join(', ')}
+     WHERE "id" = $${params.length}
+     RETURNING ${SELECT_COLS}`,
+    params,
+  );
+  return row ? toPublic(row) : null;
+}
+
+export async function deleteDepute(id: string): Promise<boolean> {
+  const result = await query(`DELETE FROM "deputes" WHERE "id" = $1`, [id]);
+  return (result.rowCount ?? 0) > 0;
 }

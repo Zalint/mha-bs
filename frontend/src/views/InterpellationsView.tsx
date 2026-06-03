@@ -77,6 +77,7 @@ export function InterpellationsView() {
   const deputesQuery = useApi(() => api.get<{ items: DeputeLite[] }>('/deputes'), []);
   const etatRef = useReferentiel('etatInterpellation');
   const typeRef = useReferentiel('typeInterpellation');
+  const groupeRef = useReferentiel('groupeParlementaire');
 
   // Liste triée pour le dropdown — actifs en premier, alphabétique
   const deputesOptions = useMemo(() => {
@@ -122,19 +123,37 @@ export function InterpellationsView() {
       etat: it.etat,
       dateReception: it.dateReception,
       deputeId: it.deputeId,
+      // Snapshot du groupe initial du député — sert à comparer pour décider
+      // si on doit faire un PUT /deputes/:id à la sauvegarde
+      deputeGroupe: it.deputeGroupe,
     });
   };
   const cancelEdit = (): void => {
     setEditingId(null);
     setEditDraft({});
   };
-  const saveEdit = async (id: string): Promise<void> => {
+  const saveEdit = async (id: string, originalDeputeGroupe: string | null): Promise<void> => {
     try {
-      await api.put(`/interpellations/${id}`, editDraft);
+      // 1) Si le groupe parlementaire a été modifié, on met à jour le DÉPUTÉ
+      //    associé (PAS l'interpellation — le groupe est porté par le député).
+      //    On filtre sur l'existence d'un deputeId valide et d'un changement réel.
+      const newGroupe = editDraft.deputeGroupe ?? null;
+      const deputeId = editDraft.deputeId ?? null;
+      if (deputeId && newGroupe && newGroupe !== originalDeputeGroupe) {
+        await api.put(`/deputes/${deputeId}`, { groupeParlementaire: newGroupe });
+      }
+
+      // 2) PUT interpellation — on retire deputeGroupe avant l'envoi (pas accepté
+      //    par le schéma Zod côté backend, c'est un champ join read-only).
+      const { deputeGroupe: _ignore, ...interpellationPatch } = editDraft;
+      void _ignore;
+      await api.put(`/interpellations/${id}`, interpellationPatch);
+
       toast.success('Interpellation mise à jour');
       cancelEdit();
       listQuery.refetch();
       statsQuery.refetch();
+      deputesQuery.refetch();
     } catch (err) {
       toast.error(err instanceof ApiClientError ? err.message : "Erreur de mise à jour");
     }
@@ -403,9 +422,18 @@ export function InterpellationsView() {
                         {isEditing ? (
                           <select
                             value={editDraft.deputeId ?? ''}
-                            onChange={(e) =>
-                              setEditDraft({ ...editDraft, deputeId: e.target.value })
-                            }
+                            onChange={(e) => {
+                              const newId = e.target.value;
+                              // Quand on change de député, on synchronise aussi le
+                              // groupe parlementaire affiché — l'utilisateur peut
+                              // ensuite l'overrider via le select Groupe.
+                              const newDepute = deputesOptions.find((d) => d.id === newId);
+                              setEditDraft({
+                                ...editDraft,
+                                deputeId: newId,
+                                deputeGroupe: newDepute?.groupeParlementaire ?? null,
+                              });
+                            }}
                             className="input input-sm text-xs w-full min-w-[10rem]"
                           >
                             <option value="" disabled>
@@ -428,26 +456,48 @@ export function InterpellationsView() {
                         )}
                       </td>
                       <td className="px-4 py-3 align-top">
-                        {(() => {
-                          // En mode édition, on reflète le groupe du député sélectionné
-                          // pour donner un feedback immédiat (sans attendre la sauvegarde).
-                          const displayedGroupe = isEditing
-                            ? deputesOptions.find((d) => d.id === editDraft.deputeId)
-                                ?.groupeParlementaire ?? i.deputeGroupe
-                            : i.deputeGroupe;
-                          return (
-                            <span
-                              className={cn(
-                                'inline-block px-2 py-0.5 rounded text-[11px] font-medium',
-                                displayedGroupe && displayedGroupe !== 'Non renseigne'
-                                  ? 'bg-primary-100 text-primary-700'
-                                  : 'bg-muted text-fg-muted italic',
+                        {isEditing ? (
+                          <select
+                            value={editDraft.deputeGroupe ?? ''}
+                            onChange={(e) =>
+                              setEditDraft({
+                                ...editDraft,
+                                deputeGroupe: e.target.value || null,
+                              })
+                            }
+                            className="input input-sm text-xs w-full min-w-[8rem]"
+                            title="Modifie le groupe du député associé"
+                          >
+                            <option value="">— Non renseigné —</option>
+                            {groupeRef.items.map((g) => (
+                              <option key={g.code} value={g.code}>
+                                {g.label}
+                              </option>
+                            ))}
+                            {/* Si le groupe actuel n'est pas dans le référentiel
+                                (ex. ancienne donnée), on l'ajoute pour préserver
+                                la valeur affichée. */}
+                            {editDraft.deputeGroupe &&
+                              !groupeRef.items.some(
+                                (g) => g.code === editDraft.deputeGroupe,
+                              ) && (
+                                <option value={editDraft.deputeGroupe}>
+                                  {editDraft.deputeGroupe}
+                                </option>
                               )}
-                            >
-                              {displayedGroupe ?? 'Non renseigné'}
-                            </span>
-                          );
-                        })()}
+                          </select>
+                        ) : (
+                          <span
+                            className={cn(
+                              'inline-block px-2 py-0.5 rounded text-[11px] font-medium',
+                              i.deputeGroupe && i.deputeGroupe !== 'Non renseigne'
+                                ? 'bg-primary-100 text-primary-700'
+                                : 'bg-muted text-fg-muted italic',
+                            )}
+                          >
+                            {i.deputeGroupe ?? 'Non renseigné'}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-xs align-top">
                         {isEditing ? (
@@ -519,7 +569,7 @@ export function InterpellationsView() {
                             <div className="flex items-center justify-center gap-1">
                               <button
                                 type="button"
-                                onClick={() => void saveEdit(i.id)}
+                                onClick={() => void saveEdit(i.id, i.deputeGroupe)}
                                 className="text-xs px-2 py-1 bg-success text-white rounded hover:opacity-90"
                               >
                                 ✓ Save
