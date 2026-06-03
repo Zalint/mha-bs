@@ -684,24 +684,24 @@ async function addMissionsSheet(wb: ExcelJS.Workbook): Promise<number> {
 async function addInterpellationsSheet(wb: ExcelJS.Workbook): Promise<number> {
   const rows = await queryAll<{
     typeInterpellation: string;
-    intitule: string;
+    titre: string;
     reference: string | null;
-    dateInterpellation: Date | null;
+    dateReception: Date | null;
     depute: string | null;
     sessionIntitule: string | null;
-    sousSecteur: string | null;
+    description: string | null;
     etat: string | null;
     dateReponse: Date | null;
-    contenu: string | null;
+    texteReponse: string | null;
   }>(
-    `SELECT i."typeInterpellation", i."intitule", i."reference", i."dateInterpellation",
+    `SELECT i."typeInterpellation", i."titre", i."reference", i."dateReception",
             d."nomComplet" AS "depute",
             s."intitule" AS "sessionIntitule",
-            i."sousSecteur", i."etat", i."dateReponse", i."contenu"
+            i."description", i."etat", i."dateReponse", i."texteReponse"
      FROM "interpellations" i
      LEFT JOIN "deputes" d ON d."id" = i."deputeId"
      LEFT JOIN "sessionsParlementaires" s ON s."id" = i."sessionId"
-     ORDER BY i."dateInterpellation" DESC NULLS LAST`,
+     ORDER BY i."dateReception" DESC NULLS LAST`,
   );
   const ws = wb.addWorksheet('Interpellations', {
     properties: { tabColor: { argb: 'FF7C2D12' } },
@@ -709,27 +709,27 @@ async function addInterpellationsSheet(wb: ExcelJS.Workbook): Promise<number> {
   ws.columns = [
     { header: 'Type', key: 'typeInterpellation', width: 14 },
     { header: 'Référence', key: 'reference', width: 18 },
-    { header: 'Date', key: 'dateInterpellation', width: 12 },
-    { header: 'Intitulé', key: 'intitule', width: 60 },
+    { header: 'Date réception', key: 'dateReception', width: 14 },
+    { header: 'Titre', key: 'titre', width: 60 },
     { header: 'Député', key: 'depute', width: 26 },
     { header: 'Session', key: 'sessionIntitule', width: 30 },
-    { header: 'Sous-secteur', key: 'sousSecteur', width: 18 },
+    { header: 'Description', key: 'description', width: 50 },
     { header: 'État', key: 'etat', width: 14 },
-    { header: 'Date réponse', key: 'dateReponse', width: 12 },
-    { header: 'Contenu', key: 'contenu', width: 60 },
+    { header: 'Date réponse', key: 'dateReponse', width: 14 },
+    { header: 'Texte réponse', key: 'texteReponse', width: 60 },
   ];
   for (const r of rows) {
     ws.addRow({
       typeInterpellation: r.typeInterpellation,
       reference: r.reference,
-      dateInterpellation: ymdFr(r.dateInterpellation),
-      intitule: r.intitule,
+      dateReception: ymdFr(r.dateReception),
+      titre: r.titre,
       depute: r.depute,
       sessionIntitule: r.sessionIntitule,
-      sousSecteur: r.sousSecteur,
+      description: r.description,
       etat: r.etat,
       dateReponse: ymdFr(r.dateReponse),
-      contenu: r.contenu,
+      texteReponse: r.texteReponse,
     });
   }
   styleHeaderRow(ws);

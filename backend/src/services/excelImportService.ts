@@ -1105,11 +1105,11 @@ export async function importInterpellationsFromSheet(
       deputeId = created?.id ?? null;
     }
 
-    // Déduplication : (deputeId, intitule)
+    // Déduplication : (deputeId, titre)
     if (deputeId) {
       const exists = await queryOne<{ id: string }>(
         `SELECT "id" FROM "interpellations"
-         WHERE "deputeId" = $1 AND "intitule" = $2 LIMIT 1`,
+         WHERE "deputeId" = $1 AND "titre" = $2 LIMIT 1`,
         [deputeId, intitule],
       );
       if (exists) {
@@ -1126,22 +1126,24 @@ export async function importInterpellationsFromSheet(
       pickColumn(r, 'Structure Resp', 'Structure', 'Responsable'),
     );
 
-    // Construit le contenu en agrégeant localité + structure
-    const contenuParts: string[] = [];
-    if (localite) contenuParts.push(`Localité : ${localite}`);
-    if (structureResp) contenuParts.push(`Structure responsable : ${structureResp}`);
-    const contenu = contenuParts.length > 0 ? contenuParts.join('\n') : null;
+    // Construit la description en agrégeant localité + domaine + structure
+    const descParts: string[] = [];
+    if (localite) descParts.push(`Localité : ${localite}`);
+    if (sousSecteur) descParts.push(`Domaine : ${sousSecteur}`);
+    if (structureResp) descParts.push(`Structure responsable : ${structureResp}`);
+    const description = descParts.length > 0 ? descParts.join(' · ') : null;
 
-    // Référence synthétique pour suivi
-    const reference = `IMP-${new Date().toISOString().slice(0, 10)}-${String(idx + 1).padStart(4, '0')}`;
+    // Référence synthétique unique pour suivi (timestamp + index pour éviter collision)
+    const ts = Date.now().toString(36).slice(-6).toUpperCase();
+    const reference = `IMP-${ts}-${String(idx + 1).padStart(3, '0')}`;
 
     if (!opts.dryRun && deputeId) {
       await query(
         `INSERT INTO "interpellations"
-           ("typeInterpellation", "intitule", "reference", "deputeId",
-            "sousSecteur", "contenu", "etat")
-         VALUES ('questionEcrite', $1, $2, $3, $4, $5, 'recue')`,
-        [intitule, reference, deputeId, sousSecteur, contenu],
+           ("typeInterpellation", "titre", "reference", "deputeId",
+            "description", "dateReception", "etat")
+         VALUES ('ecrite', $1, $2, $3, $4, CURRENT_DATE, 'recue')`,
+        [intitule, reference, deputeId, description],
       );
     }
     imported++;
@@ -1228,47 +1230,67 @@ async function migrateInterpellations(
   if (!sheet) return 0;
   const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { defval: null });
   let inserted = 0;
-  for (const r of rows) {
-    const intitule = normalizeString(pickColumn(r, 'Intitulé', 'Intitule', 'INTITULE'));
-    const typeInterpellation = normalizeString(
+  for (let idx = 0; idx < rows.length; idx++) {
+    const r = rows[idx];
+    if (!r) continue;
+    const titre = normalizeString(
+      pickColumn(r, 'Titre', 'Intitulé', 'Intitule', 'INTITULE'),
+    );
+    const typeRaw = normalizeString(
       pickColumn(r, 'Type', 'Type interpellation', 'TYPE'),
     );
-    if (!intitule || !typeInterpellation) continue;
+    if (!titre) continue;
 
-    const reference = normalizeString(pickColumn(r, 'Référence', 'Reference', 'REFERENCE'));
-    // Déduplication : par (typeInterpellation, intitule) si reference absente
-    const existing = reference
-      ? await queryOne<{ id: string }>(
-          `SELECT "id" FROM "interpellations" WHERE "reference" = $1 LIMIT 1`,
-          [reference],
-        )
-      : await queryOne<{ id: string }>(
-          `SELECT "id" FROM "interpellations"
-           WHERE "typeInterpellation" = $1 AND "intitule" = $2 LIMIT 1`,
-          [typeInterpellation, intitule],
-        );
+    // Normalise le type : seules valeurs acceptées par le CHECK = orale/ecrite/commission
+    const type =
+      typeRaw && ['orale', 'ecrite', 'commission'].includes(typeRaw.toLowerCase())
+        ? typeRaw.toLowerCase()
+        : 'ecrite';
+
+    const refRaw = normalizeString(pickColumn(r, 'Référence', 'Reference', 'REFERENCE'));
+    const ts = Date.now().toString(36).slice(-6).toUpperCase();
+    const reference = refRaw ?? `IMP-${ts}-${String(idx + 1).padStart(3, '0')}`;
+
+    const existing = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "interpellations" WHERE "reference" = $1 LIMIT 1`,
+      [reference],
+    );
     if (existing) continue;
 
-    const dateInterpellation = normalizeDate(pickColumn(r, 'Date', 'DATE'));
-    const sousSecteur = normalizeString(pickColumn(r, 'Sous-secteur', 'SOUS-SECTEUR'));
+    // Cherche le député (requis : NOT NULL)
+    const deputeName = normalizeString(pickColumn(r, 'Député', 'Depute', 'Nom député'));
+    if (!deputeName) continue;
+    const depute = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "deputes" WHERE LOWER("nomComplet") = LOWER($1) LIMIT 1`,
+      [deputeName],
+    );
+    if (!depute) continue; // sans député en base, on skip
+
+    const dateReception =
+      normalizeDate(pickColumn(r, 'Date réception', 'Date reception', 'Date', 'DATE')) ??
+      new Date().toISOString().slice(0, 10);
     const etat = normalizeString(pickColumn(r, 'État', 'Etat', 'ETAT')) ?? 'recue';
     const dateReponse = normalizeDate(pickColumn(r, 'Date réponse', 'Date reponse'));
-    const contenu = normalizeString(pickColumn(r, 'Contenu', 'CONTENU'));
+    const description = normalizeString(
+      pickColumn(r, 'Description', 'Contenu', 'CONTENU'),
+    );
+    const texteReponse = normalizeString(pickColumn(r, 'Texte réponse', 'Texte reponse'));
     if (!opts.dryRun) {
       await query(
         `INSERT INTO "interpellations"
-           ("typeInterpellation", "intitule", "reference", "dateInterpellation",
-            "sousSecteur", "etat", "dateReponse", "contenu")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+           ("typeInterpellation", "titre", "reference", "deputeId", "description",
+            "dateReception", "etat", "dateReponse", "texteReponse")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
-          typeInterpellation,
-          intitule,
+          type,
+          titre,
           reference,
-          dateInterpellation,
-          sousSecteur,
+          depute.id,
+          description,
+          dateReception,
           etat,
           dateReponse,
-          contenu,
+          texteReponse,
         ],
       );
     }
