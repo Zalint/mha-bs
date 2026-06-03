@@ -76,7 +76,10 @@ export function MissionsTerrainView() {
   const navigate = useNavigate();
   const userRole = useAuthStore((s) => s.user?.role);
   const canEdit = userRole === 'admin' || userRole === 'bs';
-  const isAdmin = userRole === 'admin';
+  // canDelete = canEdit ici — admin ET bs peuvent supprimer (unitaire et bulk).
+  // On garde isAdmin pour les actions vraiment reservees a l'admin (wipe DB,
+  // backfill geocoding...) si besoin futur.
+  const canDelete = canEdit;
 
   const query = useApi(() => api.get<{ items: MissionTerrain[] }>('/missions'), []);
   const items = query.data?.items ?? [];
@@ -87,6 +90,23 @@ export function MissionsTerrainView() {
   const [editDraft, setEditDraft] = useState<MissionDraft | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // === Sélection multiple pour bulk delete ===
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const allSelected = items.length > 0 && items.every((m) => selectedIds.has(m.id));
+  const toggleAll = (): void => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map((m) => m.id)));
+    }
+  };
+  const toggleOne = (id: string): void => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedIds(next);
+  };
 
   const startEdit = (m: MissionTerrain): void => {
     setEditDraft(missionToDraft(m));
@@ -142,6 +162,27 @@ export function MissionsTerrainView() {
     });
   };
 
+  const bulkDelete = (): void => {
+    if (selectedIds.size === 0) return;
+    setConfirmState({
+      title: `Supprimer ${selectedIds.size} mission(s) ?`,
+      description:
+        'Toutes les missions sélectionnées seront définitivement supprimées avec leurs ouvrages associés. Action irréversible.',
+      onConfirm: async () => {
+        try {
+          const res = await api.post<{ deleted: number }>('/missions/bulk-delete', {
+            ids: Array.from(selectedIds),
+          });
+          toast.success(`${res.deleted} mission(s) supprimée(s)`);
+          setSelectedIds(new Set());
+          query.refetch();
+        } catch (err) {
+          toast.error(err instanceof ApiClientError ? err.message : 'Erreur de suppression');
+        }
+      },
+    });
+  };
+
   const regions = useMemo(() => {
     return new Set(items.map((i) => i.region).filter(Boolean));
   }, [items]);
@@ -157,9 +198,21 @@ export function MissionsTerrainView() {
             Sites d'ouvrages visités par le MHA · cartographie nationale et observations
           </p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => navigate('/bs/reunion')}>
-          <Plus className="w-3.5 h-3.5" /> Nouvelle mission
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {canDelete && selectedIds.size > 0 && (
+            <button
+              type="button"
+              onClick={bulkDelete}
+              className="btn bg-danger text-white hover:bg-danger/90"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Supprimer ({selectedIds.size})
+            </button>
+          )}
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/bs/reunion')}>
+            <Plus className="w-3.5 h-3.5" /> Nouvelle mission
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -249,9 +302,21 @@ export function MissionsTerrainView() {
 
         {/* Liste */}
         <div className="card overflow-hidden">
-          <div className="card-header">
+          <div className="card-header gap-2">
+            {canDelete && items.length > 0 && (
+              <input
+                type="checkbox"
+                aria-label="Tout sélectionner"
+                checked={allSelected}
+                onChange={toggleAll}
+                className="accent-primary"
+              />
+            )}
             <h2 className="text-md font-semibold">Sites visités</h2>
-            <span className="ml-auto text-sm text-fg-muted">{items.length} site(s)</span>
+            <span className="ml-auto text-sm text-fg-muted">
+              {selectedIds.size > 0 ? `${selectedIds.size} / ` : ''}
+              {items.length} site(s)
+            </span>
           </div>
           <div className="max-h-[520px] overflow-auto">
             {items.length === 0 ? (
@@ -261,10 +326,22 @@ export function MissionsTerrainView() {
                 <div
                   key={m.id}
                   className={cn(
-                    'grid grid-cols-[36px_1fr_auto] gap-3 px-4 py-3 border-b border-border',
+                    canDelete
+                      ? 'grid grid-cols-[24px_36px_1fr_auto] gap-3 px-4 py-3 border-b border-border'
+                      : 'grid grid-cols-[36px_1fr_auto] gap-3 px-4 py-3 border-b border-border',
                     'last:border-0 hover:bg-muted items-center',
+                    selectedIds.has(m.id) && 'bg-primary-100/30',
                   )}
                 >
+                  {canDelete && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Sélectionner mission ${m.localite}`}
+                      checked={selectedIds.has(m.id)}
+                      onChange={() => toggleOne(m.id)}
+                      className="accent-primary"
+                    />
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -311,7 +388,7 @@ export function MissionsTerrainView() {
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
-                      {isAdmin && (
+                      {canDelete && (
                         <button
                           type="button"
                           onClick={() => deleteMission(m)}

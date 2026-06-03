@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { createMissionTerrainSchema } from '@mha-bs/shared';
 
+import { query } from '../../db/query.js';
 import { NotFoundError, UnauthorizedError } from '../../lib/errors.js';
 import { authJwt } from '../../middlewares/authJwt.js';
 import { requireRole } from '../../middlewares/rbac.js';
@@ -88,6 +89,36 @@ missionRoutes.delete('/:id', authJwt, requireRole('admin', 'bs'), async (req, re
     next(err);
   }
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/missions/bulk-delete — suppression multiple (admin + bs)
+// Body : { ids: string[] } — UUIDs des missions à supprimer
+// ---------------------------------------------------------------------------
+
+const bulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(500),
+});
+
+missionRoutes.post(
+  '/bulk-delete',
+  authJwt,
+  requireRole('admin', 'bs'),
+  validate(bulkDeleteSchema),
+  async (req, res, next) => {
+    try {
+      const { ids } = req.body as z.infer<typeof bulkDeleteSchema>;
+      // Suppression en une seule requête — la FK ouvragesVisites.missionId
+      // utilise ON DELETE CASCADE, donc les ouvrages liés partent avec.
+      const result = await query(
+        `DELETE FROM "missionsTerrain" WHERE "id" = ANY($1::uuid[])`,
+        [ids],
+      );
+      res.json({ deleted: result.rowCount ?? 0 });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 const ouvrageSchema = z.object({
   nomOuvrage: z.string().min(1).max(200),
