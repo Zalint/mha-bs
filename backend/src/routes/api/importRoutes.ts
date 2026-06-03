@@ -4,6 +4,9 @@ import multer from 'multer';
 import { authJwt } from '../../middlewares/authJwt.js';
 import { requireRole } from '../../middlewares/rbac.js';
 import {
+  COLUMN_EXPECTATIONS,
+  checkColumnMapping,
+  type ImportMode,
   importDirectivesFirstSheet,
   importInterpellationsFromSheet,
   importMissionsFromSheet,
@@ -105,9 +108,11 @@ importRoutes.post(
 );
 
 /**
- * POST /api/import/inspect
+ * POST /api/import/inspect?mode=interpellations|missions-terrain
  * Scanne le classeur sans rien insérer : retourne la liste des feuilles
- * avec headers détectés et 3 lignes d'échantillon pour preview.
+ * avec headers détectés, sample rows, et — si `mode` est fourni — le
+ * mapping des colonnes attendues vs trouvées + la liste explicite des
+ * colonnes attendues pour ce mode.
  */
 importRoutes.post(
   '/inspect',
@@ -121,10 +126,24 @@ importRoutes.post(
         return;
       }
       const sheets = inspectWorkbook(req.file.buffer);
+      const modeRaw = String(req.query.mode ?? '').trim();
+      const isValidMode = (m: string): m is ImportMode => m in COLUMN_EXPECTATIONS;
+      const mode = isValidMode(modeRaw) ? modeRaw : null;
+
+      // Si mode spécifié, enrichit chaque feuille avec le mapping
+      const enrichedSheets = mode
+        ? sheets.map((s) => ({
+            ...s,
+            columnMapping: checkColumnMapping(s.headers, mode),
+          }))
+        : sheets;
+
       res.json({
         filename: req.file.originalname,
         sizeBytes: req.file.size,
-        sheets,
+        sheets: enrichedSheets,
+        expectedColumns: mode ? COLUMN_EXPECTATIONS[mode] : null,
+        mode,
       });
     } catch (err) {
       next(err);

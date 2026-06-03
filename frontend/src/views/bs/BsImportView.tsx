@@ -41,12 +41,22 @@ interface SheetPreview {
   headers: string[];
   sampleRows: Array<Record<string, string | number | null>>;
   suggestedHeaderRow: number;
+  columnMapping?: Record<string, string | null>;
+}
+
+interface ExpectedColumn {
+  role: string;
+  label: string;
+  candidates: string[];
+  required: boolean;
 }
 
 interface InspectResult {
   filename: string;
   sizeBytes: number;
   sheets: SheetPreview[];
+  expectedColumns: ExpectedColumn[] | null;
+  mode: string | null;
 }
 
 interface DedicatedResult {
@@ -106,6 +116,8 @@ export function BsImportView() {
   const [dedicatedResult, setDedicatedResult] = useState<DedicatedResult | null>(null);
   const [dedicatedSubmitting, setDedicatedSubmitting] = useState(false);
 
+  const [dedicatedExpected, setDedicatedExpected] = useState<ExpectedColumn[] | null>(null);
+
   const startDedicatedImport = async (mode: DedicatedMode): Promise<void> => {
     if (!file) return;
     setDedicatedSubmitting(true);
@@ -114,17 +126,30 @@ export function BsImportView() {
     setDedicatedSheets(null);
     setDedicatedSelectedSheet('');
     setDedicatedResult(null);
+    setDedicatedExpected(null);
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await api.post<InspectResult>('/import/inspect', form);
+      const res = await api.post<InspectResult>('/import/inspect', form, {
+        query: { mode },
+      });
       setDedicatedSheets(res.sheets);
-      // Suggère automatiquement le 1er onglet qui ressemble au mode demandé
-      const guessName =
+      setDedicatedExpected(res.expectedColumns);
+      // Suggestion : 1er onglet où toutes les colonnes REQUISES sont mappées
+      const allRequiredFound = (s: SheetPreview): boolean => {
+        if (!res.expectedColumns || !s.columnMapping) return false;
+        return res.expectedColumns
+          .filter((c) => c.required)
+          .every((c) => Boolean(s.columnMapping?.[c.role]));
+      };
+      const bestMatch = res.sheets.find(allRequiredFound);
+      const nameMatch =
         mode === 'interpellations'
           ? res.sheets.find((s) => /député|deput|interpell/i.test(s.name))?.name
           : res.sheets.find((s) => /mission|terrain/i.test(s.name))?.name;
-      setDedicatedSelectedSheet(guessName ?? res.sheets[0]?.name ?? '');
+      setDedicatedSelectedSheet(
+        bestMatch?.name ?? nameMatch ?? res.sheets[0]?.name ?? '',
+      );
     } catch (e) {
       setError(e instanceof ApiClientError ? e.message : "Erreur d'analyse du fichier.");
       setDedicatedMode(null);
@@ -622,9 +647,48 @@ export function BsImportView() {
               </button>
             </div>
 
+            {/* Bandeau : colonnes attendues pour ce mode */}
+            {dedicatedExpected && (
+              <div className="px-5 py-3 bg-info-bg border-b border-border">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-fg-muted mb-2">
+                  Colonnes attendues pour ce type d&apos;import
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {dedicatedExpected.map((c) => (
+                    <span
+                      key={c.role}
+                      title={`Accepté : ${c.candidates.join(' / ')}`}
+                      className={cn(
+                        'text-[11px] font-mono px-2 py-0.5 rounded inline-flex items-center gap-1',
+                        c.required
+                          ? 'bg-danger-bg text-danger border border-danger/30'
+                          : 'bg-muted text-fg-muted border border-border',
+                      )}
+                    >
+                      {c.required && <span className="font-bold">★</span>}
+                      {c.label}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-fg-muted italic mt-2">
+                  ★ = requis · survole une colonne pour voir les noms acceptés (alias)
+                </p>
+              </div>
+            )}
+
             <div className="px-5 py-4 space-y-3">
               {dedicatedSheets.map((s) => {
                 const isSelected = dedicatedSelectedSheet === s.name;
+                // Compte les colonnes requises trouvées
+                const requiredFound = dedicatedExpected
+                  ? dedicatedExpected
+                      .filter((c) => c.required)
+                      .filter((c) => Boolean(s.columnMapping?.[c.role])).length
+                  : 0;
+                const requiredTotal = dedicatedExpected
+                  ? dedicatedExpected.filter((c) => c.required).length
+                  : 0;
+                const isCompatible = requiredFound === requiredTotal;
                 return (
                   <button
                     key={s.name}
@@ -634,7 +698,9 @@ export function BsImportView() {
                       'w-full text-left border rounded-lg p-3 transition-colors',
                       isSelected
                         ? 'border-primary bg-primary-100/40'
-                        : 'border-border hover:border-fg-muted',
+                        : isCompatible
+                          ? 'border-border hover:border-fg-muted'
+                          : 'border-border opacity-60 hover:opacity-100',
                     )}
                   >
                     <div className="flex items-start justify-between gap-3 mb-2">
@@ -642,6 +708,20 @@ export function BsImportView() {
                         <div className="font-semibold text-sm flex items-center gap-2">
                           {isSelected && <span className="text-primary">✓</span>}
                           {s.name}
+                          {dedicatedExpected && (
+                            <span
+                              className={cn(
+                                'text-[10.5px] font-bold px-1.5 py-0.5 rounded',
+                                isCompatible
+                                  ? 'bg-success-bg text-success'
+                                  : 'bg-danger-bg text-danger',
+                              )}
+                            >
+                              {isCompatible
+                                ? `✓ ${requiredFound}/${requiredTotal} requises`
+                                : `⚠ ${requiredFound}/${requiredTotal} requises`}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-fg-muted font-mono mt-0.5">
                           {s.rowCount} ligne{s.rowCount > 1 ? 's' : ''} · {s.headers.length}{' '}
@@ -655,6 +735,46 @@ export function BsImportView() {
                         </span>
                       )}
                     </div>
+
+                    {/* Mapping des colonnes : role → colonne trouvée */}
+                    {dedicatedExpected && s.columnMapping && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mb-2 bg-muted/30 rounded p-2 border border-border">
+                        {dedicatedExpected.map((c) => {
+                          const found = s.columnMapping?.[c.role];
+                          return (
+                            <div
+                              key={c.role}
+                              className="flex items-center gap-1.5 text-[11px]"
+                            >
+                              <span
+                                className={cn(
+                                  'font-mono w-3 text-center font-bold',
+                                  found
+                                    ? 'text-success'
+                                    : c.required
+                                      ? 'text-danger'
+                                      : 'text-fg-muted',
+                                )}
+                              >
+                                {found ? '✓' : c.required ? '✗' : '·'}
+                              </span>
+                              <span className="text-fg-2 font-semibold truncate flex-shrink-0">
+                                {c.label}
+                              </span>
+                              <span className="text-fg-muted">→</span>
+                              <span
+                                className={cn(
+                                  'font-mono truncate',
+                                  found ? 'text-success' : 'text-fg-muted italic',
+                                )}
+                              >
+                                {found ?? (c.required ? 'manquante' : '—')}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     {/* Headers */}
                     <div className="flex flex-wrap gap-1 mb-2">
                       {s.headers.slice(0, 10).map((h, i) => (
@@ -715,16 +835,37 @@ export function BsImportView() {
               >
                 Annuler
               </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => void handleDedicatedConfirm()}
-                disabled={!dedicatedSelectedSheet || dedicatedSubmitting}
-              >
-                {dedicatedSubmitting
-                  ? 'Import…'
-                  : `Importer la feuille "${dedicatedSelectedSheet}"`}
-              </button>
+              {(() => {
+                const selectedSheet = dedicatedSheets.find(
+                  (s) => s.name === dedicatedSelectedSheet,
+                );
+                const requiredMissing =
+                  selectedSheet && dedicatedExpected
+                    ? dedicatedExpected
+                        .filter((c) => c.required)
+                        .filter((c) => !selectedSheet.columnMapping?.[c.role])
+                    : [];
+                const blocked = requiredMissing.length > 0;
+                return (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => void handleDedicatedConfirm()}
+                    disabled={!dedicatedSelectedSheet || dedicatedSubmitting || blocked}
+                    title={
+                      blocked
+                        ? `Colonnes requises manquantes : ${requiredMissing.map((c) => c.label).join(', ')}`
+                        : ''
+                    }
+                  >
+                    {dedicatedSubmitting
+                      ? 'Import…'
+                      : blocked
+                        ? '⚠ Colonnes requises manquantes'
+                        : `Importer la feuille "${dedicatedSelectedSheet}"`}
+                  </button>
+                );
+              })()}
             </div>
           </div>
         </div>

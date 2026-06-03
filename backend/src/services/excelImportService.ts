@@ -1004,6 +1004,112 @@ export async function importDirectivesFirstSheet(
 }
 
 // ---------------------------------------------------------------------------
+// Schéma des colonnes attendues par type d'import — défini explicitement
+// pour que l'utilisateur voie ce qui est requis et puisse vérifier le mapping.
+// ---------------------------------------------------------------------------
+
+export interface ExpectedColumn {
+  role: string;        // identifiant interne (ex: 'depute', 'titre')
+  label: string;       // libellé affiché à l'utilisateur
+  candidates: string[]; // noms de colonnes acceptés dans le fichier
+  required: boolean;
+}
+
+export const COLUMN_EXPECTATIONS = {
+  interpellations: [
+    {
+      role: 'depute',
+      label: 'Député (nom complet)',
+      candidates: ['Nom des Députés', 'Députés', 'Deputes', 'Député', 'Depute', 'NOM'],
+      required: true,
+    },
+    {
+      role: 'titre',
+      label: 'Question / Intitulé',
+      candidates: ['Questions', 'Question', 'Intitulé', 'Intitule', 'INTITULE', 'Titre'],
+      required: true,
+    },
+    {
+      role: 'localite',
+      label: 'Localité',
+      candidates: ['Localité', 'Localite', 'LIEU', 'Lieu'],
+      required: false,
+    },
+    {
+      role: 'sousSecteur',
+      label: 'Domaine / Thématique',
+      candidates: ['Domaine/Thématique', 'Domaine', 'Thématique', 'Sous-secteur', 'SOUS-SECTEUR'],
+      required: false,
+    },
+    {
+      role: 'structureResp',
+      label: 'Structure responsable',
+      candidates: ['Structure Resp', 'Structure', 'Responsable'],
+      required: false,
+    },
+  ],
+  'missions-terrain': [
+    {
+      role: 'localite',
+      label: 'Localité',
+      candidates: ['Localité', 'Localite', 'LIEU', 'LIEUX', 'Lieu'],
+      required: true,
+    },
+    {
+      role: 'date',
+      label: 'Date de la mission',
+      candidates: ['Date', 'Date mission', 'DATE'],
+      required: true,
+    },
+    {
+      role: 'description',
+      label: "Description de l'activité",
+      candidates: ["Description de l'activité", 'Description', 'Activité', 'Constats'],
+      required: false,
+    },
+    {
+      role: 'region',
+      label: 'Région',
+      candidates: ['Région', 'Region'],
+      required: false,
+    },
+    {
+      role: 'projet',
+      label: 'Projet rattaché',
+      candidates: ['Projet rattaché', 'Projet', 'COPIL'],
+      required: false,
+    },
+  ],
+} as const satisfies Record<string, readonly ExpectedColumn[]>;
+
+export type ImportMode = keyof typeof COLUMN_EXPECTATIONS;
+
+/**
+ * Pour une feuille donnée, vérifie quelles colonnes attendues du mode sont
+ * effectivement présentes. Retourne un mapping role → nom_colonne_trouvée
+ * (ou null si non trouvée).
+ */
+export function checkColumnMapping(
+  headers: string[],
+  mode: ImportMode,
+): Record<string, string | null> {
+  const expected = COLUMN_EXPECTATIONS[mode];
+  const mapping: Record<string, string | null> = {};
+  for (const exp of expected) {
+    let found: string | null = null;
+    for (const cand of exp.candidates) {
+      const match = headers.find((h) => h.toUpperCase().trim() === cand.toUpperCase().trim());
+      if (match) {
+        found = match;
+        break;
+      }
+    }
+    mapping[exp.role] = found;
+  }
+  return mapping;
+}
+
+// ---------------------------------------------------------------------------
 // Inspection interactive — utilisée par les imports dédiés (interpellations,
 // missions) pour proposer à l'utilisateur la feuille à importer.
 // ---------------------------------------------------------------------------
