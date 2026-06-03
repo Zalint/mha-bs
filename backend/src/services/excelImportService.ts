@@ -797,6 +797,11 @@ export interface ImportSummary {
   recommandationsFlat: number;
   projetsSheets: number;
   reunions: number;
+  interpellations: number;
+  deputes: number;
+  sessions: number;
+  directions: number;
+  referentiels: number;
   missions: number;
 }
 
@@ -976,6 +981,216 @@ export async function importDirectivesFirstSheet(
 }
 
 // ---------------------------------------------------------------------------
+// Migrations BACKUP COMPLET (feuilles supplémentaires du backup réimportable)
+// ---------------------------------------------------------------------------
+
+async function migrateInterpellations(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  const sheet = workbook.Sheets['Interpellations'];
+  if (!sheet) return 0;
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { defval: null });
+  let inserted = 0;
+  for (const r of rows) {
+    const intitule = normalizeString(pickColumn(r, 'Intitulé', 'Intitule', 'INTITULE'));
+    const typeInterpellation = normalizeString(
+      pickColumn(r, 'Type', 'Type interpellation', 'TYPE'),
+    );
+    if (!intitule || !typeInterpellation) continue;
+
+    const reference = normalizeString(pickColumn(r, 'Référence', 'Reference', 'REFERENCE'));
+    // Déduplication : par (typeInterpellation, intitule) si reference absente
+    const existing = reference
+      ? await queryOne<{ id: string }>(
+          `SELECT "id" FROM "interpellations" WHERE "reference" = $1 LIMIT 1`,
+          [reference],
+        )
+      : await queryOne<{ id: string }>(
+          `SELECT "id" FROM "interpellations"
+           WHERE "typeInterpellation" = $1 AND "intitule" = $2 LIMIT 1`,
+          [typeInterpellation, intitule],
+        );
+    if (existing) continue;
+
+    const dateInterpellation = normalizeDate(pickColumn(r, 'Date', 'DATE'));
+    const sousSecteur = normalizeString(pickColumn(r, 'Sous-secteur', 'SOUS-SECTEUR'));
+    const etat = normalizeString(pickColumn(r, 'État', 'Etat', 'ETAT')) ?? 'recue';
+    const dateReponse = normalizeDate(pickColumn(r, 'Date réponse', 'Date reponse'));
+    const contenu = normalizeString(pickColumn(r, 'Contenu', 'CONTENU'));
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "interpellations"
+           ("typeInterpellation", "intitule", "reference", "dateInterpellation",
+            "sousSecteur", "etat", "dateReponse", "contenu")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          typeInterpellation,
+          intitule,
+          reference,
+          dateInterpellation,
+          sousSecteur,
+          etat,
+          dateReponse,
+          contenu,
+        ],
+      );
+    }
+    inserted++;
+  }
+  return inserted;
+}
+
+async function migrateDeputes(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  const sheet = workbook.Sheets['Députés'] ?? workbook.Sheets['Deputes'];
+  if (!sheet) return 0;
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { defval: null });
+  let inserted = 0;
+  for (const r of rows) {
+    const nomComplet = normalizeString(pickColumn(r, 'Nom complet', 'Nom', 'NOM COMPLET'));
+    if (!nomComplet) continue;
+    const existing = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "deputes" WHERE "nomComplet" = $1 LIMIT 1`,
+      [nomComplet],
+    );
+    if (existing) continue;
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "deputes" ("nomComplet", "sexe", "groupeParlementaire", "region", "email", "telephone")
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          nomComplet,
+          normalizeString(pickColumn(r, 'Sexe')),
+          normalizeString(pickColumn(r, 'Groupe parlementaire', 'Groupe')),
+          normalizeString(pickColumn(r, 'Région', 'Region')),
+          normalizeString(pickColumn(r, 'Email')),
+          normalizeString(pickColumn(r, 'Téléphone', 'Telephone')),
+        ],
+      );
+    }
+    inserted++;
+  }
+  return inserted;
+}
+
+async function migrateSessions(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  const sheet =
+    workbook.Sheets['Sessions parlementaires'] ?? workbook.Sheets['Sessions'];
+  if (!sheet) return 0;
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { defval: null });
+  let inserted = 0;
+  for (const r of rows) {
+    const intitule = normalizeString(pickColumn(r, 'Intitulé', 'Intitule'));
+    if (!intitule) continue;
+    const existing = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "sessionsParlementaires" WHERE "intitule" = $1 LIMIT 1`,
+      [intitule],
+    );
+    if (existing) continue;
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "sessionsParlementaires" ("intitule", "typeSession", "dateDebut", "dateFin")
+         VALUES ($1, $2, $3, $4)`,
+        [
+          intitule,
+          normalizeString(pickColumn(r, 'Type')),
+          normalizeDate(pickColumn(r, 'Date début', 'Date debut')),
+          normalizeDate(pickColumn(r, 'Date fin')),
+        ],
+      );
+    }
+    inserted++;
+  }
+  return inserted;
+}
+
+async function migrateDirections(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  const sheet = workbook.Sheets['Directions'];
+  if (!sheet) return 0;
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { defval: null });
+  let inserted = 0;
+  for (const r of rows) {
+    const code = normalizeString(pickColumn(r, 'Code', 'CODE'));
+    const fullName = normalizeString(pickColumn(r, 'Nom complet', 'Nom'));
+    if (!code || !fullName) continue;
+    const existing = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "directions" WHERE "code" = $1 LIMIT 1`,
+      [code],
+    );
+    if (existing) continue;
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "directions" ("code", "fullName", "typeEntite", "color", "ordreAffichage")
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          code,
+          fullName,
+          normalizeString(pickColumn(r, 'Type entité', 'Type entite')),
+          normalizeString(pickColumn(r, 'Couleur', 'Color')),
+          normalizeInt(pickColumn(r, 'Ordre', 'ordreAffichage')),
+        ],
+      );
+    }
+    inserted++;
+  }
+  return inserted;
+}
+
+async function migrateReferentiels(
+  workbook: XLSX.WorkBook,
+  opts: { dryRun?: boolean } = {},
+): Promise<number> {
+  const sheet = workbook.Sheets['Référentiels'] ?? workbook.Sheets['Referentiels'];
+  if (!sheet) return 0;
+  const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { defval: null });
+  let inserted = 0;
+  for (const r of rows) {
+    const codeType = normalizeString(pickColumn(r, 'codeType', 'CODETYPE'));
+    const code = normalizeString(pickColumn(r, 'code', 'CODE'));
+    const label = normalizeString(pickColumn(r, 'label', 'LABEL'));
+    if (!codeType || !code || !label) continue;
+    const existing = await queryOne<{ id: string }>(
+      `SELECT "id" FROM "referentiels" WHERE "codeType" = $1 AND "code" = $2 LIMIT 1`,
+      [codeType, code],
+    );
+    if (existing) continue;
+    if (!opts.dryRun) {
+      await query(
+        `INSERT INTO "referentiels"
+           ("codeType", "code", "label", "description", "parentCode", "ordreAffichage", "isActive")
+         VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, TRUE))`,
+        [
+          codeType,
+          code,
+          label,
+          normalizeString(pickColumn(r, 'description')),
+          normalizeString(pickColumn(r, 'parentCode')),
+          normalizeInt(pickColumn(r, 'ordreAffichage')),
+          (() => {
+            const raw = pickColumn(r, 'isActive');
+            if (raw === null || raw === undefined || raw === '') return null;
+            if (typeof raw === 'boolean') return raw;
+            const s = String(raw).toLowerCase().trim();
+            return s === 'true' || s === '1' || s === 'oui' || s === 'yes';
+          })(),
+        ],
+      );
+    }
+    inserted++;
+  }
+  return inserted;
+}
+
+// ---------------------------------------------------------------------------
 // Mode COMPLET (toutes feuilles reconnues)
 // ---------------------------------------------------------------------------
 
@@ -999,6 +1214,13 @@ export async function importWorkbook(
   const reunionsExport = await migrateReunionsExport(workbook, opts);
   const missions = await migrateMissions(workbook, opts);
 
+  // --- Backup complet (feuilles supplémentaires) ---
+  const interpellations = await migrateInterpellations(workbook, opts);
+  const deputes = await migrateDeputes(workbook, opts);
+  const sessions = await migrateSessions(workbook, opts);
+  const directions = await migrateDirections(workbook, opts);
+  const referentiels = await migrateReferentiels(workbook, opts);
+
   return {
     rencontres: plan.rencontres,
     directives: plan.directives,
@@ -1010,5 +1232,10 @@ export async function importWorkbook(
     projetsSheets,
     reunions: reunionsHist + reunionsExport,
     missions,
+    interpellations,
+    deputes,
+    sessions,
+    directions,
+    referentiels,
   };
 }

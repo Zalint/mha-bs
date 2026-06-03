@@ -18,6 +18,11 @@ interface ImportResult {
   projetsSheets: number;
   reunions: number;
   missions: number;
+  interpellations: number;
+  deputes: number;
+  sessions: number;
+  directions: number;
+  referentiels: number;
 }
 
 interface DirectivesOnlyResult {
@@ -168,7 +173,12 @@ export function BsImportView() {
       result.recommandationsFlat +
       result.projetsSheets +
       result.reunions +
-      result.missions
+      result.missions +
+      result.interpellations +
+      result.deputes +
+      result.sessions +
+      result.directions +
+      result.referentiels
     : 0;
 
   return (
