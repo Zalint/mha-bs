@@ -6,6 +6,7 @@ import {
   FileText,
   Mic,
   Pencil,
+  Search,
   Trash2,
   Users,
   X,
@@ -91,17 +92,74 @@ export function InterpellationsView() {
   const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data]);
   const stats = statsQuery.data;
 
+  // === Recherche + filtres ===
+  const [searchQuery, setSearchQuery] = useState('');
+  const [etatFilter, setEtatFilter] = useState<string>('tous'); // 'tous' | code etat
+  const [typeFilter, setTypeFilter] = useState<string>('tous'); // 'tous' | code type
+
+  /**
+   * Normalise une chaîne pour la recherche : sans accents, lowercase, trim.
+   * Permet "depute" de matcher "député", "saint louis" de matcher "Saint-Louis", etc.
+   */
+  const normalize = (s: string | null | undefined): string =>
+    (s ?? '')
+      .toString()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .trim();
+
+  const filteredItems = useMemo(() => {
+    const needle = normalize(searchQuery);
+    return items.filter((i) => {
+      // Filtre état
+      if (etatFilter !== 'tous' && i.etat !== etatFilter) return false;
+      // Filtre type
+      if (typeFilter !== 'tous' && i.typeInterpellation !== typeFilter) return false;
+      // Recherche texte (multi-champs)
+      if (needle === '') return true;
+      const haystack = [
+        i.deputeNom,
+        i.deputeGroupe,
+        i.titre,
+        i.description,
+        i.reference,
+        i.sessionIntitule,
+      ]
+        .map(normalize)
+        .join(' ');
+      return haystack.includes(needle);
+    });
+  }, [items, searchQuery, etatFilter, typeFilter]);
+
+  // Compte par état (pour les chips de filtre, sur le set complet — pas filtré)
+  const etatCounts = useMemo(() => {
+    const out: Record<string, number> = { tous: items.length };
+    for (const i of items) out[i.etat] = (out[i.etat] ?? 0) + 1;
+    return out;
+  }, [items]);
+
   const etatLabel = (code: string): string =>
     etatRef.items.find((r) => r.code === code)?.label ?? code;
   const typeLabel = (code: string): string =>
     typeRef.items.find((r) => r.code === code)?.label ?? code;
 
   // === Sélection multiple pour bulk delete (admin) ===
+  // La sélection "tout" opère sur la LISTE FILTRÉE — éviter de cocher
+  // silencieusement des items masqués par la recherche.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const allSelected = items.length > 0 && selectedIds.size === items.length;
+  const allFilteredSelected =
+    filteredItems.length > 0 && filteredItems.every((i) => selectedIds.has(i.id));
   const toggleAll = (): void => {
-    if (allSelected) setSelectedIds(new Set());
-    else setSelectedIds(new Set(items.map((i) => i.id)));
+    if (allFilteredSelected) {
+      const next = new Set(selectedIds);
+      for (const i of filteredItems) next.delete(i.id);
+      setSelectedIds(next);
+    } else {
+      const next = new Set(selectedIds);
+      for (const i of filteredItems) next.add(i.id);
+      setSelectedIds(next);
+    }
   };
   const toggleOne = (id: string): void => {
     const next = new Set(selectedIds);
@@ -329,15 +387,102 @@ export function InterpellationsView() {
 
       {/* Liste */}
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-border bg-surface2 flex items-center justify-between">
-          <h2 className="text-md font-semibold">Liste des interpellations</h2>
-          <span className="text-xs text-fg-muted font-mono">
-            {items.length} interpellation{items.length > 1 ? 's' : ''}
-          </span>
+        <div className="px-4 py-3 border-b border-border bg-surface2 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-md font-semibold">Liste des interpellations</h2>
+            <span className="text-xs text-fg-muted font-mono">
+              {filteredItems.length === items.length
+                ? `${items.length} interpellation${items.length > 1 ? 's' : ''}`
+                : `${filteredItems.length} / ${items.length} interpellation${items.length > 1 ? 's' : ''}`}
+            </span>
+          </div>
+          {/* Barre de recherche + filtres */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px] max-w-md">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-fg-muted pointer-events-none" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher (député, question, localité…)"
+                className="input pl-8 pr-8 w-full text-sm"
+                aria-label="Rechercher"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg p-0.5"
+                  aria-label="Effacer la recherche"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {/* Chips état */}
+            <div className="flex flex-wrap gap-1">
+              <FilterChip
+                label="Tous"
+                count={etatCounts.tous ?? 0}
+                active={etatFilter === 'tous'}
+                onClick={() => setEtatFilter('tous')}
+              />
+              {(['recue', 'enPreparation', 'aValider', 'repondue'] as const).map((code) => (
+                <FilterChip
+                  key={code}
+                  label={etatLabel(code)}
+                  count={etatCounts[code] ?? 0}
+                  active={etatFilter === code}
+                  onClick={() => setEtatFilter(code)}
+                />
+              ))}
+            </div>
+            {/* Select type (compact) */}
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="input input-sm text-xs"
+              aria-label="Filtrer par type"
+            >
+              <option value="tous">Tous les types</option>
+              <option value="ecrite">Écrites</option>
+              <option value="orale">Orales</option>
+              <option value="commission">En commission</option>
+            </select>
+            {(searchQuery || etatFilter !== 'tous' || typeFilter !== 'tous') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setEtatFilter('tous');
+                  setTypeFilter('tous');
+                }}
+                className="text-xs text-fg-muted hover:text-fg underline"
+              >
+                Réinitialiser
+              </button>
+            )}
+          </div>
         </div>
         {items.length === 0 ? (
           <div className="text-center text-fg-muted py-12 text-sm">
             Aucune interpellation enregistrée pour le moment.
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="text-center text-fg-muted py-12 text-sm">
+            Aucune interpellation ne correspond à la recherche / aux filtres.
+            <br />
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setEtatFilter('tous');
+                setTypeFilter('tous');
+              }}
+              className="text-primary hover:underline mt-2"
+            >
+              Réinitialiser les filtres
+            </button>
           </div>
         ) : (
           <div className="overflow-auto">
@@ -349,7 +494,7 @@ export function InterpellationsView() {
                       <input
                         type="checkbox"
                         aria-label="Tout sélectionner"
-                        checked={allSelected}
+                        checked={allFilteredSelected}
                         onChange={toggleAll}
                         className="accent-primary"
                       />
@@ -381,7 +526,7 @@ export function InterpellationsView() {
                 </tr>
               </thead>
               <tbody>
-                {items.map((i) => {
+                {filteredItems.map((i) => {
                   const isEditing = editingId === i.id;
                   const isSelected = selectedIds.has(i.id);
                   return (
@@ -675,5 +820,39 @@ function BarRow({ label, value, max }: BarRowProps) {
       </div>
       <span className="font-mono text-sm font-semibold text-right tabular-nums">{value}</span>
     </div>
+  );
+}
+
+interface FilterChipProps {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}
+
+/** Chip de filtre compact avec label + compteur, état actif/inactif. */
+function FilterChip({ label, count, active, onClick }: FilterChipProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors',
+        'border',
+        active
+          ? 'bg-primary text-white border-primary'
+          : 'bg-surface text-fg-2 border-border hover:bg-muted',
+      )}
+    >
+      {label}
+      <span
+        className={cn(
+          'tabular-nums text-[10.5px] font-mono',
+          active ? 'opacity-90' : 'opacity-60',
+        )}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
