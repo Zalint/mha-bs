@@ -33,6 +33,7 @@ import * as XLSX from 'xlsx';
 
 import { query, queryAll, queryOne } from '../db/query.js';
 import { logger } from '../lib/logger.js';
+import { geocode as geocodeLocalite } from '../lib/senegalGazetteer.js';
 
 type UnknownRow = Record<string, unknown>;
 
@@ -710,14 +711,23 @@ async function migrateMissions(
     );
     if (exists) continue;
 
-    const region = normalizeString(r['Région']);
+    const rawRegion = normalizeString(r['Région']);
     const latRaw = r['Latitude'];
     const lonRaw = r['Longitude'];
-    const latitude = latRaw === null || latRaw === '' ? null : Number(latRaw);
-    const longitude = lonRaw === null || lonRaw === '' ? null : Number(lonRaw);
+    const parsedLat = latRaw === null || latRaw === '' ? null : Number(latRaw);
+    const parsedLng = lonRaw === null || lonRaw === '' ? null : Number(lonRaw);
     const projetRattache = normalizeString(r['Projet rattaché']);
     const constats = normalizeString(r['Constats']);
     const recommandations = normalizeString(r['Recommandations']);
+
+    // Auto-géocodage si lat/lng/région absents dans le fichier — utile lorsque
+    // le backup réimporté provient d'une ancienne version sans coordonnées.
+    const geo = geocodeLocalite(localite);
+    const latitude =
+      parsedLat !== null && Number.isFinite(parsedLat) ? parsedLat : geo?.latitude ?? null;
+    const longitude =
+      parsedLng !== null && Number.isFinite(parsedLng) ? parsedLng : geo?.longitude ?? null;
+    const region = rawRegion ?? geo?.region ?? null;
 
     if (!opts.dryRun) {
       await query(
@@ -725,16 +735,7 @@ async function migrateMissions(
            ("dateMission", "localite", "region", "latitude", "longitude",
             "projetRattache", "constats", "recommandations")
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [
-          date,
-          localite,
-          region,
-          Number.isFinite(latitude as number) ? latitude : null,
-          Number.isFinite(longitude as number) ? longitude : null,
-          projetRattache,
-          constats,
-          recommandations,
-        ],
+        [date, localite, region, latitude, longitude, projetRattache, constats, recommandations],
       );
     }
     inserted++;
@@ -1328,17 +1329,37 @@ export async function importMissionsFromSheet(
     const constats = normalizeString(
       pickColumn(r, "Description de l'activité", 'Description', 'Activité', 'Constats'),
     );
-    const region = normalizeString(pickColumn(r, 'Région', 'Region'));
+    const rawRegion = normalizeString(pickColumn(r, 'Région', 'Region'));
+    const rawLatitude = pickColumn(r, 'Latitude', 'Lat', 'LATITUDE');
+    const rawLongitude = pickColumn(r, 'Longitude', 'Lng', 'Lon', 'LONGITUDE');
     const projetRattache = normalizeString(
       pickColumn(r, 'Projet rattaché', 'Projet', 'COPIL'),
     );
 
+    // Auto-géocodage : si le fichier ne fournit pas lat/lng/région, on tente
+    // de déduire les 3 à partir du nom de la localité via le gazetteer Sénégal
+    // (données embarquées, aucun appel réseau).
+    const geo = geocodeLocalite(localite);
+    const parsedLat =
+      rawLatitude !== undefined && rawLatitude !== null && rawLatitude !== ''
+        ? Number(rawLatitude)
+        : null;
+    const parsedLng =
+      rawLongitude !== undefined && rawLongitude !== null && rawLongitude !== ''
+        ? Number(rawLongitude)
+        : null;
+    const latitude =
+      parsedLat !== null && Number.isFinite(parsedLat) ? parsedLat : geo?.latitude ?? null;
+    const longitude =
+      parsedLng !== null && Number.isFinite(parsedLng) ? parsedLng : geo?.longitude ?? null;
+    const region = rawRegion ?? geo?.region ?? null;
+
     if (!opts.dryRun) {
       await query(
         `INSERT INTO "missionsTerrain"
-           ("dateMission", "localite", "region", "projetRattache", "constats")
-         VALUES ($1, $2, $3, $4, $5)`,
-        [date, localite, region, projetRattache, constats],
+           ("dateMission", "localite", "region", "latitude", "longitude", "projetRattache", "constats")
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [date, localite, region, latitude, longitude, projetRattache, constats],
       );
     }
     imported++;

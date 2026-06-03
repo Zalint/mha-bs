@@ -50,6 +50,14 @@ interface InterpellationStats {
   parGroupe: Record<string, number>;
 }
 
+interface DeputeLite {
+  id: string;
+  nomComplet: string;
+  groupeParlementaire: string;
+  region: string | null;
+  isActive: boolean;
+}
+
 const ETAT_STYLES: Record<string, string> = {
   recue: 'bg-info-bg text-info',
   enPreparation: 'bg-warning-bg text-warning',
@@ -66,8 +74,18 @@ export function InterpellationsView() {
 
   const listQuery = useApi(() => api.get<{ items: Interpellation[] }>('/interpellations'), []);
   const statsQuery = useApi(() => api.get<InterpellationStats>('/interpellations/stats'), []);
+  const deputesQuery = useApi(() => api.get<{ items: DeputeLite[] }>('/deputes'), []);
   const etatRef = useReferentiel('etatInterpellation');
   const typeRef = useReferentiel('typeInterpellation');
+
+  // Liste triée pour le dropdown — actifs en premier, alphabétique
+  const deputesOptions = useMemo(() => {
+    const list = deputesQuery.data?.items ?? [];
+    return [...list].sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      return a.nomComplet.localeCompare(b.nomComplet, 'fr');
+    });
+  }, [deputesQuery.data]);
 
   const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data]);
   const stats = statsQuery.data;
@@ -103,6 +121,7 @@ export function InterpellationsView() {
       typeInterpellation: it.typeInterpellation,
       etat: it.etat,
       dateReception: it.dateReception,
+      deputeId: it.deputeId,
     });
   };
   const cancelEdit = (): void => {
@@ -381,21 +400,54 @@ export function InterpellationsView() {
                         )}
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <div className="font-medium text-sm">
-                          {i.deputeNom ?? <span className="italic text-fg-muted">non lié</span>}
-                        </div>
+                        {isEditing ? (
+                          <select
+                            value={editDraft.deputeId ?? ''}
+                            onChange={(e) =>
+                              setEditDraft({ ...editDraft, deputeId: e.target.value })
+                            }
+                            className="input input-sm text-xs w-full min-w-[10rem]"
+                          >
+                            <option value="" disabled>
+                              — Choisir un député —
+                            </option>
+                            {deputesOptions.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.nomComplet}
+                                {d.groupeParlementaire && d.groupeParlementaire !== 'Non renseigne'
+                                  ? ` · ${d.groupeParlementaire}`
+                                  : ''}
+                                {!d.isActive ? ' (inactif)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="font-medium text-sm">
+                            {i.deputeNom ?? <span className="italic text-fg-muted">non lié</span>}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 align-top">
-                        <span
-                          className={cn(
-                            'inline-block px-2 py-0.5 rounded text-[11px] font-medium',
-                            i.deputeGroupe && i.deputeGroupe !== 'Non renseigne'
-                              ? 'bg-primary-100 text-primary-700'
-                              : 'bg-muted text-fg-muted italic',
-                          )}
-                        >
-                          {i.deputeGroupe ?? 'Non renseigné'}
-                        </span>
+                        {(() => {
+                          // En mode édition, on reflète le groupe du député sélectionné
+                          // pour donner un feedback immédiat (sans attendre la sauvegarde).
+                          const displayedGroupe = isEditing
+                            ? deputesOptions.find((d) => d.id === editDraft.deputeId)
+                                ?.groupeParlementaire ?? i.deputeGroupe
+                            : i.deputeGroupe;
+                          return (
+                            <span
+                              className={cn(
+                                'inline-block px-2 py-0.5 rounded text-[11px] font-medium',
+                                displayedGroupe && displayedGroupe !== 'Non renseigne'
+                                  ? 'bg-primary-100 text-primary-700'
+                                  : 'bg-muted text-fg-muted italic',
+                              )}
+                            >
+                              {displayedGroupe ?? 'Non renseigné'}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-xs align-top">
                         {isEditing ? (
