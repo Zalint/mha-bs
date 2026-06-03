@@ -91,11 +91,13 @@ export function SenegalMiniMap({ items, height = 176 }: Props) {
       ' ',
     ) + ' Z';
 
-  // Dedup : aggregate les points exactement coincidents pour eviter un overdraw
-  // (plusieurs missions sur la meme commune → un seul point un peu plus gros)
+  // Dedup : aggregate les points coincidents. On utilise toFixed(3) (~110m de
+  // precision) plutot que toFixed(2) (~1.1km) — sur la presqu'ile de Dakar les
+  // communes voisines (Yeumbeul, Keur Massar, Pikine…) sont a moins d'1km
+  // l'une de l'autre, on les ecrasait toutes en un seul point.
   const buckets = new Map<string, { lat: number; lng: number; count: number; label: string }>();
   for (const m of positioned) {
-    const key = `${m.latitude.toFixed(2)},${m.longitude.toFixed(2)}`;
+    const key = `${m.latitude.toFixed(3)},${m.longitude.toFixed(3)}`;
     const existing = buckets.get(key);
     if (existing) {
       existing.count++;

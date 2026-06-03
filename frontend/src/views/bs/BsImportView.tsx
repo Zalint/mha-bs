@@ -1,9 +1,11 @@
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, Upload, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, MapPin, Upload, X } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import { ApiClientError, api } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
+import { useAuthStore } from '../../stores/authStore.js';
 
 interface ImportResult {
   filename: string;
@@ -92,8 +94,45 @@ function formatBytes(n: number): string {
   return `${(n / 1024 / 1024).toFixed(2)} Mo`;
 }
 
+interface BackfillGeocodingResult {
+  ok: true;
+  total: number;
+  updated: number;
+  skipped: number;
+  unmatchedLocalites: string[];
+}
+
 export function BsImportView() {
   const navigate = useNavigate();
+  const userRole = useAuthStore((s) => s.user?.role);
+  const isAdmin = userRole === 'admin';
+
+  // === Outil admin : backfill geocoding des missions existantes ===
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<BackfillGeocodingResult | null>(null);
+
+  const handleBackfillGeocoding = async (): Promise<void> => {
+    setBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const res = await api.post<BackfillGeocodingResult>('/admin/backfill-geocoding', {});
+      setBackfillResult(res);
+      if (res.updated > 0) {
+        toast.success(
+          `${res.updated} mission(s) géocodée(s) sur ${res.total}.`,
+        );
+      } else {
+        toast.info('Aucune mission à géocoder (toutes ont déjà des coordonnées).');
+      }
+    } catch (err) {
+      toast.error(
+        err instanceof ApiClientError ? err.message : 'Erreur lors du géocodage',
+      );
+    } finally {
+      setBackfilling(false);
+    }
+  };
+
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -310,6 +349,96 @@ export function BsImportView() {
         Colonnes minimales requises : <code className="font-mono bg-muted px-1 rounded">DIRECTIVES</code>
         {' '}et une date (DATE RENCONTRE, DATE RECONTRE ou ECHEANCE).
       </div>
+
+      {/* ===================================================================
+          OUTIL ADMIN — Backfill géocodage des missions terrain existantes
+          (rattrape les imports faits AVANT que le gazetteer ne soit branché
+          dans le pipeline d'import)
+         =================================================================== */}
+      {isAdmin && (
+        <div className="bg-surface border border-border rounded-lg p-4 mb-5">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-primary-100 text-primary-700 flex items-center justify-center flex-shrink-0">
+              <MapPin className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-semibold text-fg">
+                Géocoder les missions terrain existantes
+              </h2>
+              <p className="text-xs text-fg-muted mt-0.5">
+                Parcourt les missions dont latitude / longitude / région sont
+                vides et les complète à partir du gazetteer Sénégal embarqué
+                (Touba, Tivaouane, Saint-Louis, …). Idempotent — ne touche
+                jamais une valeur déjà saisie.
+              </p>
+              {backfillResult && (
+                <div className="mt-3 bg-surface2 border border-border rounded p-3 text-xs">
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <div className="text-2xl font-mono font-bold text-success">
+                        {backfillResult.updated}
+                      </div>
+                      <div className="text-[10.5px] uppercase tracking-wider text-fg-muted">
+                        mises à jour
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-mono font-bold text-warning">
+                        {backfillResult.skipped}
+                      </div>
+                      <div className="text-[10.5px] uppercase tracking-wider text-fg-muted">
+                        non géolocalisées
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-mono font-bold text-fg-muted">
+                        {backfillResult.total}
+                      </div>
+                      <div className="text-[10.5px] uppercase tracking-wider text-fg-muted">
+                        examinées
+                      </div>
+                    </div>
+                  </div>
+                  {backfillResult.unmatchedLocalites.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                      <div className="text-[10.5px] uppercase tracking-wider text-fg-muted mb-1">
+                        Localités sans match dans le gazetteer ({backfillResult.unmatchedLocalites.length})
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {backfillResult.unmatchedLocalites.slice(0, 30).map((l) => (
+                          <span
+                            key={l}
+                            className="inline-block bg-warning-bg text-warning px-1.5 py-0.5 rounded text-[10.5px] font-mono"
+                          >
+                            {l}
+                          </span>
+                        ))}
+                        {backfillResult.unmatchedLocalites.length > 30 && (
+                          <span className="text-fg-muted">
+                            + {backfillResult.unmatchedLocalites.length - 30} autre(s)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10.5px] text-fg-muted italic mt-1">
+                        Ces missions devront être géocodées à la main via le picker
+                        carte sur la page Missions terrain.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleBackfillGeocoding()}
+              disabled={backfilling}
+              className="btn btn-primary btn-sm whitespace-nowrap"
+            >
+              {backfilling ? 'Géocodage…' : 'Lancer le géocodage'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Format attendu */}
       <details className="bg-surface border border-border rounded-lg p-4 mb-5">

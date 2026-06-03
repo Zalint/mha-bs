@@ -8,6 +8,7 @@ import { logger } from '../../lib/logger.js';
 import { authJwt } from '../../middlewares/authJwt.js';
 import { requireRole } from '../../middlewares/rbac.js';
 import { validate } from '../../middlewares/validate.js';
+import { backfillMissionsGeocoding } from '../../services/geocodingService.js';
 import { wipeDatabase } from '../../services/wipeService.js';
 
 /**
@@ -72,6 +73,38 @@ adminRoutes.post('/wipe-database', validate(wipeBodySchema), async (req, res, ne
       ok: true,
       ...result,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * POST /api/admin/backfill-geocoding
+ *
+ * Parcourt les missions terrain dont latitude/longitude/region sont NULL
+ * et tente de les compléter via le gazetteer Sénégal (données embarquées,
+ * aucun appel réseau).
+ *
+ * Réponse : { ok, total, updated, skipped, unmatchedLocalites }
+ *   - total : nb de lignes vues (au moins une colonne géo manquante)
+ *   - updated : nb de lignes effectivement mises à jour
+ *   - skipped : nb de lignes ignorées (pas de match gazetteer)
+ *   - unmatchedLocalites : liste des localités non reconnues — sert à
+ *     enrichir le gazetteer plus tard
+ *
+ * Idempotente : peut être rejouée sans effet de bord, ne touche jamais
+ * une colonne déjà renseignée.
+ */
+adminRoutes.post('/backfill-geocoding', async (req, res, next) => {
+  try {
+    if (!req.user) throw new ForbiddenError();
+    const userId = req.user.userId;
+    const result = await backfillMissionsGeocoding();
+    logger.info(
+      { userId, ...result },
+      `Backfill geocoding terminé · ${result.updated}/${result.total} missions mises à jour`,
+    );
+    res.json({ ok: true, ...result });
   } catch (err) {
     next(err);
   }
