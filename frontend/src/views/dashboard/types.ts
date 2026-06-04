@@ -73,6 +73,13 @@ export interface SgSummaryResponse {
     attente: number;
     ineligible: number;
   }[];
+  // Détail du total filtré : créées en N vs reportées (null si pas d'année)
+  directivesAnneeDetail: {
+    total: number;
+    creeesEnAnnee: number;
+    reportees: number;
+    reporteesParAnnee: { annee: number; n: number }[];
+  } | null;
 }
 
 export interface DashboardViewProps {

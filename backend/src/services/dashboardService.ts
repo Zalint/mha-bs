@@ -286,6 +286,8 @@ export interface SgSummary {
   // Répartition INFORMATIVE des directives par année d'exercice (r.annee),
   // tous états confondus. Indépendant du filtre année sélectionné.
   directivesParAnnee: DirectivesAnneeBreakdown[];
+  // Détail du total filtré : créées en N vs reportées (null si pas d'année).
+  directivesAnneeDetail: DirectivesAnneeDetail | null;
 }
 
 export interface DirectivesAnneeBreakdown {
@@ -295,6 +297,56 @@ export interface DirectivesAnneeBreakdown {
   enCours: number;
   attente: number;
   ineligible: number;
+}
+
+/**
+ * Détail du total filtré de directives : combien créées dans l'année N vs
+ * combien reportées d'années antérieures (selon le filtre annee/anneeMode).
+ * Sert à enrichir le sous-titre du dashboard :
+ *   "14 directives · année 2026 (4 créées en 2026, 10 reportées)"
+ * Renvoie null si aucune année n'est sélectionnée (pas de découpage pertinent).
+ */
+export interface DirectivesAnneeDetail {
+  total: number;
+  creeesEnAnnee: number;
+  reportees: number;
+  // Origine des reportées par année (ex: [{ annee: 2024, n: 3 }, ...])
+  reporteesParAnnee: { annee: number; n: number }[];
+}
+
+export async function getDirectivesAnneeDetail(
+  annee: number,
+  anneeMode: AnneeMode = 'active',
+  creeEnAnneeOnly: boolean = false,
+): Promise<DirectivesAnneeDetail> {
+  const params: number[] = [annee];
+  const clause = directiveAnneeClause(anneeMode, 1, creeEnAnneeOnly);
+  const totals = await queryOne<{ creees: string; reportees: string }>(
+    `SELECT
+       COUNT(*) FILTER (WHERE r."annee" = $1)::TEXT AS "creees",
+       COUNT(*) FILTER (WHERE r."annee" < $1)::TEXT AS "reportees"
+     FROM "directives" d
+     JOIN "rencontres" r ON r."id" = d."rencontreId"
+     WHERE ${clause}`,
+    params,
+  );
+  const parAnnee = await queryAll<{ annee: string; n: string }>(
+    `SELECT r."annee"::TEXT AS "annee", COUNT(*)::TEXT AS "n"
+     FROM "directives" d
+     JOIN "rencontres" r ON r."id" = d."rencontreId"
+     WHERE (${clause}) AND r."annee" < $1
+     GROUP BY r."annee"
+     ORDER BY r."annee" DESC`,
+    params,
+  );
+  const creeesEnAnnee = Number(totals?.creees ?? '0');
+  const reportees = Number(totals?.reportees ?? '0');
+  return {
+    total: creeesEnAnnee + reportees,
+    creeesEnAnnee,
+    reportees,
+    reporteesParAnnee: parAnnee.map((r) => ({ annee: Number(r.annee), n: Number(r.n) })),
+  };
 }
 
 /**
@@ -652,6 +704,11 @@ export async function getSgSummary(
     getCopilProjets(),
     getDirectivesParAnnee(),
   ]);
+  // Détail créées/reportées — seulement si une année est sélectionnée.
+  const directivesAnneeDetail =
+    annee !== undefined
+      ? await getDirectivesAnneeDetail(annee, anneeMode, creeEnAnneeOnly)
+      : null;
   return {
     annee: annee ?? null,
     availableYears,
@@ -663,6 +720,7 @@ export async function getSgSummary(
     activiteParTrimestre,
     copilProjets,
     directivesParAnnee,
+    directivesAnneeDetail,
   };
 }
 

@@ -46,6 +46,21 @@ export function DashboardSgExecutive({ data, missions, anneeLabel, forPrint = fa
   const aggregate = computeAggregate(data.directives);
   const recoAggregate = computeRecommandationsAggregate(data.recommandationsParCategorie);
 
+  // Sous-titre directives : si une année est filtrée, on détaille créées vs
+  // reportées (ex: "14 directives · année 2026 (4 créées 2026 · 10 reportées :
+  // 7 de 2024, 3 de 2025)").
+  const det = data.directivesAnneeDetail;
+  let directivesSubtitle = `${aggregate.totalDirectives} directives · ${anneeLabel}`;
+  if (det && data.annee !== null && det.reportees > 0) {
+    const origines = det.reporteesParAnnee.map((o) => `${o.n} de ${o.annee}`).join(', ');
+    directivesSubtitle =
+      `${det.total} directives · année ${data.annee} ` +
+      `(${det.creeesEnAnnee} créée${det.creeesEnAnnee > 1 ? 's' : ''} en ${data.annee} · ` +
+      `${det.reportees} reportée${det.reportees > 1 ? 's' : ''}${origines ? ` : ${origines}` : ''})`;
+  } else if (det && data.annee !== null) {
+    directivesSubtitle = `${det.total} directives · année ${data.annee} (toutes créées en ${data.annee})`;
+  }
+
   return (
     <div className="grid grid-cols-12 gap-3">
 
@@ -53,7 +68,7 @@ export function DashboardSgExecutive({ data, missions, anneeLabel, forPrint = fa
       <BentoCard
         accent="green"
         title="Directives présidentielles"
-        subtitle={`${aggregate.totalDirectives} directives · ${anneeLabel}`}
+        subtitle={directivesSubtitle}
         pulse
         detail={
           <DirectivesDetail
