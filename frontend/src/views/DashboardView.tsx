@@ -1,4 +1,14 @@
-import { FileDown, Info, Landmark, Loader2, RefreshCw } from 'lucide-react';
+import { FileDown, Landmark, Loader2, RefreshCw } from 'lucide-react';
+
+import type { AnneeMode } from '@mha-bs/shared';
+
+import { AnneeFilterHelp } from '../components/directives/AnneeFilterHelp.js';
+
+const ANNEE_MODE_LABELS_DASH: Record<AnneeMode, string> = {
+  active: 'Active pendant',
+  creation: 'Création',
+  echeance: 'Échéance',
+};
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -14,6 +24,7 @@ import { DashboardSgFocus } from './dashboard/DashboardSgFocus.js';
 import type { SgSummaryResponse } from './dashboard/types.js';
 
 const ANNEE_STORAGE_KEY = 'mha.dashboard.annee';
+const ANNEE_MODE_STORAGE_KEY = 'mha.dashboard.anneeMode';
 const LAYOUT_STORAGE_KEY = 'mha.dashboard.layout';
 const CURRENT_YEAR = new Date().getUTCFullYear();
 
@@ -36,6 +47,13 @@ function loadInitialAnnee(): number | null {
   return Number.isFinite(parsed) ? parsed : CURRENT_YEAR;
 }
 
+function loadInitialAnneeMode(): AnneeMode {
+  if (typeof window === 'undefined') return 'active';
+  const raw = window.localStorage.getItem(ANNEE_MODE_STORAGE_KEY);
+  if (raw === 'active' || raw === 'creation' || raw === 'echeance') return raw;
+  return 'active';
+}
+
 function loadInitialLayout(): Layout {
   if (typeof window === 'undefined') return 'executive';
   const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
@@ -45,6 +63,7 @@ function loadInitialLayout(): Layout {
 
 export function DashboardView() {
   const [annee, setAnnee] = useState<number | null>(loadInitialAnnee);
+  const [anneeMode, setAnneeMode] = useState<AnneeMode>(loadInitialAnneeMode);
   const [layout, setLayout] = useState<Layout>(loadInitialLayout);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const pdfContentRef = useRef<HTMLDivElement>(null);
@@ -106,15 +125,21 @@ export function DashboardView() {
   }, [annee]);
 
   useEffect(() => {
+    window.localStorage.setItem(ANNEE_MODE_STORAGE_KEY, anneeMode);
+  }, [anneeMode]);
+
+  useEffect(() => {
     window.localStorage.setItem(LAYOUT_STORAGE_KEY, layout);
   }, [layout]);
 
   const summaryQuery = useApi(
     () =>
       api.get<SgSummaryResponse>('/dashboard/sg-summary', {
-        query: annee !== null ? { annee } : {},
+        // anneeMode n'est envoyé que si une année est selectionnee — sinon
+        // sans portée, le serveur l'ignore de toute facon.
+        query: annee !== null ? { annee, anneeMode } : {},
       }),
-    [annee],
+    [annee, anneeMode],
   );
 
   const missionsQuery = useApi(
@@ -234,15 +259,9 @@ export function DashboardView() {
               </button>
             ))}
           </div>
-          <label
-            className="flex items-center gap-2 text-xs sm:text-sm text-fg-muted"
-            title={
-              "Directives : 'active pendant N' (visible si émise pendant ou avant N et non close début N — gère les directives pluri-annuelles).\n" +
-              "Réunions / missions : événements de l'année N (date dans l'année)."
-            }
-          >
-            Année active
-            <Info className="w-3 h-3" />
+          <label className="flex items-center gap-2 text-xs sm:text-sm text-fg-muted">
+            Année ({ANNEE_MODE_LABELS_DASH[anneeMode]})
+            <AnneeFilterHelp currentMode={anneeMode} />
             <select
               value={annee === null ? ALL_YEARS : String(annee)}
               onChange={(e) => {
@@ -258,6 +277,22 @@ export function DashboardView() {
                 </option>
               ))}
             </select>
+            {/* Sélecteur du mode : Active pendant / Création / Échéance.
+                Masque pour 'Toutes les années' car alors l'année n'a aucun
+                effet sur le filtre serveur. */}
+            {annee !== null && (
+              <select
+                value={anneeMode}
+                onChange={(e) => setAnneeMode(e.target.value as AnneeMode)}
+                className="rounded border border-border bg-surface px-2 py-1.5 text-xs font-mono text-fg-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                aria-label="Mode du filtre Année"
+                title="Sémantique du filtre Année (cliquez le i pour le tableau comparatif)"
+              >
+                <option value="active">Active pendant</option>
+                <option value="creation">Création</option>
+                <option value="echeance">Échéance</option>
+              </select>
+            )}
           </label>
         </div>
       </div>

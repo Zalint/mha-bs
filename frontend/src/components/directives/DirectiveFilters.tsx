@@ -1,14 +1,22 @@
-import { Info, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 
-import { DIRECTIVE_ETATS, type DirectiveEtat } from '@mha-bs/shared';
+import { type AnneeMode, DIRECTIVE_ETATS, type DirectiveEtat } from '@mha-bs/shared';
 
 import { cn } from '../../lib/cn.js';
+import { AnneeFilterHelp } from './AnneeFilterHelp.js';
 
 export interface DirectiveFiltersValue {
   annee: string;
+  anneeMode: AnneeMode;
   etat: DirectiveEtat | '';
   search: string;
 }
+
+const ANNEE_MODE_LABELS: Record<AnneeMode, string> = {
+  active: 'Active pendant',
+  creation: 'Création',
+  echeance: 'Échéance',
+};
 
 interface Props {
   value: DirectiveFiltersValue;
@@ -27,27 +35,39 @@ export function DirectiveFiltersBar({ value, onChange, availableYears }: Props) 
   return (
     <div className="bg-surface border border-border rounded-lg p-4 mb-4 flex flex-wrap items-end gap-3">
       <div>
-        <label
-          htmlFor="f-annee"
-          className="field-label flex items-center gap-1.5"
-          title="Une directive est visible pour l'année N si elle a été émise pendant ou avant N ET son échéance n'est pas dépassée avant N. Une directive pluri-annuelle (ex. 2024 → 2026) apparaît donc sous chaque année qu'elle couvre."
-        >
-          Année active
-          <Info className="w-3 h-3 text-fg-muted" />
+        <label htmlFor="f-annee" className="field-label flex items-center gap-1.5">
+          Année ({ANNEE_MODE_LABELS[value.anneeMode]})
+          <AnneeFilterHelp currentMode={value.anneeMode} />
         </label>
-        <select
-          id="f-annee"
-          className="select"
-          value={value.annee}
-          onChange={(e) => onChange({ ...value, annee: e.target.value })}
-        >
-          <option value="">Toutes</option>
-          {availableYears.map((y) => (
-            <option key={y} value={String(y)}>
-              {y}
-            </option>
-          ))}
-        </select>
+        <div className="flex gap-1.5">
+          <select
+            id="f-annee"
+            className="select"
+            value={value.annee}
+            onChange={(e) => onChange({ ...value, annee: e.target.value })}
+            aria-label="Année"
+          >
+            <option value="">Toutes</option>
+            {availableYears.map((y) => (
+              <option key={y} value={String(y)}>
+                {y}
+              </option>
+            ))}
+          </select>
+          <select
+            className="select text-xs"
+            value={value.anneeMode}
+            onChange={(e) =>
+              onChange({ ...value, anneeMode: e.target.value as AnneeMode })
+            }
+            aria-label="Mode du filtre Année"
+            title="Sémantique du filtre : Active pendant N, Création (émise en N), Échéance (échéance en N)"
+          >
+            <option value="active">Active pendant</option>
+            <option value="creation">Création</option>
+            <option value="echeance">Échéance</option>
+          </select>
+        </div>
       </div>
       <div className="flex-1 min-w-[240px]">
         <label htmlFor="f-search" className="field-label">

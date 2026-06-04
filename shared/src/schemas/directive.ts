@@ -50,11 +50,24 @@ export type CreateDirectiveInput = z.infer<typeof createDirectiveSchema>;
 export const updateDirectiveSchema = createDirectiveSchema.partial();
 export type UpdateDirectiveInput = z.infer<typeof updateDirectiveSchema>;
 
+/**
+ * Sémantique du filtre par année. Utilisé par la liste des directives et
+ * les KPIs du dashboard. Détermine comment "année = N" est interprété :
+ *   - 'active'   : la directive est active pendant N (émise pendant/avant N
+ *                  ET non close début N). Gère les pluri-annuelles.
+ *   - 'creation' : la directive a été émise en N (rencontre.annee = N).
+ *   - 'echeance' : l'échéance de la directive tombe en N
+ *                  (year(echeance) = N). Exclut les directives sans échéance.
+ */
+export const ANNEE_MODES = ['active', 'creation', 'echeance'] as const;
+export type AnneeMode = (typeof ANNEE_MODES)[number];
+
 export const directiveFiltersSchema = z.object({
   typeRencontre: z.string().optional(),
   etat: z.enum(DIRECTIVE_ETATS).optional(),
   statutValidation: z.enum(STATUTS_VALIDATION).optional(),
   annee: z.coerce.number().int().optional(),
+  anneeMode: z.enum(ANNEE_MODES).default('active'),
   rencontreId: z.string().uuid().optional(),
   responsableId: z.coerce.number().int().optional(),
   search: z.string().optional(),

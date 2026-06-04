@@ -39,7 +39,12 @@ export function DirectivesListView({ typeRencontre }: Props) {
   // initialement reservee a l'admin, etendue au BS suite a demande user.
   const canDelete = role === 'admin' || role === 'bs';
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState<DirectiveFiltersValue>({ annee: '', etat: '', search: '' });
+  const [filters, setFilters] = useState<DirectiveFiltersValue>({
+    annee: '',
+    anneeMode: 'active',
+    etat: '',
+    search: '',
+  });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState<{ kind: 'single'; id: string } | { kind: 'bulk' } | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -50,7 +55,10 @@ export function DirectivesListView({ typeRencontre }: Props) {
       page,
       pageSize: PAGE_SIZE,
     };
-    if (filters.annee) params.annee = Number(filters.annee);
+    if (filters.annee) {
+      params.annee = Number(filters.annee);
+      params.anneeMode = filters.anneeMode;
+    }
     if (filters.etat) params.etat = filters.etat;
     if (filters.search) params.search = filters.search;
     return params;
@@ -58,7 +66,7 @@ export function DirectivesListView({ typeRencontre }: Props) {
 
   const directivesQuery = useApi(
     () => api.get<PaginatedResponse<Directive>>('/directives', { query: queryParams }),
-    [typeRencontre, page, filters.annee, filters.etat, filters.search],
+    [typeRencontre, page, filters.annee, filters.anneeMode, filters.etat, filters.search],
   );
 
   const kpisQuery = useApi(

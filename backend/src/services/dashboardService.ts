@@ -1,4 +1,7 @@
+import type { AnneeMode } from '@mha-bs/shared';
+
 import { queryAll, queryOne } from '../db/query.js';
+import { directiveAnneeClause } from '../lib/directiveAnneeFilter.js';
 
 export interface GlobalKpis {
   totalDirectives: number;
@@ -74,18 +77,15 @@ export async function getGlobalKpis(): Promise<GlobalKpis> {
 export async function getKpisByTypeRencontre(
   typeRencontre: string,
   annee?: number,
+  anneeMode: AnneeMode = 'active',
 ): Promise<GlobalKpis> {
   const params: (string | number)[] = [typeRencontre];
   let anneeClause = '';
   if (annee !== undefined) {
-    // Sémantique "Active pendant l'année N" : la directive doit avoir été
-    // émise pendant ou avant N ET ne pas être terminée avant N. Cohérent
-    // avec le filtre liste (directiveModel.ts).
+    // Filtre paramétrable par anneeMode (active/creation/echeance) — formule
+    // SQL centralisée dans backend/src/lib/directiveAnneeFilter.ts.
     params.push(annee);
-    anneeClause =
-      `AND r."annee" <= $${params.length}
-       AND (d."echeance" IS NULL
-            OR EXTRACT(YEAR FROM d."echeance")::INT >= $${params.length})`;
+    anneeClause = `AND ${directiveAnneeClause(anneeMode, params.length)}`;
   }
 
   const row = await queryOne<{
@@ -573,7 +573,10 @@ export async function getAvailableYears(): Promise<number[]> {
   return Array.from(years).sort((a, b) => b - a);
 }
 
-export async function getSgSummary(annee?: number): Promise<SgSummary> {
+export async function getSgSummary(
+  annee?: number,
+  anneeMode: AnneeMode = 'active',
+): Promise<SgSummary> {
   const [
     availableYears,
     conseilMinistres,
@@ -587,9 +590,9 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     copilProjets,
   ] = await Promise.all([
     getAvailableYears(),
-    getKpisByTypeRencontre('conseilMinistres', annee),
-    getKpisByTypeRencontre('conseilInterMinisteriel', annee),
-    getKpisByTypeRencontre('coordinationSggSg', annee),
+    getKpisByTypeRencontre('conseilMinistres', annee, anneeMode),
+    getKpisByTypeRencontre('conseilInterMinisteriel', annee, anneeMode),
+    getKpisByTypeRencontre('coordinationSggSg', annee, anneeMode),
     getCopilSummary(),
     getRecommandationsByCategorie(),
     getReunionsTechniquesSummary(annee),

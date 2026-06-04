@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { TYPES_RENCONTRE } from '@mha-bs/shared';
+import { ANNEE_MODES, TYPES_RENCONTRE } from '@mha-bs/shared';
 
 import { queryAll } from '../../db/query.js';
 import { authJwt } from '../../middlewares/authJwt.js';
@@ -36,13 +36,14 @@ dashboardRoutes.get('/global', authJwt, async (_req, res, next) => {
 const kpisQuerySchema = z.object({
   typeRencontre: z.enum(TYPES_RENCONTRE).optional(),
   annee: z.coerce.number().int().min(2000).max(2100).optional(),
+  anneeMode: z.enum(ANNEE_MODES).default('active'),
 });
 
 dashboardRoutes.get('/kpis', authJwt, validate(kpisQuerySchema, 'query'), async (req, res, next) => {
   try {
     const q = req.query as unknown as z.infer<typeof kpisQuerySchema>;
     const kpis = q.typeRencontre
-      ? await getKpisByTypeRencontre(q.typeRencontre, q.annee)
+      ? await getKpisByTypeRencontre(q.typeRencontre, q.annee, q.anneeMode)
       : await getGlobalKpis();
     res.json(kpis);
   } catch (err) {
@@ -52,6 +53,7 @@ dashboardRoutes.get('/kpis', authJwt, validate(kpisQuerySchema, 'query'), async 
 
 const sgSummaryQuerySchema = z.object({
   annee: z.coerce.number().int().min(2000).max(2100).optional(),
+  anneeMode: z.enum(ANNEE_MODES).default('active'),
 });
 
 dashboardRoutes.get(
@@ -61,7 +63,7 @@ dashboardRoutes.get(
   async (req, res, next) => {
     try {
       const q = req.query as unknown as z.infer<typeof sgSummaryQuerySchema>;
-      res.json(await getSgSummary(q.annee));
+      res.json(await getSgSummary(q.annee, q.anneeMode));
     } catch (err) {
       next(err);
     }

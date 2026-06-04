@@ -9,6 +9,7 @@ import type {
 } from '@mha-bs/shared';
 
 import { query, queryAll, queryOne } from '../db/query.js';
+import { directiveAnneeClause } from '../lib/directiveAnneeFilter.js';
 
 interface DirectiveRow {
   id: string;
@@ -104,18 +105,13 @@ export async function listDirectives(
     conditions.push(`d."statutValidation" = $${params.length}`);
   }
   if (filters.annee) {
-    // Sémantique "Active pendant l'année N" (et non plus "rencontre = N") :
-    // une directive est visible pour l'année N si :
-    //   - elle a été émise pendant ou avant N (rencontre.annee <= N)
-    //   - ET elle n'était pas encore close (echeance IS NULL OU year(echeance) >= N)
-    // Permet de voir les directives pluri-annuelles (ex. 2024 → 2026) sous
-    // CHAQUE année qu'elles couvrent.
+    // Sémantique paramétrable via filters.anneeMode (default 'active') :
+    //   - 'active'   : la directive est active pendant l'année N
+    //   - 'creation' : la directive a été émise en N (rencontre.annee = N)
+    //   - 'echeance' : l'échéance tombe en N (exclut les sans-échéance)
+    // Voir backend/src/lib/directiveAnneeFilter.ts pour les formules SQL.
     params.push(filters.annee);
-    conditions.push(
-      `(r."annee" <= $${params.length}
-        AND (d."echeance" IS NULL
-             OR EXTRACT(YEAR FROM d."echeance")::INT >= $${params.length}))`,
-    );
+    conditions.push(directiveAnneeClause(filters.anneeMode ?? 'active', params.length));
   }
   if (filters.rencontreId) {
     params.push(filters.rencontreId);
