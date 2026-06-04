@@ -15,8 +15,12 @@
  *
  * Sémantique des modes :
  *
- *  - 'active'   : "Active pendant N". La directive existait pendant l'année N.
- *                 Inclut les pluri-annuelles, les en-cours sans échéance, etc.
+ *  - 'active'   : "Sur la table cette année N". Deux cas réunis :
+ *                   • créées EN N (r.annee = N) → toutes, quelle que soit
+ *                     l'échéance ;
+ *                   • créées AVANT N (r.annee < N) → uniquement celles dont
+ *                     l'échéance tombe en N (year(echeance) = N).
+ *                 = le neuf de l'année + le vieux qui arrive à échéance en N.
  *  - 'creation' : Émise en N. Strict — la directive doit avoir été liée à
  *                 une rencontre dont l'année = N.
  *  - 'echeance' : Échéance en N. La directive doit avoir une échéance dont
@@ -54,26 +58,25 @@ export function directiveAnneeClause(
       return `(EXTRACT(YEAR FROM d."echeance")::INT = ${$n}${creationSuffix})`;
     case 'active':
     default:
-      // Sémantique métier (validée user) :
-      //   - Pour l'année cible N (r.annee = N) : on montre TOUT, quel que soit
-      //     l'état ou l'échéance. C'est "ce qu'on a émis cette année".
-      //   - Pour les années antérieures (r.annee < N) : on ne montre QUE les
-      //     directives encore OUVERTES aujourd'hui (état attente ou enCours).
-      //     Le backlog qui traîne, quoi.
+      // Sémantique métier (validée user) — "sur la table cette année N" :
+      //   1. Créée EN N (r.annee = N)        → INCLUSE quelle que soit
+      //      l'échéance (échéance 2026, 2028, ou aucune : peu importe).
+      //   2. Créée AVANT N (r.annee < N)     → INCLUSE uniquement si son
+      //      échéance tombe en N (year(echeance) = N).
       //
-      // L'échéance n'intervient PAS dans cette formule — seul l'état compte
-      // pour les antérieures.
+      // L'état n'intervient PAS. Une 2024 en cours avec échéance 2025
+      // n'apparaît PAS sous 2026 (échéance pas en 2026). Une 2024 échéance
+      // 2026 apparaît sous 2026.
       //
       // Exemples pour N=2026 :
-      //   - r.annee=2026, etat=realisee  → INCLUSE  (année cible : tout)
-      //   - r.annee=2026, etat=ineligible → INCLUSE (année cible : tout)
-      //   - r.annee=2024, etat=enCours    → INCLUSE  (encore ouverte)
-      //   - r.annee=2025, etat=attente    → INCLUSE  (encore ouverte)
-      //   - r.annee=2024, etat=realisee   → exclue   (close, hors N)
-      //   - r.annee=2025, etat=ineligible → exclue   (close, hors N)
+      //   - r.annee=2026, echeance=2028        → INCLUSE (créée en N)
+      //   - r.annee=2026, echeance NULL        → INCLUSE (créée en N)
+      //   - r.annee=2024, echeance=2026        → INCLUSE (antérieure, échéance N)
+      //   - r.annee=2024, echeance=2025        → exclue  (échéance pas en N)
+      //   - r.annee=2025, echeance NULL        → exclue  (antérieure sans échéance N)
       return `((r."annee" = ${$n}
                OR (r."annee" < ${$n}
-                   AND d."etat" IN ('attente', 'enCours')))
+                   AND EXTRACT(YEAR FROM d."echeance")::INT = ${$n}))
                ${creationSuffix})`;
   }
 }

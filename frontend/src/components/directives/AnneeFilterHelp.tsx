@@ -25,47 +25,40 @@ interface Row {
 }
 
 const ROWS: Row[] = [
-  // Émise N + réalisée : visible uniquement pour N (année cible : on montre tout)
+  // Créée en N : visible pour N quelle que soit l'échéance (mode active)
   {
-    label: 'Émise 2024, déjà réalisée (echéance 2024)',
-    active: [2024], // visible uniquement pour son année d'émission
+    label: 'Créée 2024, échéance 2024',
+    active: [2024], // créée 2024 → visible 2024 ; échéance 2024 → aussi via echeance
     creation: [2024],
     echeance: [2024],
   },
-  // Émise + encore en cours : reste visible pour son année + toutes les suivantes
+  // Créée + échéance lointaine : active visible seulement l'année de création
   {
-    label: 'Émise 2024, encore en cours (sans échéance)',
-    active: [2024, 2025, 2026, 2027],
-    creation: [2024],
-    echeance: [], // pas d'échéance
-  },
-  // Émise + en cours avec échéance future : pareil — c'est l'état qui compte
-  {
-    label: 'Émise 2024, en cours, échéance 2026',
-    active: [2024, 2025, 2026, 2027], // visible tant que l'état reste en cours
+    label: 'Créée 2024, échéance 2026',
+    active: [2024, 2026], // 2024 (créée) + 2026 (échéance en N pour année antérieure)
     creation: [2024],
     echeance: [2026],
   },
-  // Émise N et encore en attente : reste visible tant que ouverte
+  // Créée + sans échéance : active visible seulement l'année de création
   {
-    label: 'Émise 2025, encore en attente',
-    active: [2025, 2026, 2027],
+    label: 'Créée 2025, sans échéance',
+    active: [2025], // créée 2025 ; jamais d'échéance → pas reportée
     creation: [2025],
     echeance: [],
   },
-  // Émise N, réalisée plus tard : visible uniquement pour N (pas après car close)
+  // Créée + échéance même année
   {
-    label: 'Émise 2024, réalisée plus tard (échéance 2026)',
-    active: [2024], // visible pour son année d'émission seulement
-    creation: [2024],
-    echeance: [2026],
+    label: 'Créée 2025, échéance 2025',
+    active: [2025],
+    creation: [2025],
+    echeance: [2025],
   },
-  // Émise N année cible : visible quel que soit l'état (tout pour l'année cible)
+  // Créée en N=2026 avec échéance lointaine : visible 2026 (créée en N)
   {
-    label: 'Émise 2026, déjà réalisée ou inéligible',
-    active: [2026],
+    label: 'Créée 2026, échéance 2028',
+    active: [2026], // créée en 2026 → visible 2026 quelle que soit l'échéance
     creation: [2026],
-    echeance: [], // dépend du cas, omis ici
+    echeance: [], // 2028 hors de la fenêtre du tableau
   },
 ];
 
@@ -240,8 +233,8 @@ export function AnneeFilterHelp({ currentMode = 'active' }: Props) {
               <ModeCard
                 title="Active pendant"
                 active={currentMode === 'active'}
-                description="Pour l'année cible N : on montre TOUTES les directives émises en N (peu importe l'état). Pour les années antérieures (r.annee < N) : uniquement celles encore ouvertes (état attente ou enCours). L'échéance n'intervient PAS."
-                bestFor="Vue SG : « nouveautés de l'année + backlog qui traîne »."
+                description="Sur la table cette année N : toutes les directives créées EN N (quelle que soit l'échéance) + les directives créées AVANT N dont l'échéance tombe en N. L'état n'intervient pas."
+                bestFor="Vue SG : « le neuf de l'année + le vieux qui arrive à échéance »."
               />
               <ModeCard
                 title="Création"
