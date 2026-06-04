@@ -55,9 +55,10 @@ function loadInitialAnneeMode(): AnneeMode {
 }
 
 function loadInitialLayout(): Layout {
-  if (typeof window === 'undefined') return 'executive';
-  const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
-  if (raw === 'executive' || raw === 'bento' || raw === 'focus') return raw;
+  // Bento et Focus sont masques dans l'UI (cf. picker plus bas) → on force
+  // 'executive' meme si une valeur ancienne en localStorage etait differente.
+  // Si on reactive les autres layouts plus tard, restaurer la lecture du
+  // localStorage.
   return 'executive';
 }
 
@@ -241,24 +242,30 @@ export function DashboardView() {
             </span>
             <span className="sm:hidden">PDF</span>
           </button>
-          <div className="flex bg-surface border border-border rounded-lg p-0.5">
-            {LAYOUTS.map((l) => (
-              <button
-                key={l.key}
-                type="button"
-                onClick={() => setLayout(l.key)}
-                title={l.hint}
-                className={cn(
-                  'px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium rounded-md transition-colors',
-                  layout === l.key
-                    ? 'bg-primary text-white'
-                    : 'text-fg-muted hover:text-fg hover:bg-muted',
-                )}
-              >
-                {l.label}
-              </button>
-            ))}
-          </div>
+          {/* Sélecteur de layout masqué — Bento et Focus sont caches a la
+              demande, Executive reste le seul layout actif. Le state `layout`
+              est preserve pour faciliter la reactivation future : il suffit
+              de retirer le `false &&` pour remontrer les 3 boutons. */}
+          {false && (
+            <div className="flex bg-surface border border-border rounded-lg p-0.5">
+              {LAYOUTS.map((l) => (
+                <button
+                  key={l.key}
+                  type="button"
+                  onClick={() => setLayout(l.key)}
+                  title={l.hint}
+                  className={cn(
+                    'px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium rounded-md transition-colors',
+                    layout === l.key
+                      ? 'bg-primary text-white'
+                      : 'text-fg-muted hover:text-fg hover:bg-muted',
+                  )}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          )}
           <label className="flex items-center gap-2 text-xs sm:text-sm text-fg-muted">
             Année ({ANNEE_MODE_LABELS_DASH[anneeMode]})
             <AnneeFilterHelp currentMode={anneeMode} />
