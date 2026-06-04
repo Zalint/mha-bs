@@ -21,6 +21,12 @@ export const reunionTechniqueSchema = z.object({
   participants: z.array(z.string()),
   visibleSg: z.boolean(),
   inclusRapportHebdo: z.boolean(),
+  /**
+   * Notes privees attachees a la reunion. Visible UNIQUEMENT par le createur
+   * (filtre cote backend : null pour les autres viewers). Pas de limite de
+   * taille — usage : prise de notes brute en seance.
+   */
+  notesPrivees: z.string().nullable(),
   createdBy: z.string().uuid().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

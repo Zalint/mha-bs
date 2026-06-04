@@ -694,6 +694,12 @@ UPDATE "referentiels" SET "parentCode" = 'cngi'     WHERE "codeType" = 'typeMatr
 -- Colonne typeReunion sur reunionsTechniques (copil/technique/...)
 ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "typeReunion" VARCHAR(50);
 
+-- Colonne notesPrivees : texte libre attache a une reunion, visible UNIQUEMENT
+-- par le createur (filtrage applicatif cote model + routes). Pas de limite de
+-- taille — utilise pour la prise de notes brute en seance avant la saisie
+-- formelle (decisions / ordreDuJour).
+ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "notesPrivees" TEXT;
+
 
 -- =============================================================================
 -- VUES : agrégations dashboard

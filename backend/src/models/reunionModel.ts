@@ -17,6 +17,7 @@ interface ReunionRow {
   participants: string[];
   visibleSg: boolean;
   inclusRapportHebdo: boolean;
+  notesPrivees: string | null;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -26,7 +27,17 @@ function toYmd(d: Date | null): string {
   return d ? d.toISOString().slice(0, 10) : '';
 }
 
-function toReunion(row: ReunionRow): ReunionTechnique {
+/**
+ * Convertit une ligne SQL en objet public.
+ *
+ * `viewerUserId` est l'id de l'utilisateur qui lit la donnee. Le champ
+ * `notesPrivees` est masque (`null`) si le viewer n'est PAS le createur de
+ * la reunion. Si `viewerUserId` est `undefined`, on considere le contexte
+ * comme non-authentifie/admin technique et on masque par defaut (principe
+ * de moindre privilege).
+ */
+function toReunion(row: ReunionRow, viewerUserId?: string | null): ReunionTechnique {
+  const isCreator = viewerUserId != null && row.createdBy === viewerUserId;
   return {
     id: row.id,
     dateReunion: toYmd(row.dateReunion),
@@ -42,6 +53,8 @@ function toReunion(row: ReunionRow): ReunionTechnique {
     participants: Array.isArray(row.participants) ? row.participants : [],
     visibleSg: row.visibleSg,
     inclusRapportHebdo: row.inclusRapportHebdo,
+    // Visible UNIQUEMENT par le createur — sinon null cote API
+    notesPrivees: isCreator ? row.notesPrivees : null,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -51,11 +64,14 @@ function toReunion(row: ReunionRow): ReunionTechnique {
 const SELECT_COLS = `
   "id", "dateReunion", "heureDebut", "dureeEstimee", "theme", "lieu",
   "sousSecteur", "copilLie", "typeReunion", "ordreDuJour", "decisions", "participants",
-  "visibleSg", "inclusRapportHebdo",
+  "visibleSg", "inclusRapportHebdo", "notesPrivees",
   "createdBy", "createdAt", "updatedAt"
 `;
 
-export async function listReunions(filters: { sousSecteur?: SousSecteur } = {}): Promise<ReunionTechnique[]> {
+export async function listReunions(
+  filters: { sousSecteur?: SousSecteur } = {},
+  viewerUserId?: string | null,
+): Promise<ReunionTechnique[]> {
   const conditions: string[] = [];
   const params: unknown[] = [];
   if (filters.sousSecteur) {
@@ -68,15 +84,18 @@ export async function listReunions(filters: { sousSecteur?: SousSecteur } = {}):
      ORDER BY "dateReunion" DESC`,
     params,
   );
-  return rows.map(toReunion);
+  return rows.map((r) => toReunion(r, viewerUserId));
 }
 
-export async function findReunionById(id: string): Promise<ReunionTechnique | null> {
+export async function findReunionById(
+  id: string,
+  viewerUserId?: string | null,
+): Promise<ReunionTechnique | null> {
   const row = await queryOne<ReunionRow>(
     `SELECT ${SELECT_COLS} FROM "reunionsTechniques" WHERE "id" = $1`,
     [id],
   );
-  return row ? toReunion(row) : null;
+  return row ? toReunion(row, viewerUserId) : null;
 }
 
 export async function createReunion(
@@ -87,9 +106,9 @@ export async function createReunion(
     `INSERT INTO "reunionsTechniques" (
        "dateReunion", "heureDebut", "dureeEstimee", "theme", "lieu",
        "sousSecteur", "copilLie", "typeReunion", "ordreDuJour", "decisions", "participants",
-       "visibleSg", "inclusRapportHebdo", "createdBy"
+       "visibleSg", "inclusRapportHebdo", "notesPrivees", "createdBy"
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
      RETURNING ${SELECT_COLS}`,
     [
       input.dateReunion,
@@ -105,16 +124,19 @@ export async function createReunion(
       JSON.stringify(input.participants ?? []),
       input.visibleSg ?? true,
       input.inclusRapportHebdo ?? false,
+      input.notesPrivees ?? null,
       createdBy,
     ],
   );
   if (!row) throw new Error('Echec creation reunion');
-  return toReunion(row);
+  // Le createur lit toujours ses propres notes → on passe createdBy comme viewer
+  return toReunion(row, createdBy);
 }
 
 export async function updateReunion(
   id: string,
   input: Partial<CreateReunionTechniqueInput>,
+  viewerUserId?: string | null,
 ): Promise<ReunionTechnique> {
   const sets: string[] = [];
   const params: unknown[] = [];
@@ -136,6 +158,10 @@ export async function updateReunion(
   if (input.participants !== undefined) push('participants', input.participants, true);
   if (input.visibleSg !== undefined) push('visibleSg', input.visibleSg);
   if (input.inclusRapportHebdo !== undefined) push('inclusRapportHebdo', input.inclusRapportHebdo);
+  // notesPrivees : autorise UNIQUEMENT si le viewer est le createur (controle
+  // au niveau route AVANT d'arriver ici, mais on protege en defense en
+  // profondeur).
+  if (input.notesPrivees !== undefined) push('notesPrivees', input.notesPrivees);
 
   if (sets.length === 0) throw new Error('Aucun champ a mettre a jour');
   params.push(id);
@@ -146,7 +172,7 @@ export async function updateReunion(
     params,
   );
   if (!row) throw new Error('Reunion introuvable');
-  return toReunion(row);
+  return toReunion(row, viewerUserId);
 }
 
 export async function deleteReunion(id: string): Promise<void> {

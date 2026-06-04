@@ -16,7 +16,13 @@ import {
 } from '@mha-bs/shared';
 
 import { FormField } from '../../components/ui/FormField.js';
+import {
+  NotesPriveesField,
+  clearNotesDraft,
+  readNotesDraft,
+} from '../../components/ui/NotesPriveesField.js';
 import { Textarea } from '../../components/ui/Textarea.js';
+import { useAuthStore } from '../../stores/authStore.js';
 import { useReferentiel } from '../../hooks/useReferentiel.js';
 import { ApiClientError, api } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
@@ -35,6 +41,7 @@ interface ReunionFormValues {
   typeReunion: string;
   ordreDuJour: string;
   decisions: string;
+  notesPrivees: string;
   participantsRaw: string;
   visibleSg: boolean;
   inclusRapportHebdo: boolean;
@@ -71,6 +78,12 @@ export function BsReunionMissionView() {
   const [mode, setMode] = useState<Mode>('reunion');
   const [submitting, setSubmitting] = useState(false);
   const [ouvrages, setOuvrages] = useState<Ouvrage[]>([]);
+  const userId = useAuthStore((s) => s.user?.id);
+
+  // Clé localStorage pour le brouillon des notes privées — scopée par user.
+  // En l'absence de userId (devrait pas arriver, mais defense en profondeur),
+  // on tombe sur une clé générique partagée.
+  const notesStorageKey = `bs-reunion-notes-draft-${userId ?? 'anon'}`;
 
   // Referentiels charges depuis l'API (gerables via /bs/config)
   const sousSecteursRef = useReferentiel('sousSecteur');
@@ -92,6 +105,8 @@ export function BsReunionMissionView() {
       typeReunion: 'technique',
       ordreDuJour: '',
       decisions: '',
+      // Restaure le brouillon des notes s'il y en a un en localStorage
+      notesPrivees: readNotesDraft(notesStorageKey)?.content ?? '',
       participantsRaw: 'Cabinet MHA, DPGI, ONAS',
       visibleSg: true,
       inclusRapportHebdo: false,
@@ -125,12 +140,15 @@ export function BsReunionMissionView() {
         typeReunion: v.typeReunion || null,
         ordreDuJour: v.ordreDuJour || null,
         decisions: v.decisions || null,
+        notesPrivees: v.notesPrivees || null,
         participants: v.participantsRaw.split(',').map((s) => s.trim()).filter(Boolean),
         visibleSg: v.visibleSg,
         inclusRapportHebdo: v.inclusRapportHebdo,
       };
       await api.post('/reunions', payload);
       toast.success('Réunion enregistrée');
+      // Brouillon localStorage n'est plus utile -> on nettoie
+      clearNotesDraft(notesStorageKey);
       reunionForm.reset();
     } catch (err) {
       toast.error(err instanceof ApiClientError ? err.message : 'Erreur');
@@ -310,6 +328,30 @@ export function BsReunionMissionView() {
             <FormField label="Décisions / suites attendues">
               <Textarea rows={3} {...reunionForm.register('decisions')} />
             </FormField>
+          </fieldset>
+
+          {/* Notes privees — visible UNIQUEMENT par le createur (ici toujours
+              moi car je suis en creation; cote backend la garde est aussi
+              presente pour les autres viewers). */}
+          <fieldset className="p-5 border-b border-border">
+            <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-2">
+              Notes privées
+              <span className="ml-2 text-fg-muted/70 normal-case tracking-normal">
+                · texte libre, uniquement visible par vous
+              </span>
+            </legend>
+            <Controller
+              name="notesPrivees"
+              control={reunionForm.control}
+              render={({ field }) => (
+                <NotesPriveesField
+                  value={field.value}
+                  onChange={field.onChange}
+                  storageKey={notesStorageKey}
+                  rows={10}
+                />
+              )}
+            />
           </fieldset>
 
           <fieldset className="p-5 border-b border-border">
