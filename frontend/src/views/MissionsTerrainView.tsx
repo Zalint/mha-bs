@@ -28,10 +28,22 @@ import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { KpiCard } from '../components/ui/KpiCard.js';
 import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
+import { useReferentiel } from '../hooks/useReferentiel.js';
 import { ApiClientError, api } from '../lib/apiClient.js';
 import { cn } from '../lib/cn.js';
 import { formatShort } from '../lib/formatDate.js';
 import { useAuthStore } from '../stores/authStore.js';
+
+/**
+ * Ouvrage en cours d'edition. Un id est present si la ligne provient deja
+ * de la base (charge a l'ouverture du modal) ; sinon c'est une saisie locale
+ * qui sera POSTee a la sauvegarde.
+ */
+interface EditOuvrage {
+  id?: string;
+  nomOuvrage: string;
+  typeOuvrage: string | null;
+}
 
 const SENEGAL_BOUNDS: [number, number] = [14.5, -14.5];
 const PIN_ICON = L.divIcon({
@@ -84,12 +96,24 @@ export function MissionsTerrainView() {
   const query = useApi(() => api.get<{ items: MissionTerrain[] }>('/missions'), []);
   const items = query.data?.items ?? [];
 
+  // Referentiel type d'ouvrage : sert a afficher le libelle propre + alimenter
+  // le dropdown du form 'Ajouter un ouvrage' dans le modal d'edition.
+  const typeOuvrageRef = useReferentiel('typeOuvrage');
+
   const mapRef = useRef<L.Map | null>(null);
 
   // Édition : draft de mission + modal picker carte
   const [editDraft, setEditDraft] = useState<MissionDraft | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Ouvrages associes a la mission en cours d'edition. Liste melangee :
+  //   - lignes avec `id`  → ouvrages existants charges depuis l'API
+  //   - lignes sans `id`  → ouvrages saisis localement (POST au save)
+  // `deletedOuvrageIds` retient les ids d'existants supprimes par l'user pour
+  // les DELETE lors du save.
+  const [editOuvrages, setEditOuvrages] = useState<EditOuvrage[]>([]);
+  const [deletedOuvrageIds, setDeletedOuvrageIds] = useState<Set<string>>(new Set());
 
   // === Sélection multiple pour bulk delete ===
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -110,15 +134,60 @@ export function MissionsTerrainView() {
 
   const startEdit = (m: MissionTerrain): void => {
     setEditDraft(missionToDraft(m));
+    // Reset ouvrages avant le fetch pour eviter un flash de l'ancienne liste
+    setEditOuvrages([]);
+    setDeletedOuvrageIds(new Set());
+    // Charge les ouvrages existants. GET /missions/:id renvoie { ...mission, ouvrages }.
+    void (async () => {
+      try {
+        const res = await api.get<{ ouvrages?: Array<EditOuvrage> }>(`/missions/${m.id}`);
+        setEditOuvrages(
+          (res.ouvrages ?? []).map((o) => ({
+            id: o.id,
+            nomOuvrage: o.nomOuvrage,
+            typeOuvrage: o.typeOuvrage,
+          })),
+        );
+      } catch {
+        // silencieux — la mission a juste pas d'ouvrages, ou erreur reseau
+      }
+    })();
   };
   const cancelEdit = (): void => {
     setEditDraft(null);
     setShowPicker(false);
+    setEditOuvrages([]);
+    setDeletedOuvrageIds(new Set());
   };
+
+  /** Push d'un ouvrage nouvellement saisi dans le modal. */
+  const addEditOuvrage = (o: EditOuvrage): void => {
+    setEditOuvrages((arr) => [...arr, { ...o, id: undefined }]);
+  };
+
+  /**
+   * Retire un ouvrage de la liste editable. S'il existait deja en DB (id !=
+   * undefined), on marque son id pour DELETE au save. Sinon (ouvrage local
+   * jamais POSTe), il suffit de l'oublier.
+   */
+  const removeEditOuvrage = (index: number): void => {
+    const target = editOuvrages[index];
+    if (!target) return;
+    if (target.id) {
+      setDeletedOuvrageIds((s) => {
+        const next = new Set(s);
+        next.add(target.id!);
+        return next;
+      });
+    }
+    setEditOuvrages((arr) => arr.filter((_, i) => i !== index));
+  };
+
   const saveEdit = async (): Promise<void> => {
     if (!editDraft) return;
     setSaving(true);
     try {
+      // 1) Update champs principaux de la mission
       await api.put(`/missions/${editDraft.id}`, {
         dateMission: editDraft.dateMission,
         localite: editDraft.localite,
@@ -129,8 +198,25 @@ export function MissionsTerrainView() {
         constats: editDraft.constats || null,
         recommandations: editDraft.recommandations || null,
       });
+
+      // 2) Sync ouvrages : DELETE les supprimes, POST les nouveaux
+      //    (sequentiel pour eviter un burst de requetes ; volume tres faible
+      //    en pratique — quelques ouvrages max par mission)
+      for (const id of deletedOuvrageIds) {
+        await api.delete(`/missions/ouvrages/${id}`);
+      }
+      for (const o of editOuvrages.filter((x) => !x.id)) {
+        await api.post(`/missions/${editDraft.id}/ouvrages`, {
+          nomOuvrage: o.nomOuvrage,
+          typeOuvrage: o.typeOuvrage,
+          etatOuvrage: 'fonctionnel', // valeur silencieuse — cf decision UI
+        });
+      }
+
       toast.success('Mission mise à jour');
       setEditDraft(null);
+      setEditOuvrages([]);
+      setDeletedOuvrageIds(new Set());
       query.refetch();
     } catch (err) {
       toast.error(err instanceof ApiClientError ? err.message : 'Erreur de mise à jour');
@@ -425,6 +511,13 @@ export function MissionsTerrainView() {
           onSave={() => void saveEdit()}
           onOpenPicker={() => setShowPicker(true)}
           saving={saving}
+          ouvrages={editOuvrages}
+          onAddOuvrage={addEditOuvrage}
+          onRemoveOuvrage={removeEditOuvrage}
+          typesOuvrage={typeOuvrageRef.items.map((t) => ({
+            code: t.code,
+            label: t.label,
+          }))}
         />
       )}
 
@@ -478,6 +571,10 @@ interface MissionEditModalProps {
   onSave: () => void;
   onOpenPicker: () => void;
   saving: boolean;
+  ouvrages: EditOuvrage[];
+  onAddOuvrage: (o: EditOuvrage) => void;
+  onRemoveOuvrage: (index: number) => void;
+  typesOuvrage: { code: string; label: string }[];
 }
 
 function MissionEditModal({
@@ -487,9 +584,24 @@ function MissionEditModal({
   onSave,
   onOpenPicker,
   saving,
+  ouvrages,
+  onAddOuvrage,
+  onRemoveOuvrage,
+  typesOuvrage,
 }: MissionEditModalProps) {
   const set = <K extends keyof MissionDraft>(k: K, v: MissionDraft[K]): void => {
     onChange({ ...draft, [k]: v });
+  };
+
+  // Form local pour la saisie d'un nouvel ouvrage dans le modal d'edition
+  const [newNom, setNewNom] = useState('');
+  const [newType, setNewType] = useState('');
+  const handleAddOuvrage = (): void => {
+    const trimmed = newNom.trim();
+    if (!trimmed) return;
+    onAddOuvrage({ nomOuvrage: trimmed, typeOuvrage: newType || null });
+    setNewNom('');
+    setNewType('');
   };
 
   return (
@@ -615,6 +727,102 @@ function MissionEditModal({
               placeholder="Actions à mener suite à la visite…"
             />
           </Field>
+
+          {/* Ouvrages visites — liste editable. Add/remove sont stockes en
+              local par le parent ; le sync DB se fait au moment du save. */}
+          <div className="border border-border rounded-lg p-3 bg-surface2">
+            <div className="text-xs font-semibold text-fg-muted uppercase tracking-wider mb-2 flex items-center gap-2">
+              Ouvrages visités
+              {ouvrages.length > 0 && (
+                <span className="inline-flex items-center bg-primary text-white rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums normal-case tracking-normal">
+                  {ouvrages.length}
+                </span>
+              )}
+            </div>
+
+            {ouvrages.length === 0 ? (
+              <p className="text-xs text-fg-muted italic mb-2">
+                Aucun ouvrage associé. Ajoutez-en ci-dessous.
+              </p>
+            ) : (
+              <ul className="space-y-1.5 mb-3">
+                {ouvrages.map((o, i) => {
+                  const typeLabel = o.typeOuvrage
+                    ? typesOuvrage.find((t) => t.code === o.typeOuvrage)?.label ??
+                      o.typeOuvrage
+                    : null;
+                  return (
+                    <li
+                      key={o.id ?? `new-${i}`}
+                      className="flex items-center gap-2 p-2 border border-border rounded bg-surface text-sm"
+                    >
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary-100 text-primary-700 font-mono text-[10px] font-bold flex-shrink-0">
+                        {i + 1}
+                      </span>
+                      <Construction className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{o.nomOuvrage}</div>
+                        {typeLabel && (
+                          <div className="text-[10.5px] text-fg-muted">{typeLabel}</div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onRemoveOuvrage(i)}
+                        className="text-fg-muted hover:text-danger p-1 rounded"
+                        aria-label={`Retirer ${o.nomOuvrage}`}
+                        title="Retirer cet ouvrage"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {/* Bloc d'ajout — visuellement distinct */}
+            <div className="border-2 border-dashed border-primary-100 bg-primary-100/20 rounded-lg p-2.5">
+              <div className="text-[10.5px] uppercase tracking-wider font-semibold text-primary-700 mb-2">
+                Ajouter un ouvrage
+              </div>
+              <div className="flex gap-2 items-center flex-wrap">
+                <input
+                  type="text"
+                  value={newNom}
+                  onChange={(e) => setNewNom(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddOuvrage();
+                    }
+                  }}
+                  placeholder="Nom de l'ouvrage"
+                  className="input flex-1 min-w-[160px] text-sm"
+                />
+                <select
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value)}
+                  className="select w-40 text-sm"
+                  aria-label="Type d'ouvrage"
+                >
+                  <option value="">Type d'ouvrage…</option>
+                  {typesOuvrage.map((t) => (
+                    <option key={t.code} value={t.code}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleAddOuvrage}
+                  className="btn btn-secondary btn-sm"
+                >
+                  <Plus className="w-3 h-3" /> Ajouter
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="px-5 py-3 border-t border-border bg-surface2 flex justify-end gap-2">

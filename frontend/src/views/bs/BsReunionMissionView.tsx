@@ -89,7 +89,6 @@ export function BsReunionMissionView() {
   const sousSecteursRef = useReferentiel('sousSecteur');
   const copilProjetRef = useReferentiel('copilProjet');
   const typeReunionRef = useReferentiel('typeReunion');
-  const etatOuvrageRef = useReferentiel('etatOuvrage');
   const regionRef = useReferentiel('regionSenegal');
   const typeOuvrageRef = useReferentiel('typeOuvrage');
 
@@ -510,9 +509,6 @@ export function BsReunionMissionView() {
                     ? typeOuvrageRef.items.find((t) => t.code === o.typeOuvrage)?.label ??
                       o.typeOuvrage
                     : null;
-                  const etatLabel =
-                    etatOuvrageRef.items.find((e) => e.code === o.etatOuvrage)?.label ??
-                    o.etatOuvrage;
                   return (
                     <li
                       key={i}
@@ -528,9 +524,6 @@ export function BsReunionMissionView() {
                           <div className="text-[11px] text-fg-muted">{typeLabel}</div>
                         )}
                       </div>
-                      <span className="badge bg-muted text-fg-2 text-[11px] whitespace-nowrap">
-                        {etatLabel}
-                      </span>
                       <button
                         type="button"
                         onClick={() => setOuvrages((arr) => arr.filter((_, idx) => idx !== i))}
@@ -553,7 +546,6 @@ export function BsReunionMissionView() {
               </div>
               <NewOuvrageRow
                 onAdd={(o) => setOuvrages((arr) => [...arr, o])}
-                etats={etatOuvrageRef.items.map((e) => ({ code: e.code, label: e.label }))}
                 types={typeOuvrageRef.items.map((t) => ({ code: t.code, label: t.label }))}
               />
             </div>
@@ -601,16 +593,17 @@ function ClickHandler({ onPick }: { onPick: (lat: number, lng: number) => void }
 
 function NewOuvrageRow({
   onAdd,
-  etats,
   types,
 }: {
   onAdd: (o: Ouvrage) => void;
-  etats: { code: string; label: string }[];
   types: { code: string; label: string }[];
 }) {
   const [nom, setNom] = useState('');
   const [typeOuvrage, setTypeOuvrage] = useState<string>('');
-  const [etat, setEtat] = useState<Ouvrage['etatOuvrage']>('fonctionnel');
+
+  // L'etat de l'ouvrage est cache cote UI (a la demande). On envoie systematiquement
+  // 'fonctionnel' au backend (la colonne etatOuvrage a un NOT NULL CHECK).
+  // Si plus tard on veut retracer l'etat, il suffit de re-introduire un dropdown ici.
 
   const handleAdd = (): void => {
     const trimmed = nom.trim();
@@ -618,11 +611,10 @@ function NewOuvrageRow({
     onAdd({
       nomOuvrage: trimmed,
       typeOuvrage: typeOuvrage || null,
-      etatOuvrage: etat,
+      etatOuvrage: 'fonctionnel',
     });
     setNom('');
     setTypeOuvrage('');
-    setEtat('fonctionnel');
   };
 
   return (
@@ -652,27 +644,6 @@ function NewOuvrageRow({
             {t.label}
           </option>
         ))}
-      </select>
-      <select
-        value={etat}
-        onChange={(e) => setEtat(e.target.value as Ouvrage['etatOuvrage'])}
-        className="select w-44"
-        aria-label="État de l'ouvrage"
-      >
-        {etats.length === 0 ? (
-          <>
-            <option value="fonctionnel">Fonctionnel</option>
-            <option value="maintenance">Maintenance</option>
-            <option value="horsService">Hors service</option>
-            <option value="enConstruction">En construction</option>
-          </>
-        ) : (
-          etats.map((e) => (
-            <option key={e.code} value={e.code}>
-              {e.label}
-            </option>
-          ))
-        )}
       </select>
       <button type="button" onClick={handleAdd} className="btn btn-secondary btn-sm">
         <Plus className="w-3 h-3" /> Ajouter
