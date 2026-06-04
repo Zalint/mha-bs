@@ -138,7 +138,100 @@ export function DashboardSgExecutive({ data, missions, anneeLabel, forPrint = fa
       >
         <TrimestresChart data={data.activiteParTrimestre} />
       </BentoCard>
+
+      {/* ----- 7. Directives par année (informatif) ----- */}
+      <BentoCard
+        accent="green"
+        title="Directives par année (exercice)"
+        subtitle="Répartition informative — toutes années, par état. Indépendant du filtre."
+      >
+        <DirectivesParAnneeContent rows={data.directivesParAnnee} />
+      </BentoCard>
     </div>
+  );
+}
+
+// =============================================================================
+// Directives par année — tableau informatif (tous états, toutes années)
+// =============================================================================
+
+function DirectivesParAnneeContent({
+  rows,
+}: {
+  rows: SgSummaryResponse['directivesParAnnee'];
+}) {
+  if (!rows || rows.length === 0) {
+    return <p className="text-sm text-fg-muted text-center py-4">Aucune directive en base.</p>;
+  }
+  const maxTotal = Math.max(...rows.map((r) => r.total), 1);
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+
+  return (
+    <div className="space-y-2.5">
+      {rows.map((r) => (
+        <div key={r.annee} className="grid grid-cols-[52px_1fr_auto] gap-3 items-center">
+          <span className="font-mono text-sm font-bold tabular-nums">{r.annee}</span>
+          {/* Barre empilée par état */}
+          <div className="h-5 rounded bg-muted overflow-hidden flex" title={`${r.total} directives`}>
+            <BarSeg value={r.realisee} max={maxTotal} color="#10B981" label="Réalisées" />
+            <BarSeg value={r.enCours} max={maxTotal} color="#FB7185" label="En cours" />
+            <BarSeg value={r.attente} max={maxTotal} color="#FBBF24" label="En attente" />
+            <BarSeg value={r.ineligible} max={maxTotal} color="#94A3B8" label="Inéligibles" />
+          </div>
+          <span className="font-mono text-sm font-semibold tabular-nums text-right w-12">
+            {r.total}
+          </span>
+        </div>
+      ))}
+
+      {/* Légende + total */}
+      <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-muted">
+          <LegendDot color="#10B981" label="Réalisées" />
+          <LegendDot color="#FB7185" label="En cours" />
+          <LegendDot color="#FBBF24" label="En attente" />
+          <LegendDot color="#94A3B8" label="Inéligibles" />
+        </div>
+        <span className="text-xs text-fg-muted">
+          Total : <span className="font-mono font-bold text-fg">{grandTotal}</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function BarSeg({
+  value,
+  max,
+  color,
+  label,
+}: {
+  value: number;
+  max: number;
+  color: string;
+  label: string;
+}) {
+  if (value <= 0) return null;
+  const pct = (value / max) * 100;
+  return (
+    <div
+      style={{ width: `${pct}%`, backgroundColor: color }}
+      className="h-full flex items-center justify-center"
+      title={`${label} : ${value}`}
+    >
+      {pct > 8 && (
+        <span className="text-[10px] font-bold text-white tabular-nums">{value}</span>
+      )}
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: color }} />
+      {label}
+    </span>
   );
 }
 

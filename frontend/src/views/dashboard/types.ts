@@ -64,6 +64,15 @@ export interface SgSummaryResponse {
     nbAttente: number;
     tauxExecution: number;
   }[];
+  // Répartition informative des directives par année d'exercice (tous états)
+  directivesParAnnee: {
+    annee: number;
+    total: number;
+    realisee: number;
+    enCours: number;
+    attente: number;
+    ineligible: number;
+  }[];
 }
 
 export interface DashboardViewProps {

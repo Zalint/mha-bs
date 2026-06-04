@@ -283,6 +283,53 @@ export interface SgSummary {
   activiteParTrimestre: ActiviteParTrimestre[];
   // Avancement par projet COPIL (PROGEP II, PISEA, etc.)
   copilProjets: CopilProjetSummary[];
+  // Répartition INFORMATIVE des directives par année d'exercice (r.annee),
+  // tous états confondus. Indépendant du filtre année sélectionné.
+  directivesParAnnee: DirectivesAnneeBreakdown[];
+}
+
+export interface DirectivesAnneeBreakdown {
+  annee: number;
+  total: number;
+  realisee: number;
+  enCours: number;
+  attente: number;
+  ineligible: number;
+}
+
+/**
+ * Répartition des directives par année d'exercice (rencontre.annee), avec
+ * ventilation par état. Purement informatif — n'applique aucun filtre.
+ */
+export async function getDirectivesParAnnee(): Promise<DirectivesAnneeBreakdown[]> {
+  const rows = await queryAll<{
+    annee: string;
+    total: string;
+    realisee: string;
+    enCours: string;
+    attente: string;
+    ineligible: string;
+  }>(
+    `SELECT r."annee"::TEXT AS "annee",
+            COUNT(*)::TEXT AS "total",
+            COUNT(*) FILTER (WHERE d."etat" = 'realisee')::TEXT   AS "realisee",
+            COUNT(*) FILTER (WHERE d."etat" = 'enCours')::TEXT    AS "enCours",
+            COUNT(*) FILTER (WHERE d."etat" = 'attente')::TEXT    AS "attente",
+            COUNT(*) FILTER (WHERE d."etat" = 'ineligible')::TEXT AS "ineligible"
+     FROM "directives" d
+     JOIN "rencontres" r ON r."id" = d."rencontreId"
+     WHERE r."annee" IS NOT NULL
+     GROUP BY r."annee"
+     ORDER BY r."annee" ASC`,
+  );
+  return rows.map((r) => ({
+    annee: Number(r.annee),
+    total: Number(r.total),
+    realisee: Number(r.realisee),
+    enCours: Number(r.enCours),
+    attente: Number(r.attente),
+    ineligible: Number(r.ineligible),
+  }));
 }
 
 /**
@@ -591,6 +638,7 @@ export async function getSgSummary(
     missionsTerrain,
     activiteParTrimestre,
     copilProjets,
+    directivesParAnnee,
   ] = await Promise.all([
     getAvailableYears(),
     getKpisByTypeRencontre('conseilMinistres', annee, anneeMode, creeEnAnneeOnly),
@@ -602,6 +650,7 @@ export async function getSgSummary(
     getMissionsTerrainSummary(annee),
     getActiviteParTrimestre(annee),
     getCopilProjets(),
+    getDirectivesParAnnee(),
   ]);
   return {
     annee: annee ?? null,
@@ -613,6 +662,7 @@ export async function getSgSummary(
     missionsTerrain,
     activiteParTrimestre,
     copilProjets,
+    directivesParAnnee,
   };
 }
 
