@@ -80,7 +80,7 @@ directiveRoutes.put(
   },
 );
 
-directiveRoutes.delete('/:id', authJwt, requireRole('admin'), async (req, res, next) => {
+directiveRoutes.delete('/:id', authJwt, requireRole('admin', 'bs'), async (req, res, next) => {
   try {
     await deleteDirective(req.params.id);
     res.status(204).end();
@@ -96,7 +96,7 @@ const bulkDeleteSchema = z.object({
 directiveRoutes.post(
   '/bulk-delete',
   authJwt,
-  requireRole('admin'),
+  requireRole('admin', 'bs'),
   validate(bulkDeleteSchema),
   async (req, res, next) => {
     try {

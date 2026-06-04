@@ -94,11 +94,13 @@ importRoutes.post(
         return;
       }
       const dryRun = req.query.dryRun === 'true' || req.query.dryRun === '1';
-      const summary = await importDirectivesFirstSheet(req.file.buffer, { dryRun });
+      const overwrite = req.query.overwrite === 'true' || req.query.overwrite === '1';
+      const summary = await importDirectivesFirstSheet(req.file.buffer, { dryRun, overwrite });
       res.json({
         filename: req.file.originalname,
         sizeBytes: req.file.size,
         dryRun,
+        overwrite,
         ...summary,
       });
     } catch (err) {

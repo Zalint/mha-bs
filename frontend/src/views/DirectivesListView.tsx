@@ -35,7 +35,9 @@ const AVAILABLE_YEARS = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2, CURRE
 export function DirectivesListView({ typeRencontre }: Props) {
   const navigate = useNavigate();
   const role = useAuthStore((s) => s.user?.role);
-  const isAdmin = role === 'admin';
+  // canDelete = admin OU bs : la suppression (unitaire et bulk) etait
+  // initialement reservee a l'admin, etendue au BS suite a demande user.
+  const canDelete = role === 'admin' || role === 'bs';
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<DirectiveFiltersValue>({ annee: '', etat: '', search: '' });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -124,7 +126,7 @@ export function DirectivesListView({ typeRencontre }: Props) {
   return (
     <div>
       <div className="flex flex-wrap items-end justify-end gap-2 mb-3">
-        {isAdmin && selectedIds.length > 0 && (
+        {canDelete && selectedIds.length > 0 && (
           <button
             type="button"
             className="btn btn-danger"
@@ -163,10 +165,10 @@ export function DirectivesListView({ typeRencontre }: Props) {
           pageSize={directivesQuery.data.pageSize}
           onPageChange={setPage}
           onRowClick={(d) => navigate(`/directives/${d.id}`)}
-          selectable={isAdmin}
+          selectable={canDelete}
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
-          onDeleteRow={isAdmin ? (id) => setConfirmDelete({ kind: 'single', id }) : undefined}
+          onDeleteRow={canDelete ? (id) => setConfirmDelete({ kind: 'single', id }) : undefined}
         />
       ) : null}
 

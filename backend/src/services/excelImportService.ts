@@ -837,9 +837,47 @@ export interface DirectivesOnlyImportSummary {
   filename?: string;
   totalRows: number;          // lignes totales analysées
   imported: number;            // nouvelles directives insérées
-  duplicatesSkipped: number;   // lignes ignorées car codeDirective déjà en base
+  updated: number;             // directives écrasées (UPSERT, mode overwrite)
+  duplicatesSkipped: number;   // lignes ignorées car codeDirective déjà en base (mode normal)
   skippedNoText: number;       // lignes ignorées car texte manquant
+  skippedInvalidDate: number;  // lignes ignorées car DATE RENCONTRE absente ou illisible
   rencontresCreated: number;   // rencontres synthétiques créées
+}
+
+/**
+ * Extrait une année (YYYY) d'une valeur de cellule.
+ *
+ * Strategie :
+ *   1. Essai parse complet via normalizeDate -> on prend YYYY de la date
+ *   2. Fallback : scan brut de la cellule pour un nombre 4 chiffres dans
+ *      la fenêtre [1990, 2100] (gère les cas "2024", "Rencontre 2024",
+ *      "ANNEE 2024", etc. — le fichier source n'a pas toujours une vraie
+ *      date dans col B)
+ *
+ * Retourne { year, parsedDate } : parsedDate vaut null si on n'a pas pu
+ * obtenir une vraie date complete mais qu'on a quand meme un YYYY.
+ */
+function extractYearFromCell(v: unknown): {
+  year: number | null;
+  parsedDate: string | null;
+} {
+  const parsedDate = normalizeDate(v);
+  if (parsedDate) {
+    const y = Number(parsedDate.slice(0, 4));
+    if (Number.isFinite(y) && y >= 1990 && y <= 2100) {
+      return { year: y, parsedDate };
+    }
+  }
+  // Fallback : extrait YYYY brut de la cellule sous forme chaîne
+  if (v !== null && v !== undefined) {
+    const s = String(v);
+    const m = s.match(/\b(19\d{2}|20\d{2}|21\d{2})\b/);
+    if (m) {
+      const y = Number(m[1]);
+      if (Number.isFinite(y)) return { year: y, parsedDate: null };
+    }
+  }
+  return { year: null, parsedDate: null };
 }
 
 /**
@@ -855,37 +893,34 @@ export interface DirectivesOnlyImportSummary {
  */
 export async function importDirectivesFirstSheet(
   buffer: Buffer,
-  opts: { dryRun?: boolean } = {},
+  opts: { dryRun?: boolean; overwrite?: boolean } = {},
 ): Promise<DirectivesOnlyImportSummary> {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const firstSheetName = workbook.SheetNames[0];
-  if (!firstSheetName) {
-    return {
-      totalRows: 0,
-      imported: 0,
-      duplicatesSkipped: 0,
-      skippedNoText: 0,
-      rencontresCreated: 0,
-    };
-  }
+  const emptySummary: DirectivesOnlyImportSummary = {
+    totalRows: 0,
+    imported: 0,
+    updated: 0,
+    duplicatesSkipped: 0,
+    skippedNoText: 0,
+    skippedInvalidDate: 0,
+    rencontresCreated: 0,
+  };
+  if (!firstSheetName) return emptySummary;
   const sheet = workbook.Sheets[firstSheetName];
-  if (!sheet) {
-    return {
-      totalRows: 0,
-      imported: 0,
-      duplicatesSkipped: 0,
-      skippedNoText: 0,
-      rencontresCreated: 0,
-    };
-  }
+  if (!sheet) return emptySummary;
 
   const headerRange = detectHeaderRow(sheet);
   const rows = XLSX.utils.sheet_to_json<UnknownRow>(sheet, { range: headerRange });
 
   let imported = 0;
+  let updated = 0;
   let duplicatesSkipped = 0;
   let skippedNoText = 0;
+  let skippedInvalidDate = 0;
   let rencontresCreated = 0;
+  // Cache des rencontres synthétiques crées dans cette session, par clé
+  // YYYY-MM-DD (ou YYYY-01-01 quand on n'a que l'année).
   const rencCache = new Map<string, string>();
 
   for (let idx = 0; idx < rows.length; idx++) {
@@ -898,6 +933,34 @@ export async function importDirectivesFirstSheet(
       continue;
     }
 
+    // === Année strictement depuis la COLONNE B (par position, pas par nom) ===
+    // Le fichier source (SUIVIACTION MINISTERIELLE MHA V2.xlsx) place la date
+    // de rencontre en colonne B, mais le header peut varier ('DATE RENCONTRE',
+    // 'DATE RECONTRE' typo, ou autre). On lit directement la cellule par
+    // référence Excel B<n> au lieu de chercher par titre — c'est la source la
+    // plus fiable pour l'année. Plus de fallback ECHEANCE/today.
+    //
+    // Indexation XLSX :
+    //   - headerRange = index 0-based du header ligne (typiquement 4 pour ce
+    //     fichier après detectHeaderRow)
+    //   - data row idx 0 → ligne Excel headerRange + 1 + 1 = headerRange + 2
+    //     (1-based dans le ref de cellule "B<n>")
+    const cellRef = `B${headerRange + 2 + idx}`;
+    const dateRencCellRaw = sheet[cellRef]?.v;
+    // Fallback header lookup si la cell B est vide pour cette ligne — rare,
+    // mais on garde la robustesse.
+    const dateRencCell =
+      dateRencCellRaw ?? pickColumn(r, 'DATE RENCONTRE', 'DATE RECONTRE', 'DATE');
+    const { year, parsedDate } = extractYearFromCell(dateRencCell);
+    if (year === null) {
+      skippedInvalidDate++;
+      continue;
+    }
+    // Si la cellule ne donnait qu'un YYYY brut sans date complète, on
+    // fabrique une date au 1er janvier de l'année trouvée — la rencontre
+    // synthétique sera quand même cohérente côté année.
+    const dateRenc = parsedDate ?? `${year}-01-01`;
+
     // === Clé de déduplication : CODE DIRECTIVE en priorité ===
     const codeDirRaw = normalizeString(pickColumn(r, 'CODE DIRECTIVE', 'CODE DIR'));
     const codeDir =
@@ -908,18 +971,14 @@ export async function importDirectivesFirstSheet(
       `SELECT "id" FROM "directives" WHERE "codeDirective" = $1`,
       [codeDir],
     );
-    if (exists) {
+    // Si existe et qu'on n'est PAS en mode overwrite → skip silencieux.
+    // Si existe et mode overwrite → on continuera pour UPDATE plus bas.
+    if (exists && !opts.overwrite) {
       duplicatesSkipped++;
       continue;
     }
 
-    // === Date pour rattacher la directive à une rencontre ===
-    const dateRenc =
-      normalizeDate(pickColumn(r, 'DATE RENCONTRE', 'DATE RECONTRE', 'DATE')) ??
-      normalizeDate(pickColumn(r, 'ECHEANCE')) ??
-      new Date().toISOString().slice(0, 10);
-
-    // === Rencontre synthétique : une par date ===
+    // === Rencontre synthétique : une par date (déjà passée par year-check) ===
     let rencontreId = rencCache.get(dateRenc);
     if (!rencontreId) {
       const codeRenc = `IMP-${dateRenc.replace(/-/g, '')}`;
@@ -932,13 +991,12 @@ export async function importDirectivesFirstSheet(
       } else if (opts.dryRun) {
         rencontreId = `dryrun-${codeRenc}`;
       } else {
-        const annee = Number(dateRenc.slice(0, 4));
         const created = await queryOne<{ id: string }>(
           `INSERT INTO "rencontres" ("typeRencontre", "codeRencontre", "intitule", "dateRencontre", "annee")
            VALUES ('conseilMinistres', $1, $2, $3, $4)
            ON CONFLICT ("codeRencontre") DO UPDATE SET "intitule" = EXCLUDED."intitule"
            RETURNING "id"`,
-          [codeRenc, `Import du ${dateRenc}`, dateRenc, annee],
+          [codeRenc, `Import du ${dateRenc}`, dateRenc, year],
         );
         rencontreId = created?.id;
         if (rencontreId) rencontresCreated++;
@@ -966,40 +1024,88 @@ export async function importDirectivesFirstSheet(
       .map((m) => m.trim())
       .filter(Boolean);
 
+    // === Mode UPSERT (overwrite) vs INSERT pur ===
+    // - exists + overwrite  → UPDATE des champs métier (preserve l'id et
+    //   donc tous les commentaires/PJ/historique liés par FK)
+    // - exists + !overwrite → déjà skippé plus haut (duplicatesSkipped)
+    // - !exists             → INSERT
     if (!opts.dryRun) {
-      await query(
-        `INSERT INTO "directives" (
-           "rencontreId", "codeDirective", "texteDirective", "ministeresAssocies",
-           "echeance", "debutExecution", "finExecution", "etat", "typeCause",
-           "joursPrevu", "joursReel", "joursRetardDemarrage", "commentaires",
-           "statutValidation"
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'valide')`,
-        [
-          rencontreId,
-          codeDir,
-          texteDir,
-          ministeres,
-          echeance,
-          debutExecution,
-          finExecution,
-          etat,
-          typeCause,
-          joursPrevu,
-          joursReel,
-          joursRetardDemarrage,
-          commentaires,
-        ],
-      );
+      if (exists && opts.overwrite) {
+        await query(
+          `UPDATE "directives" SET
+             "rencontreId" = $1,
+             "texteDirective" = $2,
+             "ministeresAssocies" = $3,
+             "echeance" = $4,
+             "debutExecution" = $5,
+             "finExecution" = $6,
+             "etat" = $7,
+             "typeCause" = $8,
+             "joursPrevu" = $9,
+             "joursReel" = $10,
+             "joursRetardDemarrage" = $11,
+             "commentaires" = $12
+           WHERE "codeDirective" = $13`,
+          [
+            rencontreId,
+            texteDir,
+            ministeres,
+            echeance,
+            debutExecution,
+            finExecution,
+            etat,
+            typeCause,
+            joursPrevu,
+            joursReel,
+            joursRetardDemarrage,
+            commentaires,
+            codeDir,
+          ],
+        );
+        updated++;
+      } else {
+        await query(
+          `INSERT INTO "directives" (
+             "rencontreId", "codeDirective", "texteDirective", "ministeresAssocies",
+             "echeance", "debutExecution", "finExecution", "etat", "typeCause",
+             "joursPrevu", "joursReel", "joursRetardDemarrage", "commentaires",
+             "statutValidation"
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'valide')`,
+          [
+            rencontreId,
+            codeDir,
+            texteDir,
+            ministeres,
+            echeance,
+            debutExecution,
+            finExecution,
+            etat,
+            typeCause,
+            joursPrevu,
+            joursReel,
+            joursRetardDemarrage,
+            commentaires,
+          ],
+        );
+        imported++;
+      }
+    } else {
+      // En dryRun on ne distingue pas insert vs update — on compte juste comme
+      // 'aurait été inséré'. Si jamais on veut le distinguer en preview, il
+      // suffit de regarder `exists` ici.
+      if (exists && opts.overwrite) updated++;
+      else imported++;
     }
-    imported++;
   }
 
   return {
     totalRows: rows.length,
     imported,
+    updated,
     duplicatesSkipped,
     skippedNoText,
+    skippedInvalidDate,
     rencontresCreated,
   };
 }

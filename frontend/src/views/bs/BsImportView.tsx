@@ -32,9 +32,12 @@ interface DirectivesOnlyResult {
   sizeBytes: number;
   totalRows: number;
   imported: number;
+  updated: number;              // mode overwrite : nb directives ecrasees
   duplicatesSkipped: number;
   skippedNoText: number;
+  skippedInvalidDate: number;   // ignorees car col B (DATE RENCONTRE) absente/illisible
   rencontresCreated: number;
+  overwrite?: boolean;          // echo de la requete
 }
 
 interface SheetPreview {
@@ -147,6 +150,9 @@ export function BsImportView() {
   const [directivesPreview, setDirectivesPreview] = useState<DirectivesOnlyResult | null>(null);
   const [directivesResult, setDirectivesResult] = useState<DirectivesOnlyResult | null>(null);
   const [directivesSubmitting, setDirectivesSubmitting] = useState(false);
+  // Mode UPSERT : si checked → ?overwrite=true. Les directives existantes
+  // (clé naturelle CODE DIRECTIVE) sont écrasées au lieu d'être skippées.
+  const [directivesOverwrite, setDirectivesOverwrite] = useState(false);
 
   // Mode "Import dédié interactif" (interpellations / missions terrain)
   const [dedicatedMode, setDedicatedMode] = useState<DedicatedMode | null>(null);
@@ -235,7 +241,10 @@ export function BsImportView() {
       const form = new FormData();
       form.append('file', file);
       const res = await api.post<DirectivesOnlyResult>('/import/directives', form, {
-        query: { dryRun: 'true' },
+        query: {
+          dryRun: 'true',
+          ...(directivesOverwrite ? { overwrite: 'true' } : {}),
+        },
       });
       setDirectivesPreview(res);
     } catch (e) {
@@ -252,7 +261,9 @@ export function BsImportView() {
     try {
       const form = new FormData();
       form.append('file', file);
-      const res = await api.post<DirectivesOnlyResult>('/import/directives', form);
+      const res = await api.post<DirectivesOnlyResult>('/import/directives', form, {
+        query: directivesOverwrite ? { overwrite: 'true' } : {},
+      });
       setDirectivesResult(res);
       setDirectivesPreview(null);
     } catch (e) {
@@ -512,7 +523,32 @@ export function BsImportView() {
         )}
       </div>
 
-      <div className="flex flex-wrap justify-end mt-4 gap-2 sm:gap-3">
+      {/* Toggle 'Ecraser les directives existantes' — applique au bouton
+          'Directives (1er onglet)' uniquement. Quand actif, l'import passe
+          en UPSERT par CODE DIRECTIVE : les lignes existantes sont mises a
+          jour au lieu d'etre skippees, les nouvelles sont inserees. */}
+      <div className="flex justify-end mt-4">
+        <label
+          className={cn(
+            'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-xs select-none',
+            directivesOverwrite
+              ? 'border-warning bg-warning-bg text-warning font-semibold'
+              : 'border-border bg-surface text-fg-muted hover:bg-muted',
+          )}
+          title="Si activé, les directives existantes (même CODE DIRECTIVE) sont écrasées avec les nouvelles valeurs du fichier."
+        >
+          <input
+            type="checkbox"
+            checked={directivesOverwrite}
+            onChange={(e) => setDirectivesOverwrite(e.target.checked)}
+            className="accent-warning"
+            disabled={directivesSubmitting}
+          />
+          ⚠ Écraser les directives existantes (UPSERT)
+        </label>
+      </div>
+
+      <div className="flex flex-wrap justify-end mt-2 gap-2 sm:gap-3">
         <button
           type="button"
           className="btn btn-ghost"
@@ -526,9 +562,17 @@ export function BsImportView() {
           className="btn btn-secondary"
           onClick={() => void handleDirectivesPreview()}
           disabled={!file || submitting || directivesSubmitting || dedicatedSubmitting}
-          title="Lit uniquement le 1er onglet, déduplique par CODE DIRECTIVE"
+          title={
+            directivesOverwrite
+              ? 'Mode ÉCRASER : remplace les directives existantes par CODE DIRECTIVE'
+              : 'Lit uniquement le 1er onglet, déduplique par CODE DIRECTIVE'
+          }
         >
-          {directivesSubmitting ? 'Analyse…' : '📋 Directives (1er onglet)'}
+          {directivesSubmitting
+            ? 'Analyse…'
+            : directivesOverwrite
+              ? '📋 Directives (écraser)'
+              : '📋 Directives (1er onglet)'}
         </button>
         <button
           type="button"
@@ -627,19 +671,30 @@ export function BsImportView() {
             <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <div className="font-semibold text-base">
-                Import directives réussi · {directivesResult.imported} nouvelle
-                {directivesResult.imported > 1 ? 's' : ''}
+                Import directives réussi ·{' '}
+                {directivesResult.imported} nouvelle{directivesResult.imported > 1 ? 's' : ''}
+                {directivesResult.updated > 0
+                  ? ` · ${directivesResult.updated} écrasée${directivesResult.updated > 1 ? 's' : ''}`
+                  : ''}
               </div>
               <div className="text-xs mt-0.5 opacity-80 font-mono">
                 {directivesResult.filename} · {formatBytes(directivesResult.sizeBytes)}
+                {directivesResult.overwrite ? ' · mode ÉCRASER' : ''}
               </div>
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             <ResultCell label="Lignes analysées" value={directivesResult.totalRows} />
             <ResultCell label="Importées" value={directivesResult.imported} />
-            <ResultCell label="Doublons ignorés" value={directivesResult.duplicatesSkipped} />
-            <ResultCell label="Sans texte (skip)" value={directivesResult.skippedNoText} />
+            <ResultCell label="Écrasées" value={directivesResult.updated ?? 0} />
+            <ResultCell
+              label={directivesResult.overwrite ? 'Doublons (n/a)' : 'Doublons ignorés'}
+              value={directivesResult.duplicatesSkipped}
+            />
+            <ResultCell
+              label="Date invalide (skip)"
+              value={directivesResult.skippedInvalidDate ?? 0}
+            />
           </div>
           <div className="mt-4 flex gap-3 text-sm">
             <button
@@ -697,26 +752,60 @@ export function BsImportView() {
             </div>
             <div className="px-5 py-4">
               <p className="text-sm text-fg-2 mb-3">
-                Mode strict — 1er onglet uniquement · déduplication par <code className="font-mono bg-muted px-1 rounded">CODE DIRECTIVE</code> :
+                {directivesPreview.overwrite ? (
+                  <>
+                    <span className="font-semibold text-warning">Mode ÉCRASER</span> — 1er
+                    onglet uniquement. Les directives existantes (même{' '}
+                    <code className="font-mono bg-muted px-1 rounded">CODE DIRECTIVE</code>)
+                    seront <b>mises à jour</b> ; les nouvelles seront insérées.
+                  </>
+                ) : (
+                  <>
+                    Mode strict — 1er onglet uniquement · déduplication par{' '}
+                    <code className="font-mono bg-muted px-1 rounded">CODE DIRECTIVE</code> :
+                  </>
+                )}
               </p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                 <PreviewCell label="Analysées" value={directivesPreview.totalRows} />
                 <PreviewCell
                   label="Nouvelles"
                   value={directivesPreview.imported}
                   highlight
                 />
-                <PreviewCell
-                  label="Doublons ignorés"
-                  value={directivesPreview.duplicatesSkipped}
-                />
+                {directivesPreview.overwrite && (
+                  <PreviewCell
+                    label="Écrasées"
+                    value={directivesPreview.updated ?? 0}
+                    highlight
+                  />
+                )}
+                {!directivesPreview.overwrite && (
+                  <PreviewCell
+                    label="Doublons ignorés"
+                    value={directivesPreview.duplicatesSkipped}
+                  />
+                )}
                 <PreviewCell label="Sans texte" value={directivesPreview.skippedNoText} />
+                <PreviewCell
+                  label="Date invalide"
+                  value={directivesPreview.skippedInvalidDate ?? 0}
+                />
               </div>
-              {directivesPreview.imported === 0 && (
+              {directivesPreview.imported === 0 && directivesPreview.updated === 0 && (
                 <div className="mt-3 bg-warning-bg border-l-4 border-warning px-3 py-2 text-xs text-fg-2 rounded-r">
                   <AlertTriangle className="inline w-3.5 h-3.5 mr-1 text-warning" />
-                  Aucune nouvelle directive. Soit toutes sont déjà en base, soit la colonne
-                  DIRECTIVES est manquante / vide.
+                  {directivesPreview.overwrite
+                    ? 'Aucune directive à écraser ni à insérer. Vérifiez la colonne DIRECTIVES et les codes.'
+                    : 'Aucune nouvelle directive. Soit toutes sont déjà en base, soit la colonne DIRECTIVES est manquante / vide.'}
+                </div>
+              )}
+              {(directivesPreview.skippedInvalidDate ?? 0) > 0 && (
+                <div className="mt-3 bg-info-bg border-l-4 border-primary px-3 py-2 text-xs text-fg-2 rounded-r">
+                  <AlertTriangle className="inline w-3.5 h-3.5 mr-1 text-primary" />
+                  {directivesPreview.skippedInvalidDate} ligne(s) ignorée(s) car la colonne
+                  B (DATE RENCONTRE) est absente ou illisible. L'année y est extraite — sans
+                  elle, la directive ne peut pas être rattachée à une rencontre.
                 </div>
               )}
             </div>
