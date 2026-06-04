@@ -68,6 +68,13 @@ export const directiveFiltersSchema = z.object({
   statutValidation: z.enum(STATUTS_VALIDATION).optional(),
   annee: z.coerce.number().int().optional(),
   anneeMode: z.enum(ANNEE_MODES).default('active'),
+  /**
+   * 2e layer : si true, ajoute la contrainte "créée dans l'année sélectionnée"
+   * (r.annee = annee) au filtre principal. Combine bien avec anneeMode='active'
+   * pour voir "créées en N ET toujours ouvertes en N".
+   * Ignoré si annee n'est pas définie.
+   */
+  creeEnAnneeOnly: z.coerce.boolean().default(false),
   rencontreId: z.string().uuid().optional(),
   responsableId: z.coerce.number().int().optional(),
   search: z.string().optional(),

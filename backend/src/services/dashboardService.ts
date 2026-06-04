@@ -78,14 +78,16 @@ export async function getKpisByTypeRencontre(
   typeRencontre: string,
   annee?: number,
   anneeMode: AnneeMode = 'active',
+  creeEnAnneeOnly: boolean = false,
 ): Promise<GlobalKpis> {
   const params: (string | number)[] = [typeRencontre];
   let anneeClause = '';
   if (annee !== undefined) {
-    // Filtre paramétrable par anneeMode (active/creation/echeance) — formule
-    // SQL centralisée dans backend/src/lib/directiveAnneeFilter.ts.
+    // Filtre paramétrable par anneeMode (active/creation/echeance) + 2e
+    // layer optionnel creeEnAnneeOnly. Formule centralisée dans
+    // backend/src/lib/directiveAnneeFilter.ts.
     params.push(annee);
-    anneeClause = `AND ${directiveAnneeClause(anneeMode, params.length)}`;
+    anneeClause = `AND ${directiveAnneeClause(anneeMode, params.length, creeEnAnneeOnly)}`;
   }
 
   const row = await queryOne<{
@@ -576,6 +578,7 @@ export async function getAvailableYears(): Promise<number[]> {
 export async function getSgSummary(
   annee?: number,
   anneeMode: AnneeMode = 'active',
+  creeEnAnneeOnly: boolean = false,
 ): Promise<SgSummary> {
   const [
     availableYears,
@@ -590,9 +593,9 @@ export async function getSgSummary(
     copilProjets,
   ] = await Promise.all([
     getAvailableYears(),
-    getKpisByTypeRencontre('conseilMinistres', annee, anneeMode),
-    getKpisByTypeRencontre('conseilInterMinisteriel', annee, anneeMode),
-    getKpisByTypeRencontre('coordinationSggSg', annee, anneeMode),
+    getKpisByTypeRencontre('conseilMinistres', annee, anneeMode, creeEnAnneeOnly),
+    getKpisByTypeRencontre('conseilInterMinisteriel', annee, anneeMode, creeEnAnneeOnly),
+    getKpisByTypeRencontre('coordinationSggSg', annee, anneeMode, creeEnAnneeOnly),
     getCopilSummary(),
     getRecommandationsByCategorie(),
     getReunionsTechniquesSummary(annee),

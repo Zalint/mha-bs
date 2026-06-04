@@ -8,6 +8,8 @@ import { AnneeFilterHelp } from './AnneeFilterHelp.js';
 export interface DirectiveFiltersValue {
   annee: string;
   anneeMode: AnneeMode;
+  /** 2e layer optionnel : restreindre aux créées dans l'année sélectionnée. */
+  creeEnAnneeOnly: boolean;
   etat: DirectiveEtat | '';
   search: string;
 }
@@ -68,6 +70,28 @@ export function DirectiveFiltersBar({ value, onChange, availableYears }: Props) 
             <option value="echeance">Échéance</option>
           </select>
         </div>
+        {/* 2e layer : restreindre aux créées dans l'année sélectionnée.
+            Masqué si pas d'année ou si mode = 'creation' (déjà la même
+            contrainte = redondant). */}
+        {value.annee && value.anneeMode !== 'creation' && (
+          <label
+            className={cn(
+              'inline-flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded border text-[11px] cursor-pointer select-none',
+              value.creeEnAnneeOnly
+                ? 'border-primary bg-primary-100 text-primary-700 font-semibold'
+                : 'border-border bg-surface text-fg-muted hover:bg-muted',
+            )}
+            title={`Restreint aussi aux directives créées en ${value.annee}.`}
+          >
+            <input
+              type="checkbox"
+              checked={value.creeEnAnneeOnly}
+              onChange={(e) => onChange({ ...value, creeEnAnneeOnly: e.target.checked })}
+              className="accent-primary"
+            />
+            + Créées en {value.annee}
+          </label>
+        )}
       </div>
       <div className="flex-1 min-w-[240px]">
         <label htmlFor="f-search" className="field-label">

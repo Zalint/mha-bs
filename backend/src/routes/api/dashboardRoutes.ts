@@ -37,13 +37,14 @@ const kpisQuerySchema = z.object({
   typeRencontre: z.enum(TYPES_RENCONTRE).optional(),
   annee: z.coerce.number().int().min(2000).max(2100).optional(),
   anneeMode: z.enum(ANNEE_MODES).default('active'),
+  creeEnAnneeOnly: z.coerce.boolean().default(false),
 });
 
 dashboardRoutes.get('/kpis', authJwt, validate(kpisQuerySchema, 'query'), async (req, res, next) => {
   try {
     const q = req.query as unknown as z.infer<typeof kpisQuerySchema>;
     const kpis = q.typeRencontre
-      ? await getKpisByTypeRencontre(q.typeRencontre, q.annee, q.anneeMode)
+      ? await getKpisByTypeRencontre(q.typeRencontre, q.annee, q.anneeMode, q.creeEnAnneeOnly)
       : await getGlobalKpis();
     res.json(kpis);
   } catch (err) {
@@ -54,6 +55,7 @@ dashboardRoutes.get('/kpis', authJwt, validate(kpisQuerySchema, 'query'), async 
 const sgSummaryQuerySchema = z.object({
   annee: z.coerce.number().int().min(2000).max(2100).optional(),
   anneeMode: z.enum(ANNEE_MODES).default('active'),
+  creeEnAnneeOnly: z.coerce.boolean().default(false),
 });
 
 dashboardRoutes.get(
@@ -63,7 +65,7 @@ dashboardRoutes.get(
   async (req, res, next) => {
     try {
       const q = req.query as unknown as z.infer<typeof sgSummaryQuerySchema>;
-      res.json(await getSgSummary(q.annee, q.anneeMode));
+      res.json(await getSgSummary(q.annee, q.anneeMode, q.creeEnAnneeOnly));
     } catch (err) {
       next(err);
     }

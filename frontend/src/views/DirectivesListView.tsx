@@ -42,6 +42,7 @@ export function DirectivesListView({ typeRencontre }: Props) {
   const [filters, setFilters] = useState<DirectiveFiltersValue>({
     annee: '',
     anneeMode: 'active',
+    creeEnAnneeOnly: false,
     etat: '',
     search: '',
   });
@@ -58,6 +59,7 @@ export function DirectivesListView({ typeRencontre }: Props) {
     if (filters.annee) {
       params.annee = Number(filters.annee);
       params.anneeMode = filters.anneeMode;
+      if (filters.creeEnAnneeOnly) params.creeEnAnneeOnly = 'true';
     }
     if (filters.etat) params.etat = filters.etat;
     if (filters.search) params.search = filters.search;
@@ -66,7 +68,15 @@ export function DirectivesListView({ typeRencontre }: Props) {
 
   const directivesQuery = useApi(
     () => api.get<PaginatedResponse<Directive>>('/directives', { query: queryParams }),
-    [typeRencontre, page, filters.annee, filters.anneeMode, filters.etat, filters.search],
+    [
+      typeRencontre,
+      page,
+      filters.annee,
+      filters.anneeMode,
+      filters.creeEnAnneeOnly,
+      filters.etat,
+      filters.search,
+    ],
   );
 
   const kpisQuery = useApi(

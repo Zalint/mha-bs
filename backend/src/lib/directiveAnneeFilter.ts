@@ -29,24 +29,35 @@ import type { AnneeMode } from '@mha-bs/shared';
  * @param anneeMode mode sélectionné par l'utilisateur
  * @param placeholderIndex position $N de l'année dans le tableau params
  *                          (l'année doit avoir été poussée AVANT l'appel)
+ * @param creeEnAnneeOnly  2e layer optionnel : si true, ajoute la contrainte
+ *                          "créée dans l'année N" (r.annee = N) en plus du
+ *                          mode principal. Utile combinée à 'active' pour
+ *                          obtenir "créées en N ET toujours ouvertes en N".
+ *                          Sans effet sur 'creation' (déjà la même contrainte).
  */
 export function directiveAnneeClause(
   anneeMode: AnneeMode,
   placeholderIndex: number,
+  creeEnAnneeOnly: boolean = false,
 ): string {
   const $n = `$${placeholderIndex}`;
+  // Suffixe applique apres le filtre principal quand le 2e layer est actif.
+  // Sans effet pour 'creation' (qui implique deja r.annee = $n).
+  const creationSuffix =
+    creeEnAnneeOnly && anneeMode !== 'creation' ? ` AND r."annee" = ${$n}` : '';
   switch (anneeMode) {
     case 'creation':
       // Strict : émise en N
       return `r."annee" = ${$n}`;
     case 'echeance':
       // Strict : échéance en N. Les directives sans échéance ne matchent pas.
-      return `EXTRACT(YEAR FROM d."echeance")::INT = ${$n}`;
+      return `(EXTRACT(YEAR FROM d."echeance")::INT = ${$n}${creationSuffix})`;
     case 'active':
     default:
       // Couvre l'année N : émise pendant/avant N ET pas encore close début N
       return `(r."annee" <= ${$n}
                AND (d."echeance" IS NULL
-                    OR EXTRACT(YEAR FROM d."echeance")::INT >= ${$n}))`;
+                    OR EXTRACT(YEAR FROM d."echeance")::INT >= ${$n})
+               ${creationSuffix})`;
   }
 }

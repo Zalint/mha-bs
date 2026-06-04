@@ -26,6 +26,7 @@ const directivesQuerySchema = z.object({
   annee: z.coerce.number().int().min(2000).max(2100).optional(),
   anneeMode: z.enum(ANNEE_MODES).default('active'),
   typeRencontre: z.enum(TYPES_RENCONTRE).optional(),
+  creeEnAnneeOnly: z.coerce.boolean().default(false),
 });
 
 visualisationRoutes.get(
@@ -40,6 +41,7 @@ visualisationRoutes.get(
           annee: q.annee,
           anneeMode: q.anneeMode,
           typeRencontre: q.typeRencontre,
+          creeEnAnneeOnly: q.creeEnAnneeOnly,
         }),
       );
     } catch (err) {

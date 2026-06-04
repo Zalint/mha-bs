@@ -19,6 +19,8 @@ export interface VisuFilters {
   annee?: number;
   anneeMode: AnneeMode;
   typeRencontre?: string;
+  /** 2e layer : si true, restreint aussi aux créées dans `annee`. */
+  creeEnAnneeOnly?: boolean;
 }
 
 /**
@@ -38,7 +40,9 @@ function buildDirectiveWhere(filters: VisuFilters): {
   }
   if (filters.annee !== undefined) {
     params.push(filters.annee);
-    conditions.push(directiveAnneeClause(filters.anneeMode, params.length));
+    conditions.push(
+      directiveAnneeClause(filters.anneeMode, params.length, filters.creeEnAnneeOnly ?? false),
+    );
   }
 
   return {
@@ -144,7 +148,7 @@ export async function getDirectivesParType(
   let whereAnnee = '';
   if (filters.annee !== undefined) {
     params.push(filters.annee);
-    whereAnnee = `WHERE ${directiveAnneeClause(filters.anneeMode, params.length)}`;
+    whereAnnee = `WHERE ${directiveAnneeClause(filters.anneeMode, params.length, filters.creeEnAnneeOnly ?? false)}`;
   }
   const rows = await queryAll<{ typeRencontre: string; n: string }>(
     `SELECT r."typeRencontre", COUNT(*)::TEXT AS "n"
@@ -235,7 +239,9 @@ export async function getDelaiParType(
   ];
   if (filters.annee !== undefined) {
     params.push(filters.annee);
-    conditions.push(directiveAnneeClause(filters.anneeMode, params.length));
+    conditions.push(
+      directiveAnneeClause(filters.anneeMode, params.length, filters.creeEnAnneeOnly ?? false),
+    );
   }
   const rows = await queryAll<{
     typeRencontre: string;

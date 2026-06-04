@@ -109,9 +109,16 @@ export async function listDirectives(
     //   - 'active'   : la directive est active pendant l'année N
     //   - 'creation' : la directive a été émise en N (rencontre.annee = N)
     //   - 'echeance' : l'échéance tombe en N (exclut les sans-échéance)
+    // 2e layer (creeEnAnneeOnly) : si true, ajoute r.annee = N en plus.
     // Voir backend/src/lib/directiveAnneeFilter.ts pour les formules SQL.
     params.push(filters.annee);
-    conditions.push(directiveAnneeClause(filters.anneeMode ?? 'active', params.length));
+    conditions.push(
+      directiveAnneeClause(
+        filters.anneeMode ?? 'active',
+        params.length,
+        filters.creeEnAnneeOnly ?? false,
+      ),
+    );
   }
   if (filters.rencontreId) {
     params.push(filters.rencontreId);

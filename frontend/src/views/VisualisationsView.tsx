@@ -105,17 +105,24 @@ export function VisualisationsView() {
   const [activeTab, setActiveTab] = useState<'directives' | 'recommandations'>('directives');
   const [annee, setAnnee] = useState<number | ''>(new Date().getFullYear());
   const [anneeMode, setAnneeMode] = useState<AnneeMode>('active');
+  const [creeEnAnneeOnly, setCreeEnAnneeOnly] = useState<boolean>(false);
   const [typeRencontre, setTypeRencontre] = useState<string>('');
 
   const directivesQuery = useApi(
     () =>
       api.get<DirectivesPayload>('/visualisations/directives', {
         query: {
-          ...(annee !== '' ? { annee: String(annee), anneeMode } : {}),
+          ...(annee !== ''
+            ? {
+                annee: String(annee),
+                anneeMode,
+                ...(creeEnAnneeOnly ? { creeEnAnneeOnly: 'true' } : {}),
+              }
+            : {}),
           ...(typeRencontre ? { typeRencontre } : {}),
         },
       }),
-    [annee, anneeMode, typeRencontre],
+    [annee, anneeMode, creeEnAnneeOnly, typeRencontre],
   );
 
   const recommandationsQuery = useApi(
@@ -214,6 +221,27 @@ export function VisualisationsView() {
                   </select>
                 )}
               </div>
+              {/* 2e layer : restreindre aux créées dans l'année. Masque si
+                  pas d'année ou mode = creation (redondant). */}
+              {annee !== '' && anneeMode !== 'creation' && (
+                <label
+                  className={cn(
+                    'inline-flex items-center gap-1.5 mt-1.5 px-2 py-1 rounded border text-[11px] cursor-pointer select-none',
+                    creeEnAnneeOnly
+                      ? 'border-primary bg-primary-100 text-primary-700 font-semibold'
+                      : 'border-border bg-surface text-fg-muted hover:bg-muted',
+                  )}
+                  title={`Restreint en plus aux directives créées en ${annee}.`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={creeEnAnneeOnly}
+                    onChange={(e) => setCreeEnAnneeOnly(e.target.checked)}
+                    className="accent-primary"
+                  />
+                  + Créées en {annee}
+                </label>
+              )}
             </FilterGroup>
             {(annee !== '' || typeRencontre) && (
               <button

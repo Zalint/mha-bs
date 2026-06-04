@@ -25,6 +25,7 @@ import type { SgSummaryResponse } from './dashboard/types.js';
 
 const ANNEE_STORAGE_KEY = 'mha.dashboard.annee';
 const ANNEE_MODE_STORAGE_KEY = 'mha.dashboard.anneeMode';
+const CREE_EN_ANNEE_STORAGE_KEY = 'mha.dashboard.creeEnAnneeOnly';
 const LAYOUT_STORAGE_KEY = 'mha.dashboard.layout';
 const CURRENT_YEAR = new Date().getUTCFullYear();
 
@@ -54,6 +55,11 @@ function loadInitialAnneeMode(): AnneeMode {
   return 'active';
 }
 
+function loadInitialCreeEnAnnee(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(CREE_EN_ANNEE_STORAGE_KEY) === '1';
+}
+
 function loadInitialLayout(): Layout {
   // Bento et Focus sont masques dans l'UI (cf. picker plus bas) → on force
   // 'executive' meme si une valeur ancienne en localStorage etait differente.
@@ -65,6 +71,7 @@ function loadInitialLayout(): Layout {
 export function DashboardView() {
   const [annee, setAnnee] = useState<number | null>(loadInitialAnnee);
   const [anneeMode, setAnneeMode] = useState<AnneeMode>(loadInitialAnneeMode);
+  const [creeEnAnneeOnly, setCreeEnAnneeOnly] = useState<boolean>(loadInitialCreeEnAnnee);
   const [layout, setLayout] = useState<Layout>(loadInitialLayout);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const pdfContentRef = useRef<HTMLDivElement>(null);
@@ -130,17 +137,28 @@ export function DashboardView() {
   }, [anneeMode]);
 
   useEffect(() => {
+    window.localStorage.setItem(CREE_EN_ANNEE_STORAGE_KEY, creeEnAnneeOnly ? '1' : '0');
+  }, [creeEnAnneeOnly]);
+
+  useEffect(() => {
     window.localStorage.setItem(LAYOUT_STORAGE_KEY, layout);
   }, [layout]);
 
   const summaryQuery = useApi(
     () =>
       api.get<SgSummaryResponse>('/dashboard/sg-summary', {
-        // anneeMode n'est envoyé que si une année est selectionnee — sinon
-        // sans portée, le serveur l'ignore de toute facon.
-        query: annee !== null ? { annee, anneeMode } : {},
+        // anneeMode + creeEnAnneeOnly ne sont envoyés que si une année est
+        // selectionnee — sinon sans portée, le serveur les ignore.
+        query:
+          annee !== null
+            ? {
+                annee,
+                anneeMode,
+                ...(creeEnAnneeOnly ? { creeEnAnneeOnly: 'true' } : {}),
+              }
+            : {},
       }),
-    [annee, anneeMode],
+    [annee, anneeMode, creeEnAnneeOnly],
   );
 
   const missionsQuery = useApi(
@@ -301,6 +319,29 @@ export function DashboardView() {
               </select>
             )}
           </label>
+          {/* 2e layer : restreindre aussi aux directives CRÉÉES dans l'année
+              sélectionnée. Combine bien avec 'Active pendant' pour voir
+              "créées en N ET toujours ouvertes en N". Masqué si pas d'année
+              ou si mode = creation (déjà la même contrainte). */}
+          {annee !== null && anneeMode !== 'creation' && (
+            <label
+              className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs cursor-pointer select-none transition-colors',
+                creeEnAnneeOnly
+                  ? 'border-primary bg-primary-100 text-primary-700 font-semibold'
+                  : 'border-border bg-surface text-fg-muted hover:bg-muted',
+              )}
+              title={`Restreint aux directives créées en ${annee} (et encore ouvertes selon le mode ${anneeMode === 'active' ? 'Active pendant' : 'Échéance'}).`}
+            >
+              <input
+                type="checkbox"
+                checked={creeEnAnneeOnly}
+                onChange={(e) => setCreeEnAnneeOnly(e.target.checked)}
+                className="accent-primary"
+              />
+              + Créées en {annee}
+            </label>
+          )}
         </div>
       </div>
 
