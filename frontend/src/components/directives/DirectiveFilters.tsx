@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { Info, Search } from 'lucide-react';
 
 import { DIRECTIVE_ETATS, type DirectiveEtat } from '@mha-bs/shared';
 
@@ -27,8 +27,13 @@ export function DirectiveFiltersBar({ value, onChange, availableYears }: Props) 
   return (
     <div className="bg-surface border border-border rounded-lg p-4 mb-4 flex flex-wrap items-end gap-3">
       <div>
-        <label htmlFor="f-annee" className="field-label">
-          Année
+        <label
+          htmlFor="f-annee"
+          className="field-label flex items-center gap-1.5"
+          title="Une directive est visible pour l'année N si elle a été émise pendant ou avant N ET son échéance n'est pas dépassée avant N. Une directive pluri-annuelle (ex. 2024 → 2026) apparaît donc sous chaque année qu'elle couvre."
+        >
+          Année active
+          <Info className="w-3 h-3 text-fg-muted" />
         </label>
         <select
           id="f-annee"

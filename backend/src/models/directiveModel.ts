@@ -104,8 +104,18 @@ export async function listDirectives(
     conditions.push(`d."statutValidation" = $${params.length}`);
   }
   if (filters.annee) {
+    // Sémantique "Active pendant l'année N" (et non plus "rencontre = N") :
+    // une directive est visible pour l'année N si :
+    //   - elle a été émise pendant ou avant N (rencontre.annee <= N)
+    //   - ET elle n'était pas encore close (echeance IS NULL OU year(echeance) >= N)
+    // Permet de voir les directives pluri-annuelles (ex. 2024 → 2026) sous
+    // CHAQUE année qu'elles couvrent.
     params.push(filters.annee);
-    conditions.push(`r."annee" = $${params.length}`);
+    conditions.push(
+      `(r."annee" <= $${params.length}
+        AND (d."echeance" IS NULL
+             OR EXTRACT(YEAR FROM d."echeance")::INT >= $${params.length}))`,
+    );
   }
   if (filters.rencontreId) {
     params.push(filters.rencontreId);

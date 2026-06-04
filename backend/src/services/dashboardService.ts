@@ -78,8 +78,14 @@ export async function getKpisByTypeRencontre(
   const params: (string | number)[] = [typeRencontre];
   let anneeClause = '';
   if (annee !== undefined) {
+    // Sémantique "Active pendant l'année N" : la directive doit avoir été
+    // émise pendant ou avant N ET ne pas être terminée avant N. Cohérent
+    // avec le filtre liste (directiveModel.ts).
     params.push(annee);
-    anneeClause = `AND r."annee" = $${params.length}`;
+    anneeClause =
+      `AND r."annee" <= $${params.length}
+       AND (d."echeance" IS NULL
+            OR EXTRACT(YEAR FROM d."echeance")::INT >= $${params.length})`;
   }
 
   const row = await queryOne<{
