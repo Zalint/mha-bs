@@ -129,7 +129,11 @@ export function DashboardSgExecutive({ data, missions, anneeLabel, forPrint = fa
       <BentoCard
         accent="cyan"
         title="Activité trimestrielle"
-        subtitle="Réunions techniques + rencontres · 4 trimestres roulants"
+        subtitle={
+          data.annee !== null
+            ? `Réunions techniques + rencontres · année ${data.annee}`
+            : 'Réunions techniques + rencontres · 4 trimestres roulants'
+        }
         headerRight={<TrimestreCurrentChip data={data} />}
       >
         <TrimestresChart data={data.activiteParTrimestre} />

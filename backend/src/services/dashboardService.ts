@@ -462,19 +462,29 @@ export async function getCopilProjets(): Promise<CopilProjetSummary[]> {
  * depuis aujourd'hui. Somme `reunionsTechniques` (date) + `rencontres`
  * (les rencontres sont aussi des réunions).
  */
-export async function getActiviteParTrimestre(): Promise<ActiviteParTrimestre[]> {
-  // Calcule les 4 trimestres roulants en SQL via generate_series puis JOIN sur les 2 tables.
+export async function getActiviteParTrimestre(
+  annee?: number,
+): Promise<ActiviteParTrimestre[]> {
+  // Deux modes :
+  //   - annee défini      → on retourne les 4 trimestres de cette année (T1..T4)
+  //   - annee non défini  → 4 trimestres roulants jusqu'à aujourd'hui
+  //     (comportement historique pour la vue "toutes années")
+  const trimestresCte =
+    annee !== undefined
+      ? `SELECT $1::INT AS "year", q::INT AS "q" FROM generate_series(1, 4) AS q`
+      : `SELECT
+           EXTRACT(YEAR FROM d)::INT  AS "year",
+           EXTRACT(QUARTER FROM d)::INT AS "q"
+         FROM generate_series(
+           DATE_TRUNC('quarter', CURRENT_DATE) - INTERVAL '9 months',
+           DATE_TRUNC('quarter', CURRENT_DATE),
+           INTERVAL '3 months'
+         ) AS d`;
+
+  const params: number[] = annee !== undefined ? [annee] : [];
+
   const rows = await queryAll<{ trimestre: string; reunions: string; rencontres: string }>(
-    `WITH trimestres AS (
-       SELECT
-         EXTRACT(YEAR FROM d)::INT  AS "year",
-         EXTRACT(QUARTER FROM d)::INT AS "q"
-       FROM generate_series(
-         DATE_TRUNC('quarter', CURRENT_DATE) - INTERVAL '9 months',
-         DATE_TRUNC('quarter', CURRENT_DATE),
-         INTERVAL '3 months'
-       ) AS d
-     )
+    `WITH trimestres AS ( ${trimestresCte} )
      SELECT
        t."year" || '-T' || t."q" AS "trimestre",
        COALESCE((
@@ -489,6 +499,7 @@ export async function getActiviteParTrimestre(): Promise<ActiviteParTrimestre[]>
        ), '0') AS "rencontres"
      FROM trimestres t
      ORDER BY t."year" ASC, t."q" ASC`,
+    params,
   );
   return rows.map((r) => {
     const reunions = Number(r.reunions);
@@ -577,7 +588,7 @@ export async function getSgSummary(annee?: number): Promise<SgSummary> {
     getRecommandationsByCategorie(),
     getReunionsTechniquesSummary(annee),
     getMissionsTerrainSummary(annee),
-    getActiviteParTrimestre(),
+    getActiviteParTrimestre(annee),
     getCopilProjets(),
   ]);
   return {
