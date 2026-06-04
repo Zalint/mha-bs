@@ -390,7 +390,13 @@ interface DirectivesContentProps {
 }
 
 function DirectivesContent({ aggregate, totalDirectives }: DirectivesContentProps) {
-  const max = Math.max(aggregate.nbRealisees, aggregate.nbAttente, aggregate.nbEnCours, 1);
+  const max = Math.max(
+    aggregate.nbRealisees,
+    aggregate.nbAttente,
+    aggregate.nbEnCours,
+    aggregate.nbIneligibles,
+    1,
+  );
   const etats = [
     {
       label: 'Exécuté',
@@ -409,6 +415,12 @@ function DirectivesContent({ aggregate, totalDirectives }: DirectivesContentProp
       value: aggregate.nbEnCours,
       gradient: 'from-rose-300 to-rose-500',
       text: 'text-rose-700',
+    },
+    {
+      label: 'Inéligible',
+      value: aggregate.nbIneligibles,
+      gradient: 'from-slate-300 to-slate-400',
+      text: 'text-slate-600',
     },
   ];
   return (
@@ -452,7 +464,9 @@ function DirectivesContent({ aggregate, totalDirectives }: DirectivesContentProp
             const widthPct = Math.max((e.value / max) * 100, 2);
             return (
               <div key={e.label} className="flex items-center gap-2">
-                <span className={cn('w-16 text-xs font-semibold', e.text)}>{e.label}</span>
+                <span className={cn('w-[4.5rem] text-xs font-semibold whitespace-nowrap', e.text)}>
+                  {e.label}
+                </span>
                 <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                   <div
                     className={cn('h-full rounded-full bg-gradient-to-r', e.gradient)}
