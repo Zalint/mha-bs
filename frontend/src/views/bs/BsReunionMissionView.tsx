@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 
 import L from 'leaflet';
-import { ArrowLeft, Construction, MapPin, Plus, Save, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, Construction, MapPin, Plus, Save, Trash2, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
@@ -482,34 +482,81 @@ export function BsReunionMissionView() {
           </fieldset>
 
           <fieldset className="p-5 border-b border-border">
-            <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-3">
+            <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-1 flex items-center gap-2">
               Ouvrages visités
+              {ouvrages.length > 0 && (
+                <span className="inline-flex items-center bg-primary text-white rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums normal-case tracking-normal">
+                  {ouvrages.length}
+                </span>
+              )}
             </legend>
+            <p className="text-[11.5px] text-fg-muted mb-3">
+              Ajoutez autant d'ouvrages visités que nécessaire — cliquez « Ajouter »
+              pour chaque ouvrage, puis enregistrez la mission tout en bas.
+            </p>
+
+            {/* Liste des ouvrages deja ajoutes (ou empty state guidant) */}
             {ouvrages.length === 0 ? (
-              <p className="text-sm text-fg-muted italic mb-3">Aucun ouvrage ajouté.</p>
-            ) : (
-              <div className="space-y-2 mb-3">
-                {ouvrages.map((o, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2.5 border border-border rounded">
-                    <Construction className="w-3.5 h-3.5 text-primary" />
-                    <span className="flex-1 text-sm">{o.nomOuvrage}</span>
-                    <span className="badge bg-muted text-fg-2 text-[11px]">{o.etatOuvrage}</span>
-                    <button
-                      type="button"
-                      onClick={() => setOuvrages((arr) => arr.filter((_, idx) => idx !== i))}
-                      className="text-fg-muted hover:text-danger"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+              <div className="text-center py-6 mb-3 border-2 border-dashed border-border rounded-lg bg-surface2/30">
+                <Construction className="w-5 h-5 text-fg-muted mx-auto mb-1.5" />
+                <p className="text-sm text-fg-muted italic">
+                  Aucun ouvrage encore. Saisissez le 1er ci-dessous.
+                </p>
               </div>
+            ) : (
+              <ul className="space-y-2 mb-3">
+                {ouvrages.map((o, i) => {
+                  const typeLabel = o.typeOuvrage
+                    ? typeOuvrageRef.items.find((t) => t.code === o.typeOuvrage)?.label ??
+                      o.typeOuvrage
+                    : null;
+                  const etatLabel =
+                    etatOuvrageRef.items.find((e) => e.code === o.etatOuvrage)?.label ??
+                    o.etatOuvrage;
+                  return (
+                    <li
+                      key={i}
+                      className="flex items-center gap-2.5 p-3 border border-border rounded-lg bg-surface hover:bg-muted/40 transition-colors"
+                    >
+                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 text-primary-700 font-mono text-[11px] font-bold flex-shrink-0">
+                        {i + 1}
+                      </span>
+                      <Construction className="w-4 h-4 text-primary flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{o.nomOuvrage}</div>
+                        {typeLabel && (
+                          <div className="text-[11px] text-fg-muted">{typeLabel}</div>
+                        )}
+                      </div>
+                      <span className="badge bg-muted text-fg-2 text-[11px] whitespace-nowrap">
+                        {etatLabel}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setOuvrages((arr) => arr.filter((_, idx) => idx !== i))}
+                        className="text-fg-muted hover:text-danger p-1 rounded"
+                        aria-label={`Retirer ${o.nomOuvrage}`}
+                        title="Retirer cet ouvrage"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-            <NewOuvrageRow
-              onAdd={(o) => setOuvrages((arr) => [...arr, o])}
-              etats={etatOuvrageRef.items.map((e) => ({ code: e.code, label: e.label }))}
-              types={typeOuvrageRef.items.map((t) => ({ code: t.code, label: t.label }))}
-            />
+
+            {/* Bloc de saisie d'un nouvel ouvrage, visuellement distinct */}
+            <div className="border-2 border-dashed border-primary-100 bg-primary-100/20 rounded-lg p-3">
+              <div className="text-[10.5px] uppercase tracking-wider font-semibold text-primary-700 mb-2">
+                Ajouter un ouvrage
+              </div>
+              <NewOuvrageRow
+                onAdd={(o) => setOuvrages((arr) => [...arr, o])}
+                etats={etatOuvrageRef.items.map((e) => ({ code: e.code, label: e.label }))}
+                types={typeOuvrageRef.items.map((t) => ({ code: t.code, label: t.label }))}
+              />
+            </div>
           </fieldset>
 
           <fieldset className="p-5 border-b border-border">
