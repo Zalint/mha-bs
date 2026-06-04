@@ -20,6 +20,7 @@ import { referentielRoutes } from './api/referentielRoutes.js';
 import { rencontreRoutes } from './api/rencontreRoutes.js';
 import { reunionRoutes } from './api/reunionRoutes.js';
 import { userRoutes } from './api/userRoutes.js';
+import { visualisationRoutes } from './api/visualisationRoutes.js';
 import { externalDirectiveRoutes } from './external/directiveRoutes.js';
 import { externalHealthRoutes } from './external/healthRoutes.js';
 
@@ -43,6 +44,7 @@ apiRouter.use('/interpellations', interpellationRoutes);
 apiRouter.use('/users', userRoutes);
 apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/alertes', alerteRoutes);
+apiRouter.use('/visualisations', visualisationRoutes);
 
 // --- API externe (x-api-key) ---
 if (appConfig.externalApi.enabled) {

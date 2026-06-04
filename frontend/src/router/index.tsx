@@ -27,6 +27,7 @@ import { ParDirectionView } from '../views/ParDirectionView.js';
 import { CategorieMatricesView } from '../views/recommandations/CategorieMatricesView.js';
 import { RecommandationsMhaView } from '../views/recommandations/RecommandationsMhaView.js';
 import { ReunionsTechniquesView } from '../views/ReunionsTechniquesView.js';
+import { VisualisationsView } from '../views/VisualisationsView.js';
 import { SgValidationView } from '../views/sg/SgValidationView.js';
 import { UsersView } from '../views/UsersView.js';
 
@@ -69,6 +70,7 @@ export const router = createBrowserRouter([
           { path: 'par-direction', element: <ParDirectionView /> },
           { path: 'interpellations', element: <InterpellationsView /> },
           { path: 'glossaire', element: <GlossaireView /> },
+          { path: 'visualisations', element: <VisualisationsView /> },
           { path: 'bs/liste', element: <BsListeView /> },
           { path: 'bs/alertes', element: <BsAlertesView /> },
           { path: 'bs/fiche', element: <DirectiveFicheView /> },
