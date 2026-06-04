@@ -25,25 +25,40 @@ interface Row {
 }
 
 const ROWS: Row[] = [
-  { label: 'Émise 2024, échéance 2024', active: [2024], creation: [2024], echeance: [2024] },
-  { label: 'Émise 2025, échéance 2026', active: [2025, 2026], creation: [2025], echeance: [2026] },
+  // realisee + echeance dans l'année = close dans l'année, n'apparaît plus après
   {
-    label: 'Émise 2024, échéance 2026 (pluri-annuelle)',
+    label: 'Émise 2024, réalisée en 2024',
+    active: [2024],
+    creation: [2024],
+    echeance: [2024],
+  },
+  // En cours, pas d'échéance → toujours active après son année d'émission
+  {
+    label: 'Émise 2024, encore en cours (sans échéance)',
+    active: [2024, 2025, 2026, 2027],
+    creation: [2024],
+    echeance: [], // exclue : pas d'échéance
+  },
+  // En cours avec échéance 2026 → active sur 2024-2026
+  {
+    label: 'Émise 2024, en cours, échéance 2026',
     active: [2024, 2025, 2026],
     creation: [2024],
     echeance: [2026],
   },
+  // Émise 2025 et toujours en attente : reste visible tant que ouverte
   {
-    label: 'Émise 2025, sans échéance (en cours)',
+    label: 'Émise 2025, encore en attente',
     active: [2025, 2026, 2027],
     creation: [2025],
-    echeance: [], // exclue : pas d'échéance
+    echeance: [], // pas d'échéance affichée
   },
+  // realisee + finExecution passée : close, mais échéance future → quand-même active
   {
-    label: 'Émise 2024, échéance 2025 + déjà realisee',
-    active: [2024, 2025],
+    label: 'Émise 2024, réalisée, échéance 2026',
+    active: [2024, 2025, 2026],
     creation: [2024],
-    echeance: [2025],
+    echeance: [2026],
   },
 ];
 
@@ -218,7 +233,7 @@ export function AnneeFilterHelp({ currentMode = 'active' }: Props) {
               <ModeCard
                 title="Active pendant"
                 active={currentMode === 'active'}
-                description="La directive existait pendant l'année N (émise pendant ou avant N ET pas encore close début N). Couvre les pluri-annuelles et les en-cours sans échéance."
+                description="La directive était dans le portefeuille actif pendant N. Émise pendant ou avant N ET (état ouvert : attente/enCours, OU échéance ≥ N). Inclut les en-cours pluri-annuels et les ouvertes d'années précédentes."
                 bestFor="Vue large : « portefeuille de l'année »."
               />
               <ModeCard

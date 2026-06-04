@@ -54,9 +54,20 @@ export function directiveAnneeClause(
       return `(EXTRACT(YEAR FROM d."echeance")::INT = ${$n}${creationSuffix})`;
     case 'active':
     default:
-      // Couvre l'année N : émise pendant/avant N ET pas encore close début N
+      // Couvre l'année N : émise pendant/avant N ET encore ouverte au sens
+      // métier. "Ouverte" = état attente ou enCours (la directive est dans
+      // le portefeuille actif aujourd'hui, peu importe son échéance), OU
+      // bien échéance future / sans échéance (cas des fermées avec date
+      // d'échéance >= N : elles ont été actives pendant N).
+      //
+      // Exemples sur N=2026 :
+      //   - r.annee=2024, etat=enCours              → INCLUSE (ouverte)
+      //   - r.annee=2025, etat=attente, echeance=2025 → INCLUSE (ouverte)
+      //   - r.annee=2024, etat=realisee, echeance=2024 → exclue (close avant N)
+      //   - r.annee=2024, etat=realisee, echeance=2026 → INCLUSE (active pdt N)
       return `(r."annee" <= ${$n}
-               AND (d."echeance" IS NULL
+               AND (d."etat" IN ('attente', 'enCours')
+                    OR d."echeance" IS NULL
                     OR EXTRACT(YEAR FROM d."echeance")::INT >= ${$n})
                ${creationSuffix})`;
   }
