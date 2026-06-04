@@ -1,4 +1,4 @@
-import { FileDown, Landmark, Loader2, RefreshCw } from 'lucide-react';
+import { FileDown, Info, Landmark, Loader2, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -234,8 +234,15 @@ export function DashboardView() {
               </button>
             ))}
           </div>
-          <label className="flex items-center gap-2 text-xs sm:text-sm text-fg-muted">
-            Année
+          <label
+            className="flex items-center gap-2 text-xs sm:text-sm text-fg-muted"
+            title={
+              "Directives : 'active pendant N' (visible si émise pendant ou avant N et non close début N — gère les directives pluri-annuelles).\n" +
+              "Réunions / missions : événements de l'année N (date dans l'année)."
+            }
+          >
+            Année active
+            <Info className="w-3 h-3" />
             <select
               value={annee === null ? ALL_YEARS : String(annee)}
               onChange={(e) => {
