@@ -115,8 +115,15 @@ export function DashboardView() {
       const opts: Record<string, unknown> = {
         margin: [10, 10, 10, 10],
         filename,
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#F8FAFC' },
+        // PNG + qualité max : le JPEG floutait le texte fin. scale 3 =
+        // rasterisation à 3x la résolution écran -> texte net dans le PDF.
+        image: { type: 'png', quality: 1 },
+        html2canvas: {
+          scale: 3,
+          useCORS: true,
+          backgroundColor: '#F8FAFC',
+          letterRendering: true,
+        },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
       };

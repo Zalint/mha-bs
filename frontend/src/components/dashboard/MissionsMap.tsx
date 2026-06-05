@@ -8,15 +8,20 @@ import type { MissionTerrain } from '@mha-bs/shared';
 import { formatShort } from '../../lib/formatDate.js';
 
 /**
- * Bounding box du Sénégal entier (SW → NE) avec une petite marge.
- * En passant `bounds` à la MapContainer, Leaflet calcule automatiquement le
- * zoom pour faire tenir TOUT le pays dans le conteneur, quelle que soit sa
- * taille → jamais tronqué, et "dézoomé" pour voir l'ensemble du territoire.
+ * Bounding box SERRÉE sur le territoire continental du Sénégal.
+ *
+ * On borne l'ouest à -17.6 (côte de Dakar) au lieu de -17.8+ : sinon Leaflet,
+ * pour faire tenir une bbox large dans un conteneur "paysage", ajoute beaucoup
+ * d'océan Atlantique (et le Cap-Vert) à gauche et repousse le pays tout à
+ * droite. Avec ces bornes resserrées, le Sénégal occupe le centre du cadre.
  */
 const SENEGAL_BOUNDS: L.LatLngBoundsExpression = [
-  [12.0, -17.8], // Sud-Ouest (Casamance / Cap Skirring)
-  [16.9, -11.2], // Nord-Est (vallée du fleuve / Kédougou)
+  [12.2, -17.6], // Sud-Ouest (côte / Casamance)
+  [16.7, -11.4], // Nord-Est (vallée du fleuve / Kédougou)
 ];
+
+/** Centre géographique du Sénégal — sert de point d'ancrage après fitBounds. */
+const SENEGAL_CENTER: [number, number] = [14.5, -14.5];
 
 const PIN_ICON = L.divIcon({
   className: '',
@@ -37,9 +42,16 @@ export function MissionsMap({ items, height = 320, forPrint = false }: Props) {
   return (
     <div style={{ height }} className="rounded-lg overflow-hidden border border-border">
       <MapContainer
-        // bounds fait tenir tout le Sénégal dans le conteneur → pas de troncature
+        // bounds + zoomSnap=0 : fitBounds cadre EXACTEMENT le Sénégal (zoom
+        // fractionnaire) au lieu d'arrondir le zoom vers le bas, ce qui
+        // dézoomait jusqu'à montrer l'Atlantique + le Cap-Vert. Le pays est
+        // ainsi centré dans le cadre.
+        center={SENEGAL_CENTER}
+        zoom={6.4}
         bounds={SENEGAL_BOUNDS}
-        boundsOptions={{ padding: [6, 6] }}
+        boundsOptions={{ padding: [4, 4] }}
+        zoomSnap={0}
+        zoomDelta={0.25}
         scrollWheelZoom={false}
         zoomControl={!forPrint}
         dragging={!forPrint}
