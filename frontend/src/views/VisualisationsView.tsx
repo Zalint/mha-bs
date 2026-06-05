@@ -14,6 +14,7 @@ import {
   Calendar,
   ChevronRight,
   Clock,
+  Compass,
   Filter,
   LineChart as LineChartIcon,
   PieChart as PieChartIcon,
@@ -41,6 +42,7 @@ import { type AnneeMode, TYPES_RENCONTRE } from '@mha-bs/shared';
 
 import { AnneeFilterHelp } from '../components/directives/AnneeFilterHelp.js';
 import { Spinner } from '../components/ui/Spinner.js';
+import { ExplorerView } from './ExplorerView.js';
 import { useApi } from '../hooks/useApi.js';
 import { api } from '../lib/apiClient.js';
 import { cn } from '../lib/cn.js';
@@ -102,7 +104,9 @@ const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août
 // ===== View principale =====
 
 export function VisualisationsView() {
-  const [activeTab, setActiveTab] = useState<'directives' | 'recommandations'>('directives');
+  const [activeTab, setActiveTab] = useState<'directives' | 'recommandations' | 'explorer'>(
+    'directives',
+  );
   const [annee, setAnnee] = useState<number | ''>(new Date().getFullYear());
   const [anneeMode, setAnneeMode] = useState<AnneeMode>('active');
   const [creeEnAnneeOnly, setCreeEnAnneeOnly] = useState<boolean>(false);
@@ -139,8 +143,9 @@ export function VisualisationsView() {
           Visualisations
         </h1>
         <p className="text-sm text-fg-muted mt-1">
-          Explorer les directives présidentielles et les recommandations matrice
-          sous différents angles. 8 charts pour les directives, 2 pour les recommandations.
+          Graphes pré-construits sur les directives et recommandations, plus un mode
+          <b> Explorer (Power BI)</b> pour construire vos propres analyses (dimensions,
+          mesures, filtres croisés, tableau croisé, drill-down).
         </p>
       </div>
 
@@ -160,6 +165,13 @@ export function VisualisationsView() {
             icon={Target}
           >
             Recommandations matrice
+          </TabButton>
+          <TabButton
+            active={activeTab === 'explorer'}
+            onClick={() => setActiveTab('explorer')}
+            icon={Compass}
+          >
+            Explorer (Power BI)
           </TabButton>
         </div>
       </div>
@@ -283,6 +295,9 @@ export function VisualisationsView() {
           )}
         </>
       )}
+
+      {/* Onglet Explorer (mode Power BI) */}
+      {activeTab === 'explorer' && <ExplorerView />}
     </div>
   );
 }
