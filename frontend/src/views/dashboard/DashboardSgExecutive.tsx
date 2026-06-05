@@ -307,7 +307,7 @@ function BentoCard({
             {title}
           </div>
           {subtitle && (
-            <div className="text-[11px] text-fg-muted mt-0.5 font-mono">{subtitle}</div>
+            <div className="text-[11px] text-fg-muted mt-0.5 leading-5">{subtitle}</div>
           )}
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -644,7 +644,7 @@ function CopilProjetsContent({ projets, target, onProjetClick }: CopilProjetsCon
           <Legend color="bg-amber-500" label="en progression" />
           <Legend color="bg-emerald-500" label={`cible atteinte (≥${target}%)`} />
         </span>
-        <span className="font-mono hidden sm:inline">| ligne cible {target}%</span>
+        <span className="hidden sm:inline">| ligne cible {target}%</span>
       </div>
     </>
   );
@@ -689,7 +689,9 @@ function CopilProjectRow({ projet, target, onClick }: CopilProjectRowProps) {
       onClick={onClick}
       className="w-full flex items-center gap-2.5 hover:bg-muted/50 rounded-md px-1.5 py-1 -mx-1.5 transition-colors text-left"
     >
-      <span className="w-24 text-xs font-semibold text-fg-2 truncate">{displayLabel}</span>
+      <span className="w-24 text-xs font-semibold text-fg-2 whitespace-nowrap leading-5">
+        {displayLabel}
+      </span>
       <div className="flex-1 relative h-4 bg-muted rounded">
         <div
           className={cn('absolute inset-y-0 left-0 rounded bg-gradient-to-r', gradient)}
@@ -738,12 +740,12 @@ function MissionsContent({ missions }: MissionsContentProps) {
           {missions.length === 0 ? '' : 's'}
         </span>
       </div>
-      <div className="space-y-1 text-[11px] font-mono max-h-32 overflow-auto">
+      <div className="space-y-1.5 text-xs leading-5 max-h-32 overflow-auto">
         {missions.slice(0, 5).map((m) => (
           <div key={m.id} className="flex items-center gap-2 text-fg-2">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 flex-shrink-0" />
-            <span className="truncate">
-              {m.localite}
+            <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+              <span className="font-medium">{m.localite}</span>
               {m.projetRattache && (
                 <span className="text-fg-muted"> · {m.projetRattache}</span>
               )}
