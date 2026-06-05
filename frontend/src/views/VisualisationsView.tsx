@@ -104,8 +104,10 @@ const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août
 // ===== View principale =====
 
 export function VisualisationsView() {
+  // Onglets Directives + Recommandations masques (cf. tab bar wrappee dans
+  // {false && ...}). Seul l'Explorer reste visible -> defaut 'explorer'.
   const [activeTab, setActiveTab] = useState<'directives' | 'recommandations' | 'explorer'>(
-    'directives',
+    'explorer',
   );
   const [annee, setAnnee] = useState<number | ''>(new Date().getFullYear());
   const [anneeMode, setAnneeMode] = useState<AnneeMode>('active');
@@ -143,38 +145,41 @@ export function VisualisationsView() {
           Visualisations
         </h1>
         <p className="text-sm text-fg-muted mt-1">
-          Graphes pré-construits sur les directives et recommandations, plus un mode
-          <b> Explorer (Power BI)</b> pour construire vos propres analyses (dimensions,
-          mesures, filtres croisés, tableau croisé, drill-down).
+          Mode <b>Explorer (Power BI)</b> : construisez vos propres analyses —
+          choix de la source, dimensions, mesures, filtres croisés, tableau croisé
+          et drill-down vers les données détaillées.
         </p>
       </div>
 
-      {/* Onglets */}
-      <div className="border-b border-border mb-5">
-        <div className="flex gap-1">
-          <TabButton
-            active={activeTab === 'directives'}
-            onClick={() => setActiveTab('directives')}
-            icon={Activity}
-          >
-            Directives présidentielles
-          </TabButton>
-          <TabButton
-            active={activeTab === 'recommandations'}
-            onClick={() => setActiveTab('recommandations')}
-            icon={Target}
-          >
-            Recommandations matrice
-          </TabButton>
-          <TabButton
-            active={activeTab === 'explorer'}
-            onClick={() => setActiveTab('explorer')}
-            icon={Compass}
-          >
-            Explorer (Power BI)
-          </TabButton>
+      {/* Onglets — Directives + Recommandations masques a la demande.
+          Pour les reactiver : retirer le `false &&`. */}
+      {false && (
+        <div className="border-b border-border mb-5">
+          <div className="flex gap-1">
+            <TabButton
+              active={activeTab === 'directives'}
+              onClick={() => setActiveTab('directives')}
+              icon={Activity}
+            >
+              Directives présidentielles
+            </TabButton>
+            <TabButton
+              active={activeTab === 'recommandations'}
+              onClick={() => setActiveTab('recommandations')}
+              icon={Target}
+            >
+              Recommandations matrice
+            </TabButton>
+            <TabButton
+              active={activeTab === 'explorer'}
+              onClick={() => setActiveTab('explorer')}
+              icon={Compass}
+            >
+              Explorer (Power BI)
+            </TabButton>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Onglet Directives */}
       {activeTab === 'directives' && (
