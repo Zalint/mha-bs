@@ -1,32 +1,27 @@
 /**
- * DashboardMissionsMap — wrapper qui choisit la bonne carte selon le contexte :
- *   - À l'écran     : MissionsMap (Leaflet, interactive — zoom, pan, popups)
- *   - En PDF (html2pdf/html2canvas ne sait pas capturer Leaflet) :
- *                     SenegalMiniMap (SVG statique, rendu identique a l'ecran
- *                     et en PDF)
+ * DashboardMissionsMap — carte des missions pour le dashboard.
  *
- * Le parent (DashboardView) passe `forPrint` à true juste avant la generation
- * PDF, ce qui declenche le swap. Les deux composants partagent la meme API
- * (items + height) pour permettre un drop-in remplacement.
+ * Rend TOUJOURS la vraie carte Leaflet (tuiles OpenStreetMap), cadrée sur tout
+ * le Sénégal via bounds (jamais tronquée). En mode PDF (forPrint), on désactive
+ * juste les contrôles/interactions pour un rendu propre — mais la carte reste
+ * la vraie carte OSM.
+ *
+ * Note : pour que les tuiles apparaissent dans le PDF (html2canvas), le parent
+ * (DashboardView) attend que les tuiles soient chargées avant de lancer la
+ * capture (cf. handleGeneratePdf).
  */
 
 import type { MissionTerrain } from '@mha-bs/shared';
 
 import { MissionsMap } from './MissionsMap.js';
-import { SenegalMiniMap } from './SenegalMiniMap.js';
 
 interface Props {
   items: MissionTerrain[];
   height?: number;
-  /** Force le rendu SVG statique (typique : juste avant generation PDF). */
+  /** true pendant la génération PDF — désactive les contrôles Leaflet. */
   forPrint?: boolean;
-  /** Zoom initial Leaflet (ignore quand forPrint=true). */
-  zoom?: number;
 }
 
-export function DashboardMissionsMap({ items, height = 320, forPrint = false, zoom = 7 }: Props) {
-  if (forPrint) {
-    return <SenegalMiniMap items={items} height={height} />;
-  }
-  return <MissionsMap items={items} height={height} zoom={zoom} />;
+export function DashboardMissionsMap({ items, height = 320, forPrint = false }: Props) {
+  return <MissionsMap items={items} height={height} forPrint={forPrint} />;
 }

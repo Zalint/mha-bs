@@ -97,12 +97,14 @@ export function DashboardView() {
   const handleGeneratePdf = async (): Promise<void> => {
     if (!pdfContentRef.current) return;
     setGeneratingPdf(true);
-    // Laisse React faire un re-render (passage Leaflet -> SVG dans les layouts)
-    // avant de demander a html2canvas de capturer le DOM. Deux frames =
-    // 1 re-render React + 1 layout/paint navigateur.
+    // Laisse React re-rendre (forPrint -> désactive les contrôles de la carte)
+    // puis attend ~1,4 s pour que les TUILES OpenStreetMap finissent de se
+    // charger : html2canvas ne capture que ce qui est déjà peint, donc une
+    // carte aux tuiles non chargées sortirait grise/vide dans le PDF.
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
+    await new Promise<void>((resolve) => setTimeout(resolve, 1400));
     try {
       // Import dynamique pour ne pas alourdir le bundle initial
       const html2pdf = (await import('html2pdf.js')).default;

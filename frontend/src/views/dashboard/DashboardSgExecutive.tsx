@@ -110,11 +110,8 @@ export function DashboardSgExecutive({ data, missions, anneeLabel, forPrint = fa
         />
       </BentoCard>
 
-      {/* ----- 4. Missions terrain -----
-          En PDF (forPrint) la carte est masquee (rendu moche), donc on passe
-          Missions terrain en pleine largeur. A l'ecran : demi-largeur + carte
-          a cote. */}
-      <div className={forPrint ? 'col-span-12' : 'col-span-12 lg:col-span-6'}>
+      {/* ----- 4. Missions terrain (6 cols) ----- */}
+      <div className="col-span-12 lg:col-span-6">
         <BentoCardInner
           accent="cyan"
           title="Missions terrain"
@@ -122,35 +119,26 @@ export function DashboardSgExecutive({ data, missions, anneeLabel, forPrint = fa
           onAction={() => navigate('/missions-terrain')}
         >
           <MissionsContent missions={missions} />
-          {forPrint && (
-            <p className="text-[11px] text-fg-muted mt-2">
-              {missions.length} mission{missions.length > 1 ? 's' : ''} ·{' '}
-              {data.missionsTerrain.regionsCouvertes} /{' '}
-              {data.missionsTerrain.totalRegions} régions couvertes
-            </p>
-          )}
         </BentoCardInner>
       </div>
 
-      {/* ----- 5. Carte nationale (6 cols) — masquee en PDF ----- */}
-      {!forPrint && (
-        <div className="col-span-12 lg:col-span-6">
-          <BentoCardInner
-            title="Carte nationale"
-            actionLabel="Plein écran"
-            onAction={() => navigate('/missions-terrain')}
-          >
-            <div className="rounded-md overflow-hidden border border-border h-44">
-              <DashboardMissionsMap items={missions} height={176} forPrint={forPrint} />
-            </div>
-            <p className="text-[11px] text-fg-muted mt-2 text-center">
-              {missions.length} mission{missions.length > 1 ? 's' : ''} ·{' '}
-              {data.missionsTerrain.regionsCouvertes} /{' '}
-              {data.missionsTerrain.totalRegions} régions
-            </p>
-          </BentoCardInner>
-        </div>
-      )}
+      {/* ----- 5. Carte nationale (6 cols) — vraie carte OSM cadrée Sénégal ----- */}
+      <div className="col-span-12 lg:col-span-6">
+        <BentoCardInner
+          title="Carte nationale"
+          actionLabel="Plein écran"
+          onAction={() => navigate('/missions-terrain')}
+        >
+          <div className="rounded-md overflow-hidden border border-border h-44">
+            <DashboardMissionsMap items={missions} height={176} forPrint={forPrint} />
+          </div>
+          <p className="text-[11px] text-fg-muted mt-2 text-center">
+            {missions.length} mission{missions.length > 1 ? 's' : ''} ·{' '}
+            {data.missionsTerrain.regionsCouvertes} /{' '}
+            {data.missionsTerrain.totalRegions} régions
+          </p>
+        </BentoCardInner>
+      </div>
 
       {/* ----- 6. Activité trimestrielle ----- */}
       <BentoCard
