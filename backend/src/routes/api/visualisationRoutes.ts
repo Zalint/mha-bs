@@ -16,11 +16,78 @@ import { ANNEE_MODES, TYPES_RENCONTRE } from '@mha-bs/shared';
 import { authJwt } from '../../middlewares/authJwt.js';
 import { validate } from '../../middlewares/validate.js';
 import {
+  getExplorerSchema,
+  runQuery,
+  runRows,
+} from '../../services/explorerService.js';
+import {
   getDirectivesVisualisations,
   getRecommandationsVisualisations,
 } from '../../services/visualisationService.js';
 
 export const visualisationRoutes = Router();
+
+// ===========================================================================
+// EXPLORER (mode Power BI) — moteur de requête générique
+// ===========================================================================
+
+/** GET /api/visualisations/explorer/schema — sources/dimensions/mesures/filtres. */
+visualisationRoutes.get('/explorer/schema', authJwt, (_req, res, next) => {
+  try {
+    res.json({ sources: getExplorerSchema() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const filterSchema = z.object({
+  key: z.string(),
+  values: z.array(z.union([z.string(), z.number()])).max(50),
+});
+
+const querySchema = z.object({
+  source: z.string(),
+  dimensions: z.array(z.string()).max(2).default([]),
+  measure: z.string(),
+  filters: z.array(filterSchema).max(20).default([]),
+  limit: z.number().int().positive().max(500).optional(),
+});
+
+/** POST /api/visualisations/explorer/query — agrégation group-by. */
+visualisationRoutes.post(
+  '/explorer/query',
+  authJwt,
+  validate(querySchema),
+  async (req, res, next) => {
+    try {
+      const spec = req.body as z.infer<typeof querySchema>;
+      res.json(await runQuery(spec));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+const rowsSchema = z.object({
+  source: z.string(),
+  filters: z.array(filterSchema).max(20).default([]),
+  limit: z.number().int().positive().max(300).optional(),
+});
+
+/** POST /api/visualisations/explorer/rows — lignes brutes (drill-down). */
+visualisationRoutes.post(
+  '/explorer/rows',
+  authJwt,
+  validate(rowsSchema),
+  async (req, res, next) => {
+    try {
+      const body = req.body as z.infer<typeof rowsSchema>;
+      res.json(await runRows(body.source, body.filters, body.limit));
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 const directivesQuerySchema = z.object({
   annee: z.coerce.number().int().min(2000).max(2100).optional(),
