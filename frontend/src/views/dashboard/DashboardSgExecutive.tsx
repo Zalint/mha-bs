@@ -740,11 +740,14 @@ function MissionsContent({ missions }: MissionsContentProps) {
           {missions.length === 0 ? '' : 's'}
         </span>
       </div>
-      <div className="space-y-1.5 text-xs leading-5 max-h-32 overflow-auto">
+      <div className="space-y-1.5 text-xs leading-5 max-h-32 overflow-y-auto">
         {missions.slice(0, 5).map((m) => (
           <div key={m.id} className="flex items-center gap-2 text-fg-2">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 flex-shrink-0" />
-            <span className="whitespace-nowrap overflow-hidden text-ellipsis">
+            {/* Pas d'overflow-hidden (comme les libellés COPIL) : ça clippait
+                le bas des lettres. whitespace-nowrap + leading-5 = lettres
+                entières. */}
+            <span className="whitespace-nowrap leading-5">
               <span className="font-medium">{m.localite}</span>
               {m.projetRattache && (
                 <span className="text-fg-muted"> · {m.projetRattache}</span>
