@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import {
   type CreateMissionTerrainInput,
   type CreateReunionTechniqueInput,
+  REGIONS_SENEGAL,
   type RegionSenegal,
   type SousSecteur,
 } from '@mha-bs/shared';
@@ -24,7 +25,7 @@ import {
 import { Textarea } from '../../components/ui/Textarea.js';
 import { useAuthStore } from '../../stores/authStore.js';
 import { useReferentiel } from '../../hooks/useReferentiel.js';
-import { ApiClientError, api } from '../../lib/apiClient.js';
+import { api, formatApiError } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
 import { todayYmd } from '../../lib/formatDate.js';
 
@@ -89,7 +90,6 @@ export function BsReunionMissionView() {
   const sousSecteursRef = useReferentiel('sousSecteur');
   const copilProjetRef = useReferentiel('copilProjet');
   const typeReunionRef = useReferentiel('typeReunion');
-  const regionRef = useReferentiel('regionSenegal');
   const typeOuvrageRef = useReferentiel('typeOuvrage');
 
   const reunionForm = useForm<ReunionFormValues>({
@@ -150,7 +150,7 @@ export function BsReunionMissionView() {
       clearNotesDraft(notesStorageKey);
       reunionForm.reset();
     } catch (err) {
-      toast.error(err instanceof ApiClientError ? err.message : 'Erreur');
+      toast.error(formatApiError(err, 'Erreur à l\'enregistrement de la réunion'));
     } finally {
       setSubmitting(false);
     }
@@ -159,12 +159,19 @@ export function BsReunionMissionView() {
   const submitMission = async (v: MissionFormValues): Promise<void> => {
     setSubmitting(true);
     try {
+      // Number() renvoie NaN sur une saisie non numérique, et Zod rejette NaN
+      // ('Expected number, received nan') -> on ne transmet que des nombres finis.
+      const toCoord = (raw: string): number | null => {
+        if (!raw) return null;
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : null;
+      };
       const payload: CreateMissionTerrainInput = {
         dateMission: v.dateMission,
-        localite: v.localite,
+        localite: v.localite.trim(),
         region: v.region || null,
-        latitude: v.latitude ? Number(v.latitude) : null,
-        longitude: v.longitude ? Number(v.longitude) : null,
+        latitude: toCoord(v.latitude),
+        longitude: toCoord(v.longitude),
         projetRattache: v.projetRattache || null,
         constats: v.constats || null,
         recommandations: v.recommandations || null,
@@ -178,7 +185,7 @@ export function BsReunionMissionView() {
       missionForm.reset();
       setOuvrages([]);
     } catch (err) {
-      toast.error(err instanceof ApiClientError ? err.message : 'Erreur');
+      toast.error(formatApiError(err, 'Erreur à l\'enregistrement de la mission'));
     } finally {
       setSubmitting(false);
     }
@@ -414,11 +421,15 @@ export function BsReunionMissionView() {
                 />
               </FormField>
               <FormField label="Région">
+                {/* Options issues de REGIONS_SENEGAL (la constante que le backend
+                    valide), et NON du référentiel : ses libellés sont sans
+                    accents ('Thies', 'Kedougou', 'Sedhiou') et étaient rejetés
+                    par l'enum ('Thiès', 'Kédougou', 'Sédhiou') -> 422. */}
                 <select className="select" {...missionForm.register('region')}>
                   <option value="">—</option>
-                  {regionRef.items.map((r) => (
-                    <option key={r.id} value={r.label}>
-                      {r.label}
+                  {REGIONS_SENEGAL.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
                     </option>
                   ))}
                 </select>

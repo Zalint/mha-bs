@@ -31,10 +31,35 @@ export const missionTerrainSchema = z.object({
 });
 export type MissionTerrain = z.infer<typeof missionTerrainSchema>;
 
-export const createMissionTerrainSchema = missionTerrainSchema.omit({
-  id: true,
-  createdBy: true,
-  createdAt: true,
-  updatedAt: true,
-});
+/**
+ * Schéma de création — volontairement plus TOLÉRANT que l'entité complète :
+ *
+ *  - `.nullish()` au lieu de `.nullable()` : une clé ABSENTE du payload ne doit
+ *    pas provoquer un 422. Avec `.nullable()` seul, Zod exige la présence de la
+ *    clé (même à null), ce qui cassait tout client n'envoyant que les champs
+ *    remplis.
+ *  - `region` : une chaîne vide (select « — » non renseigné) est convertie en
+ *    null avant validation, au lieu d'être rejetée par l'enum.
+ *
+ * Les contraintes métier réelles (dateMission, localite ≥ 2, bornes lat/lng)
+ * restent strictes.
+ */
+export const createMissionTerrainSchema = missionTerrainSchema
+  .omit({
+    id: true,
+    createdBy: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    region: z.preprocess(
+      (v) => (v === '' || v === undefined ? null : v),
+      z.enum(REGIONS_SENEGAL).nullable(),
+    ),
+    latitude: z.number().min(-90).max(90).nullish(),
+    longitude: z.number().min(-180).max(180).nullish(),
+    projetRattache: z.string().nullish(),
+    constats: z.string().nullish(),
+    recommandations: z.string().nullish(),
+  });
 export type CreateMissionTerrainInput = z.infer<typeof createMissionTerrainSchema>;

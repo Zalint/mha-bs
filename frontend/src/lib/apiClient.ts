@@ -22,6 +22,38 @@ export class ApiClientError extends Error {
   }
 }
 
+/**
+ * Message d'erreur lisible pour l'utilisateur.
+ *
+ * Sur un 422 de validation, le backend renvoie `details = ZodError.flatten()`,
+ * soit `{ formErrors: [], fieldErrors: { region: ['Invalid enum value…'] } }`.
+ * Sans ce helper, l'UI n'affichait que le message générique « Donnees
+ * invalides », ce qui rendait les échecs de sauvegarde indébogables.
+ * Ici on remonte le détail champ par champ.
+ */
+export function formatApiError(err: unknown, fallback = 'Une erreur est survenue'): string {
+  if (!(err instanceof ApiClientError)) {
+    return err instanceof Error ? err.message : fallback;
+  }
+  const details = err.details as
+    | { formErrors?: string[]; fieldErrors?: Record<string, string[] | undefined> }
+    | undefined;
+
+  const parts: string[] = [];
+  if (details?.fieldErrors) {
+    for (const [field, msgs] of Object.entries(details.fieldErrors)) {
+      if (msgs && msgs.length > 0) parts.push(`${field} : ${msgs[0]}`);
+    }
+  }
+  if (details?.formErrors && details.formErrors.length > 0) {
+    parts.push(...details.formErrors);
+  }
+  if (parts.length > 0) {
+    return `${err.message} — ${parts.join(' · ')}`;
+  }
+  return err.message || fallback;
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;

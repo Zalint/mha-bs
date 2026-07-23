@@ -609,7 +609,7 @@ INSERT INTO "referentiels" ("codeType", "code", "label", "ordreAffichage") VALUE
   ('lieuReunion', 'visio',                   'En visioconference',               50),
   -- Regions administratives du Senegal (14)
   ('regionSenegal', 'dakar',         'Dakar',         10),
-  ('regionSenegal', 'thies',         'Thies',         20),
+  ('regionSenegal', 'thies',         'Thiès',         20),
   ('regionSenegal', 'diourbel',      'Diourbel',      30),
   ('regionSenegal', 'saintLouis',    'Saint-Louis',   40),
   ('regionSenegal', 'louga',         'Louga',         50),
@@ -617,9 +617,9 @@ INSERT INTO "referentiels" ("codeType", "code", "label", "ordreAffichage") VALUE
   ('regionSenegal', 'kaolack',       'Kaolack',       70),
   ('regionSenegal', 'kaffrine',      'Kaffrine',      80),
   ('regionSenegal', 'tambacounda',   'Tambacounda',  90),
-  ('regionSenegal', 'kedougou',      'Kedougou',     100),
+  ('regionSenegal', 'kedougou',      'Kédougou',     100),
   ('regionSenegal', 'kolda',         'Kolda',        110),
-  ('regionSenegal', 'sedhiou',       'Sedhiou',      120),
+  ('regionSenegal', 'sedhiou',       'Sédhiou',      120),
   ('regionSenegal', 'ziguinchor',    'Ziguinchor',   130),
   ('regionSenegal', 'matam',         'Matam',        140),
   -- Types de rencontre (miroir de l'enum DB, labels editables)
@@ -818,6 +818,32 @@ VALUES
   ('Ousmane Sané',       'M', 'Wallu',  'Kolda'),
   ('Aïda Bâ',            'F', 'Pastef', 'Dakar')
 ON CONFLICT DO NOTHING;
+
+
+-- =============================================================================
+-- MIGRATION : accents des régions (correctif 422 sur POST /api/missions)
+-- =============================================================================
+-- Le seed initial du référentiel 'regionSenegal' stockait 3 libellés SANS
+-- accents ('Thies', 'Kedougou', 'Sedhiou') alors que l'enum applicatif
+-- REGIONS_SENEGAL (shared/src/constants.ts) — utilisé par la validation Zod —
+-- les attend AVEC accents. Le formulaire « Nouvelle mission » alimentait son
+-- select depuis ce référentiel : choisir l'une de ces 3 régions produisait un
+-- payload rejeté par l'enum -> HTTP 422 « Donnees invalides ».
+--
+-- Le seed ci-dessus est corrigé, mais il est en ON CONFLICT DO NOTHING : les
+-- bases déjà déployées conservent les anciens libellés. Ces UPDATE idempotents
+-- les alignent, et normalisent les régions déjà enregistrées sur des missions.
+UPDATE "referentiels" SET "label" = 'Thiès'
+  WHERE "codeType" = 'regionSenegal' AND "code" = 'thies'    AND "label" <> 'Thiès';
+UPDATE "referentiels" SET "label" = 'Kédougou'
+  WHERE "codeType" = 'regionSenegal' AND "code" = 'kedougou' AND "label" <> 'Kédougou';
+UPDATE "referentiels" SET "label" = 'Sédhiou'
+  WHERE "codeType" = 'regionSenegal' AND "code" = 'sedhiou'  AND "label" <> 'Sédhiou';
+
+-- Missions déjà enregistrées avec une région non accentuée
+UPDATE "missionsTerrain" SET "region" = 'Thiès'    WHERE "region" = 'Thies';
+UPDATE "missionsTerrain" SET "region" = 'Kédougou' WHERE "region" = 'Kedougou';
+UPDATE "missionsTerrain" SET "region" = 'Sédhiou'  WHERE "region" = 'Sedhiou';
 
 
 -- =============================================================================
