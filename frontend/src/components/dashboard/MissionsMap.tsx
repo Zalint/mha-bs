@@ -1,11 +1,17 @@
 import 'leaflet/dist/leaflet.css';
 
-import L from 'leaflet';
+import type L from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 
 import type { MissionTerrain } from '@mha-bs/shared';
 
+import { useReferentiel } from '../../hooks/useReferentiel.js';
 import { formatShort } from '../../lib/formatDate.js';
+import {
+  FAMILLE_AUTRE,
+  famillesDeMission,
+  iconeFamilles,
+} from '../../lib/ouvrageColors.js';
 
 /**
  * Bounding box SERRÉE sur le territoire continental du Sénégal.
@@ -23,13 +29,6 @@ const SENEGAL_BOUNDS: L.LatLngBoundsExpression = [
 /** Centre géographique du Sénégal — sert de point d'ancrage après fitBounds. */
 const SENEGAL_CENTER: [number, number] = [14.5, -14.5];
 
-const PIN_ICON = L.divIcon({
-  className: '',
-  html: '<div style="background:#0284C7;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:10px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3)">●</div>',
-  iconSize: [22, 22],
-  iconAnchor: [11, 11],
-});
-
 interface Props {
   items: MissionTerrain[];
   height?: number;
@@ -38,6 +37,9 @@ interface Props {
 }
 
 export function MissionsMap({ items, height = 320, forPrint = false }: Props) {
+  const typeOuvrageRef = useReferentiel('typeOuvrage');
+  const familleDeType = (code: string): string =>
+    typeOuvrageRef.parentDe(code) ?? FAMILLE_AUTRE;
   const positioned = items.filter((m) => m.latitude !== null && m.longitude !== null);
   return (
     <div style={{ height }} className="rounded-lg overflow-hidden border border-border">
@@ -66,7 +68,13 @@ export function MissionsMap({ items, height = 320, forPrint = false }: Props) {
           <Marker
             key={m.id}
             position={[m.latitude as number, m.longitude as number]}
-            icon={PIN_ICON}
+            // Meme codage couleur que la carte de Suivi missions terrain :
+            // les memes points ne doivent pas encoder differemment selon
+            // l'ecran ou on les regarde.
+            icon={iconeFamilles(
+              famillesDeMission(Object.keys(m.ouvragesParType), familleDeType),
+              22,
+            )}
           >
             <Popup>
               <div style={{ fontFamily: 'Fira Sans, system-ui, sans-serif' }}>

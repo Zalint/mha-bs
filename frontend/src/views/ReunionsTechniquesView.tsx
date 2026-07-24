@@ -12,7 +12,7 @@ import {
   Shuffle,
   Waves,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import type { ReunionTechnique, SousSecteur } from '@mha-bs/shared';
@@ -43,12 +43,74 @@ interface CalendarEvent {
   visibleSg: boolean;
 }
 
+/** Valeur sentinelle du <select> pour « toutes les années ». */
+const TOUTES_ANNEES = 'all';
+const ANNEE_STORAGE_KEY = 'mha.reunions.annee';
+
+function anneeInitiale(): number | null {
+  const courante = new Date().getUTCFullYear();
+  if (typeof window === 'undefined') return courante;
+  const raw = window.localStorage.getItem(ANNEE_STORAGE_KEY);
+  if (raw === TOUTES_ANNEES) return null;
+  if (!raw) return courante;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : courante;
+}
+
+/**
+ * Année d'une réunion, extraite de `dateReunion` au format YYYY-MM-DD.
+ * Découpage de chaîne et non `new Date()` : une date sans heure est interprétée
+ * en UTC, et un `getFullYear()` local ferait basculer le 1er janvier sur
+ * l'année précédente à l'ouest de Greenwich.
+ */
+function anneeReunion(r: ReunionTechnique): number | null {
+  if (!r.dateReunion) return null;
+  const y = Number(r.dateReunion.slice(0, 4));
+  return Number.isFinite(y) ? y : null;
+}
+
 export function ReunionsTechniquesView() {
   const navigate = useNavigate();
   const [monthOffset, setMonthOffset] = useState(0);
 
   const reunionsQuery = useApi(() => api.get<{ items: ReunionTechnique[] }>('/reunions'), []);
-  const reunions = reunionsQuery.data?.items ?? [];
+  const toutesReunions = useMemo(() => reunionsQuery.data?.items ?? [], [reunionsQuery.data]);
+
+  // === Filtre année ===
+  // Même mécanique que Suivi missions terrain : année en cours par défaut,
+  // mémorisée, avec « Toutes les années ». Le filtre s'applique ICI, a la
+  // source : calendrier, KPI, répartition par sous-secteur et agenda derivent
+  // tous de `reunions` et suivent donc automatiquement.
+  const [annee, setAnnee] = useState<number | null>(anneeInitiale);
+  useEffect(() => {
+    window.localStorage.setItem(ANNEE_STORAGE_KEY, annee === null ? TOUTES_ANNEES : String(annee));
+  }, [annee]);
+
+  const anneesDisponibles = useMemo(() => {
+    const set = new Set<number>();
+    for (const r of toutesReunions) {
+      const y = anneeReunion(r);
+      if (y !== null) set.add(y);
+    }
+    set.add(new Date().getUTCFullYear());
+    if (annee !== null) set.add(annee);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [toutesReunions, annee]);
+
+  const reunions = useMemo(
+    () =>
+      annee === null ? toutesReunions : toutesReunions.filter((r) => anneeReunion(r) === annee),
+    [toutesReunions, annee],
+  );
+
+  const anneeLabel = annee === null ? 'toutes années' : `année ${annee}`;
+
+  // Changer d'année remet le calendrier sur le mois de reference de cette
+  // annee : sans ca, un decalage accumule sur l'annee precedente resterait
+  // applique et afficherait un mois sans rapport.
+  useEffect(() => {
+    setMonthOffset(0);
+  }, [annee]);
 
   // Determine displayed month based on most recent reunion + offset
   const referenceDate = useMemo(() => {
@@ -140,12 +202,32 @@ export function ReunionsTechniquesView() {
         <div>
           <h1 className="text-2xl font-semibold text-fg leading-tight">Suivi Réunions techniques</h1>
           <p className="text-sm text-fg-muted mt-1">
-            Activité du MHA · calendrier des réunions, répartition par sous-secteur
+            Activité du MHA · calendrier des réunions, répartition par sous-secteur ·{' '}
+            <span className="text-fg-2 font-medium">{anneeLabel}</span>
           </p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => navigate('/bs/reunion')}>
-          <Plus className="w-3.5 h-3.5" /> Nouvelle réunion
-        </button>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs font-medium text-fg-muted">
+            Année
+            <select
+              value={annee === null ? TOUTES_ANNEES : String(annee)}
+              onChange={(e) =>
+                setAnnee(e.target.value === TOUTES_ANNEES ? null : Number(e.target.value))
+              }
+              className="select block mt-1 font-mono"
+            >
+              {anneesDisponibles.map((y) => (
+                <option key={y} value={String(y)}>
+                  {y}
+                </option>
+              ))}
+              <option value={TOUTES_ANNEES}>Toutes les années</option>
+            </select>
+          </label>
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/bs/reunion')}>
+            <Plus className="w-3.5 h-3.5" /> Nouvelle réunion
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -157,7 +239,7 @@ export function ReunionsTechniquesView() {
         <KpiCard
           label="Réunions tenues"
           value={reunions.filter((r) => r.visibleSg).length}
-          delta="publiées, depuis le début"
+          delta={`publiées · ${anneeLabel} · ${toutesReunions.filter((r) => r.visibleSg).length} au total`}
           icon={Calendar}
         />
         <KpiCard

@@ -1,6 +1,6 @@
 import 'leaflet/dist/leaflet.css';
 
-import L from 'leaflet';
+import type L from 'leaflet';
 import {
   CalendarClock,
   ChevronRight,
@@ -15,8 +15,8 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MapContainer, Marker, Popup, TileLayer, useMapEvents } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -32,6 +32,15 @@ import { useReferentiel } from '../hooks/useReferentiel.js';
 import { ApiClientError, api } from '../lib/apiClient.js';
 import { cn } from '../lib/cn.js';
 import { formatShort } from '../lib/formatDate.js';
+import {
+  FAMILLE_AUCUNE,
+  FAMILLE_AUTRE,
+  SANS_OUVRAGE,
+  couleurFamille,
+  ecarterCoincidences,
+  famillesDeMission,
+  iconeFamilles,
+} from '../lib/ouvrageColors.js';
 import { useAuthStore } from '../stores/authStore.js';
 
 /**
@@ -79,13 +88,6 @@ function anneeMission(m: MissionTerrain): number | null {
   const y = Number(m.dateMission.slice(0, 4));
   return Number.isFinite(y) ? y : null;
 }
-const PIN_ICON = L.divIcon({
-  className: '',
-  html: '<div style="background:#0284C7;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);font-family:Fira Mono, monospace">●</div>',
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
-});
-
 /**
  * Brouillon de mission en cours d'édition. On extrait les champs éditables et
  * on garde l'id en clé pour la requête PUT. Tous les champs nullable côté DB
@@ -115,6 +117,26 @@ function missionToDraft(m: MissionTerrain): MissionDraft {
     constats: m.constats ?? '',
     recommandations: m.recommandations ?? '',
   };
+}
+
+/**
+ * Remonte l'instance de carte ET le zoom courant au parent. Doit vivre DANS le
+ * MapContainer : `useMapEvents` lit la carte par le contexte react-leaflet.
+ *
+ * L'instance passe par un STATE et non par le `ref` du MapContainer : le calcul
+ * d'ecartement des marqueurs a besoin de la projection, et un ref n'etant pas
+ * reactif, le memo s'executait une fois avec `null` puis plus jamais — les
+ * marqueurs restaient empiles. Mesure avant/apres : 33 marqueurs pour 18
+ * positions distinctes, puis 33 sur 33.
+ */
+function SuiviCarte({ onCarte }: { onCarte: (carte: L.Map, zoom: number) => void }) {
+  const carte = useMapEvents({
+    zoomend: () => onCarte(carte, carte.getZoom()),
+  });
+  useEffect(() => {
+    onCarte(carte, carte.getZoom());
+  }, [carte, onCarte]);
+  return null;
 }
 
 export function MissionsTerrainView() {
@@ -150,10 +172,49 @@ export function MissionsTerrainView() {
     return Array.from(set).sort((a, b) => b - a);
   }, [toutesMissions, annee]);
 
-  const items = useMemo(
+  const missionsAnnee = useMemo(
     () => (annee === null ? toutesMissions : toutesMissions.filter((m) => anneeMission(m) === annee)),
     [toutesMissions, annee],
   );
+
+  // === Filtre par type d'ouvrage ===
+  // Ensemble VIDE = aucun filtre (tout est affiché), et non « rien n'est
+  // affiché » : c'est l'état d'ouverture, il doit tout montrer.
+  // La valeur sentinelle SANS_OUVRAGE cible les missions sans ouvrage saisi,
+  // sinon elles seraient impossibles à isoler — or elles sont majoritaires.
+  const [typesSelectionnes, setTypesSelectionnes] = useState<Set<string>>(new Set());
+  const basculerType = (code: string): void => {
+    setTypesSelectionnes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  };
+
+  /** Applique le filtre par type a n'importe quel ensemble de missions. */
+  const filtrerParType = useCallback(
+    (missions: MissionTerrain[]): MissionTerrain[] => {
+      if (typesSelectionnes.size === 0) return missions;
+      return missions.filter((m) => {
+        const types = Object.keys(m.ouvragesParType);
+        return types.length === 0
+          ? typesSelectionnes.has(SANS_OUVRAGE)
+          : types.some((t) => typesSelectionnes.has(t));
+      });
+    },
+    [typesSelectionnes],
+  );
+
+  const items = useMemo(() => filtrerParType(missionsAnnee), [missionsAnnee, filtrerParType]);
+
+  /**
+   * Toutes annees confondues, MAIS filtre par type — c'est la reference des
+   * sous-titres de KPI. Utiliser `toutesMissions` y afficherait « 41 au total »
+   * sous un chiffre filtre, exactement le genre de contradiction qui a deja ete
+   * signalee sur le badge du menu.
+   */
+  const missionsType = useMemo(() => filtrerParType(toutesMissions), [toutesMissions, filtrerParType]);
 
   const anneeLabel = annee === null ? 'toutes années' : `année ${annee}`;
 
@@ -162,6 +223,16 @@ export function MissionsTerrainView() {
   const typeOuvrageRef = useReferentiel('typeOuvrage');
 
   const mapRef = useRef<L.Map | null>(null);
+  // Carte + zoom courants, remontes par SuiviCarte. L'ecartement des marqueurs
+  // co-localises se calcule en PIXELS : il faut donc la projection et le zoom.
+  const [carte, setCarte] = useState<L.Map | null>(null);
+  const [zoomCarte, setZoomCarte] = useState(7);
+  // Identite stable : passe en dependance de l'effet de SuiviCarte.
+  const majCarte = useCallback((instance: L.Map, zoom: number): void => {
+    mapRef.current = instance;
+    setCarte(instance);
+    setZoomCarte(zoom);
+  }, []);
 
   // Édition : draft de mission + modal picker carte
   const [editDraft, setEditDraft] = useState<MissionDraft | null>(null);
@@ -341,23 +412,124 @@ export function MissionsTerrainView() {
     return new Set(items.map((i) => i.region).filter(Boolean));
   }, [items]);
 
+  /**
+   * Famille d'un type d'ouvrage, lue dans le referentiel (`parentCode`).
+   * Un type sans rattachement — ou un code absent du referentiel, par exemple
+   * apres renommage dans /bs/config — retombe sur « autre » plutot que de
+   * disparaitre de la carte.
+   */
+  const familleDeType = useCallback(
+    (code: string): string => typeOuvrageRef.parentDe(code) ?? FAMILLE_AUTRE,
+    [typeOuvrageRef],
+  );
+
+  /**
+   * Puces du bandeau sous la carte : elles servent A LA FOIS de legende (pastille
+   * de couleur -> famille) et de filtre (clic = facette). Un seul controle plutot
+   * que deux : la legende seule n'expliquerait pas pourquoi deux types partagent
+   * une couleur, et un filtre seul n'expliquerait pas les couleurs.
+   *
+   * Construites sur les types PRESENTS dans l'annee affichee, pas sur les 7 du
+   * referentiel : proposer de filtrer sur un type absent de la carte ne mene
+   * qu'a un ecran vide.
+   */
+  const pucesTypes = useMemo(() => {
+    const compteurs = new Map<string, number>();
+    let sansOuvrage = 0;
+    for (const m of missionsAnnee) {
+      // Compte des OUVRAGES et non des missions : meme unite que la carte
+      // « Sites visités », pour que les deux chiffres se répondent.
+      const entrees = Object.entries(m.ouvragesParType);
+      if (entrees.length === 0) sansOuvrage++;
+      else for (const [t, n] of entrees) compteurs.set(t, (compteurs.get(t) ?? 0) + n);
+    }
+    // On part des codes OBSERVES, pas du referentiel : un type renomme ou
+    // desactive dans /bs/config laisse des lignes en base avec l'ancien code.
+    // Iterer le referentiel les rendait invisibles — sans puce, hors des
+    // comptes, impossibles a isoler — alors que leurs marqueurs, eux,
+    // s'affichaient. Le referentiel ne sert plus qu'a habiller (libelle,
+    // ordre), et `labelDe` retombe sur le code brut s'il ne connait pas.
+    const rang = new Map(typeOuvrageRef.items.map((t, i) => [t.code, i]));
+    const puces = [...compteurs.entries()]
+      .sort(([a], [b]) => (rang.get(a) ?? Infinity) - (rang.get(b) ?? Infinity))
+      .map(([code, n]) => ({
+        code,
+        label: typeOuvrageRef.labelDe(code),
+        couleur: couleurFamille(familleDeType(code)),
+        n,
+      }));
+    if (sansOuvrage > 0) {
+      puces.push({
+        code: SANS_OUVRAGE,
+        label: 'Aucun ouvrage saisi',
+        couleur: couleurFamille(FAMILLE_AUCUNE),
+        n: sansOuvrage,
+      });
+    }
+    return puces;
+  }, [missionsAnnee, typeOuvrageRef, familleDeType]);
+
   // Vrai total d'ouvrages visités, via le sous-total `nbOuvrages` calculé par
   // l'API. Auparavant cette carte affichait le nombre de MISSIONS, donc le même
   // chiffre que « Missions effectuées » juste à côté, sous un libellé
   // « ouvrages d'envergure » qui ne correspondait à rien.
-  const totalOuvrages = useMemo(
-    () => items.reduce((n, m) => n + m.nbOuvrages, 0),
-    [items],
-  );
+  /**
+   * Somme des ouvrages affiches. Quand un filtre par type est actif, on ne
+   * compte QUE les ouvrages de ces types : sinon une mission qui a un bassin et
+   * une station de pompage ferait afficher 2 alors que le filtre ne porte que
+   * sur le bassin. `nbOuvrages` reste le total de la mission, il ne convient
+   * donc que hors filtre.
+   */
+  const totalOuvrages = useMemo(() => {
+    if (typesSelectionnes.size === 0) return items.reduce((n, m) => n + m.nbOuvrages, 0);
+    return items.reduce(
+      (n, m) =>
+        n +
+        Object.entries(m.ouvragesParType).reduce(
+          (s, [type, compte]) => (typesSelectionnes.has(type) ? s + compte : s),
+          0,
+        ),
+      0,
+    );
+  }, [items, typesSelectionnes]);
+
   const missionsSansOuvrage = useMemo(
     () => items.filter((m) => m.nbOuvrages === 0).length,
     [items],
   );
 
+  /**
+   * Missions geolocalisees, positions ecartees quand plusieurs partagent le
+   * meme point. Sans cet ecartement, les cinq missions 2026 — toutes en region
+   * de Dakar — se superposent au pixel pres et seule la couleur du dernier
+   * marqueur rendu est lisible : le codage couleur ne sert plus a rien
+   * precisement la ou il y a le plus de missions.
+   */
+  const marqueurs = useMemo(() => {
+    // L'ecart est calcule a la projection du zoom COURANT : `zoomCarte` est dans
+    // les dependances pour que l'eventail se resserre quand on zoome et ne
+    // devienne pas une constellation trompeuse.
+    const projection =
+      carte !== null
+        ? {
+            versPixels: (lat: number, lng: number) => carte.project([lat, lng], zoomCarte),
+            versLatLng: (x: number, y: number) => carte.unproject([x, y], zoomCarte),
+          }
+        : null;
+    return ecarterCoincidences(
+      items
+        .filter((m) => m.latitude !== null && m.longitude !== null)
+        .map((m) => ({ ...m, latitude: m.latitude as number, longitude: m.longitude as number })),
+      projection,
+    );
+  }, [items, carte, zoomCarte]);
+
   /** « 2026 : 12 · 2025 : 20 · 2024 : 11 » — affiché en mode « toutes années ». */
   const repartitionParAnnee = useMemo(() => {
     const parAnnee = new Map<number, number>();
-    for (const m of toutesMissions) {
+    // `missionsType` et non `toutesMissions` : la ventilation doit se sommer au
+    // chiffre affiche juste au-dessus, filtre par type compris.
+    for (const m of missionsType) {
       const y = anneeMission(m);
       if (y !== null) parAnnee.set(y, (parAnnee.get(y) ?? 0) + 1);
     }
@@ -365,7 +537,7 @@ export function MissionsTerrainView() {
       .sort((a, b) => b[0] - a[0])
       .map(([y, n]) => `${y} : ${n}`)
       .join(' · ');
-  }, [toutesMissions]);
+  }, [missionsType]);
 
   /**
    * Prochaine mission a venir dans la periode affichee ; a defaut, la plus
@@ -443,7 +615,7 @@ export function MissionsTerrainView() {
           delta={
             annee === null
               ? `toutes années · ${repartitionParAnnee}`
-              : `${anneeLabel} · ${toutesMissions.length} au total`
+              : `${anneeLabel} · ${missionsType.length} au total`
           }
           icon={MapPin}
         />
@@ -506,13 +678,14 @@ export function MissionsTerrainView() {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              {items
-                .filter((m) => m.latitude !== null && m.longitude !== null)
-                .map((m) => (
+              <SuiviCarte onCarte={majCarte} />
+              {marqueurs.map((m) => (
                   <Marker
                     key={m.id}
-                    position={[m.latitude as number, m.longitude as number]}
-                    icon={PIN_ICON}
+                    position={m.position}
+                    icon={iconeFamilles(
+                      famillesDeMission(Object.keys(m.ouvragesParType), familleDeType),
+                    )}
                   >
                     <Popup>
                       <div style={{ fontFamily: 'Fira Sans, system-ui, sans-serif' }}>
@@ -523,6 +696,40 @@ export function MissionsTerrainView() {
                         <span style={{ fontFamily: 'Fira Mono, monospace', fontSize: 11 }}>
                           {m.dateMission ? formatShort(m.dateMission) : '—'} · {m.region ?? '—'}
                         </span>
+                        {/* Le TYPE PRECIS est rappele ici : la couleur ne porte
+                            que la famille, elle ne doit jamais etre le seul
+                            vecteur de l'information. */}
+                        <br />
+                        {Object.keys(m.ouvragesParType).length === 0 ? (
+                          <span style={{ color: '#94A3B8', fontSize: 11, fontStyle: 'italic' }}>
+                            Aucun ouvrage saisi
+                          </span>
+                        ) : (
+                          Object.entries(m.ouvragesParType).map(([code, compte]) => (
+                            <span
+                              key={code}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                marginRight: 6,
+                                fontSize: 11,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  background: couleurFamille(familleDeType(code)),
+                                  display: 'inline-block',
+                                }}
+                              />
+                              {typeOuvrageRef.labelDe(code)}
+                              {compte > 1 && <b>&nbsp;×{compte}</b>}
+                            </span>
+                          ))
+                        )}
                         {m.constats && (
                           <>
                             <br />
@@ -532,9 +739,66 @@ export function MissionsTerrainView() {
                       </div>
                     </Popup>
                   </Marker>
-                ))}
+              ))}
             </MapContainer>
           </div>
+
+          {/* Legende ET filtre. Deux types de la meme famille partagent une
+              couleur : c'est visible ici, puce contre puce. */}
+          {pucesTypes.length > 0 && (
+            <div className="px-4 py-3 border-t border-border">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-fg-muted mr-1">
+                  Type d’ouvrage
+                </span>
+                {pucesTypes.map((p) => {
+                  const actif = typesSelectionnes.has(p.code);
+                  return (
+                    <button
+                      key={p.code}
+                      type="button"
+                      onClick={() => basculerType(p.code)}
+                      aria-pressed={actif}
+                      // Le filtre est ADDITIF (OU) : un 2e clic elargit la
+                      // selection. L'ancien libelle « N'afficher que X »
+                      // promettait l'inverse.
+                      title={
+                        actif
+                          ? `Retirer « ${p.label} » du filtre`
+                          : `Ajouter « ${p.label} » au filtre`
+                      }
+                      className={cn(
+                        'inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 rounded-full border text-[11.5px] transition-colors',
+                        actif
+                          ? 'border-primary bg-primary-100 text-primary-700 font-medium'
+                          : 'border-border bg-surface text-fg-2 hover:bg-muted',
+                      )}
+                    >
+                      <span
+                        className="w-3 h-3 rounded-full border border-white flex-shrink-0"
+                        style={{ background: p.couleur, boxShadow: '0 0 0 1px rgba(0,0,0,.12)' }}
+                      />
+                      {p.label}
+                      <span className="font-mono tabular-nums text-fg-muted">{p.n}</span>
+                    </button>
+                  );
+                })}
+                {typesSelectionnes.size > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setTypesSelectionnes(new Set())}
+                    className="text-[11.5px] text-primary hover:underline ml-1"
+                  >
+                    Tout afficher
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-fg-muted mt-2">
+                Une même couleur = une même famille d’ouvrage. Un marqueur bicolore signale
+                une mission qui en a visité plusieurs.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Liste */}
@@ -558,19 +822,35 @@ export function MissionsTerrainView() {
           <div className="max-h-[520px] overflow-auto">
             {items.length === 0 ? (
               <div className="text-center py-10 px-4">
+                {/* Deux filtres peuvent vider la liste. On nomme CELUI qui l'a
+                    fait, sinon on propose d'elargir l'annee alors que c'est le
+                    filtre par type d'ouvrage qui est en cause. */}
                 <p className="text-sm text-fg-muted">
                   {toutesMissions.length === 0
                     ? 'Aucune mission enregistrée.'
-                    : `Aucune mission en ${anneeLabel}.`}
+                    : typesSelectionnes.size > 0
+                      ? `Aucune mission de ce type d’ouvrage en ${anneeLabel}.`
+                      : `Aucune mission en ${anneeLabel}.`}
                 </p>
-                {toutesMissions.length > 0 && annee !== null && (
+                {typesSelectionnes.size > 0 ? (
                   <button
                     type="button"
-                    onClick={() => setAnnee(null)}
+                    onClick={() => setTypesSelectionnes(new Set())}
                     className="btn btn-ghost btn-sm mt-2"
                   >
-                    Voir toutes les années ({toutesMissions.length})
+                    Retirer le filtre par type ({missionsAnnee.length} mission(s))
                   </button>
+                ) : (
+                  toutesMissions.length > 0 &&
+                  annee !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setAnnee(null)}
+                      className="btn btn-ghost btn-sm mt-2"
+                    >
+                      Voir toutes les années ({toutesMissions.length})
+                    </button>
+                  )
                 )}
               </div>
             ) : (
