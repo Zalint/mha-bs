@@ -1,5 +1,7 @@
 import type { CreateRencontreInput, Rencontre } from '@mha-bs/shared';
 
+import { toYmd as ymd } from '../lib/dateOnly.js';
+
 import { queryAll, queryOne } from '../db/query.js';
 
 interface RencontreRow {
@@ -15,9 +17,8 @@ interface RencontreRow {
   updatedAt: Date;
 }
 
-function toYmd(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
+// toYmd vit dans lib/dateOnly.ts (cf. piege UTC documente la-bas).
+const toYmd = ymd;
 
 function toRencontre(row: RencontreRow): Rencontre {
   return {

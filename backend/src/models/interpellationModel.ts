@@ -1,3 +1,5 @@
+import { toYmd as ymd } from '../lib/dateOnly.js';
+
 import { queryAll, queryOne } from '../db/query.js';
 
 export interface InterpellationWithDepute {
@@ -40,9 +42,8 @@ interface InterpellationRow {
   updatedAt: Date;
 }
 
-function toYmd(d: Date | null): string | null {
-  return d ? d.toISOString().slice(0, 10) : null;
-}
+// toYmd vit dans lib/dateOnly.ts (cf. piege UTC documente la-bas).
+const toYmd = (d: Date | null): string | null => (d ? ymd(d) : null);
 
 function toInterpellation(row: InterpellationRow): InterpellationWithDepute {
   return {

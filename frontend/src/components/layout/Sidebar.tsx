@@ -31,6 +31,9 @@ import { api } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
 import { useAuthStore } from '../../stores/authStore.js';
 
+/** Annee de reference des badges du menu (cf. commentaire sur `counts`). */
+const ANNEE_EN_COURS = new Date().getUTCFullYear();
+
 interface NavCounts {
   directives: {
     conseilInterMinisteriel: number;
@@ -109,8 +112,12 @@ export function Sidebar({ mode, onModeChange, isOpen = false, onClose }: Sidebar
   );
   // Refetch des compteurs nav à chaque navigation pour rester cohérent
   // après un wipe / import / suppression.
+  // Compteurs cales sur l'ANNEE EN COURS : les pages de suivi (missions,
+  // reunions, interpellations) s'ouvrent elles aussi sur l'annee en cours, et
+  // un menu qui annonce le cumul de toutes les annees a cote d'une page filtree
+  // donne deux chiffres contradictoires a l'ecran.
   const counts = useApi(
-    () => api.get<NavCounts>('/dashboard/nav-counts'),
+    () => api.get<NavCounts>('/dashboard/nav-counts', { query: { annee: ANNEE_EN_COURS } }),
     [location.pathname],
   );
   const baseItems = mode === 'sg' ? buildNavSg(counts.data) : NAV_BS;
@@ -205,7 +212,10 @@ function NavLeafItem({ item }: { item: NavLeaf }) {
       {Icon && <Icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={1.8} />}
       <span className="flex-1">{item.label}</span>
       {item.badge !== undefined && item.badge !== 0 && (
-        <span className="bg-white/15 text-white text-[11px] px-1.5 py-0.5 rounded-full font-mono">
+        <span
+          className="bg-white/15 text-white text-[11px] px-1.5 py-0.5 rounded-full font-mono"
+          title={`${item.badge} · année ${ANNEE_EN_COURS}`}
+        >
           {item.badge}
         </span>
       )}

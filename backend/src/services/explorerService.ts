@@ -198,7 +198,10 @@ const SOURCES: Record<string, SourceDef> = {
   reunions: {
     key: 'reunions',
     label: 'Réunions techniques',
-    from: `"reunionsTechniques" rt`,
+    // Filtre de publication porte par la sous-requete : `SourceDef` n'a pas de
+    // notion de `baseWhere`, et l'explorer ne doit pas exposer les reunions
+    // restees a l'etape 1 de la saisie (visibleSg = false).
+    from: `(SELECT * FROM "reunionsTechniques" WHERE "visibleSg" = TRUE) rt`,
     rowColumns: [
       { sql: `rt."dateReunion"::TEXT`, label: 'Date' },
       { sql: `LEFT(rt."theme", 90)`, label: 'Thème' },

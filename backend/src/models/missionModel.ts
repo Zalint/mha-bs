@@ -5,6 +5,8 @@ import type {
   RegionSenegal,
 } from '@mha-bs/shared';
 
+import { toYmd as ymd } from '../lib/dateOnly.js';
+
 import { query, queryAll, queryOne } from '../db/query.js';
 
 interface MissionRow {
@@ -17,6 +19,8 @@ interface MissionRow {
   projetRattache: string | null;
   constats: string | null;
   recommandations: string | null;
+  /** Present uniquement sur les requetes qui selectionnent le sous-total. */
+  nbOuvrages?: number;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -32,9 +36,9 @@ interface OuvrageRow {
   createdAt: Date;
 }
 
-function toYmd(d: Date | null): string {
-  return d ? d.toISOString().slice(0, 10) : '';
-}
+// toYmd vit dans lib/dateOnly.ts : la version locale d'origine reprojetait
+// la date en UTC et reculait d'un jour hors Greenwich.
+const toYmd = (d: Date | null): string => (d ? ymd(d) : '');
 
 function toMission(row: MissionRow): MissionTerrain {
   return {
@@ -47,6 +51,7 @@ function toMission(row: MissionRow): MissionTerrain {
     projetRattache: row.projetRattache,
     constats: row.constats,
     recommandations: row.recommandations,
+    nbOuvrages: row.nbOuvrages ?? 0,
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -71,17 +76,35 @@ const SELECT_MISSION = `
   "createdBy", "createdAt", "updatedAt"
 `;
 
+/**
+ * Colonnes de mission + sous-total d'ouvrages visites.
+ *
+ * Sous-requete correlee et non JOIN + GROUP BY : le GROUP BY obligerait a
+ * enumerer toutes les colonnes et casserait la reutilisation de SELECT_MISSION.
+ * `idxOuvragesMission` couvre le predicat, le cout reste marginal.
+ *
+ * `::INT` et non le bigint natif de COUNT : node-postgres rend les int8 sous
+ * forme de chaine, ce qui donnerait un `nbOuvrages` string cote API alors que
+ * le schema partage attend un number.
+ */
+const SELECT_MISSION_AVEC_OUVRAGES = `
+  m."id", m."dateMission", m."localite", m."region", m."latitude", m."longitude",
+  m."projetRattache", m."constats", m."recommandations",
+  m."createdBy", m."createdAt", m."updatedAt",
+  (SELECT COUNT(*) FROM "ouvragesVisites" o WHERE o."missionId" = m."id")::INT AS "nbOuvrages"
+`;
+
 export async function listMissions(opts: { annee?: number } = {}): Promise<MissionTerrain[]> {
   const params: number[] = [];
   let where = '';
   if (opts.annee !== undefined) {
     params.push(opts.annee);
-    where = `WHERE EXTRACT(YEAR FROM "dateMission") = $1`;
+    where = `WHERE EXTRACT(YEAR FROM m."dateMission") = $1`;
   }
   const rows = await queryAll<MissionRow>(
-    `SELECT ${SELECT_MISSION} FROM "missionsTerrain"
+    `SELECT ${SELECT_MISSION_AVEC_OUVRAGES} FROM "missionsTerrain" m
      ${where}
-     ORDER BY "dateMission" DESC`,
+     ORDER BY m."dateMission" DESC`,
     params,
   );
   return rows.map(toMission);
@@ -89,7 +112,7 @@ export async function listMissions(opts: { annee?: number } = {}): Promise<Missi
 
 export async function findMissionById(id: string): Promise<MissionTerrain | null> {
   const row = await queryOne<MissionRow>(
-    `SELECT ${SELECT_MISSION} FROM "missionsTerrain" WHERE "id" = $1`,
+    `SELECT ${SELECT_MISSION_AVEC_OUVRAGES} FROM "missionsTerrain" m WHERE m."id" = $1`,
     [id],
   );
   return row ? toMission(row) : null;
@@ -130,6 +153,8 @@ export async function createMission(
     ],
   );
   if (!row) throw new Error('Echec creation mission');
+  // `nbOuvrages` retombe sur 0 via toMission : une mission qui vient d'etre
+  // creee n'a par construction aucun ouvrage rattache.
   return toMission(row);
 }
 
@@ -154,14 +179,18 @@ export async function updateMission(
 
   if (sets.length === 0) throw new Error('Aucun champ a mettre a jour');
   params.push(id);
-  const row = await queryOne<MissionRow>(
+  const row = await queryOne<{ id: string }>(
     `UPDATE "missionsTerrain" SET ${sets.join(', ')}
      WHERE "id" = $${params.length}
-     RETURNING ${SELECT_MISSION}`,
+     RETURNING "id"`,
     params,
   );
   if (!row) throw new Error('Mission introuvable');
-  return toMission(row);
+  // Relecture plutot que RETURNING : le sous-total d'ouvrages n'est pas
+  // touche par l'UPDATE, et le renvoyer a 0 par defaut serait un mensonge.
+  const mission = await findMissionById(row.id);
+  if (!mission) throw new Error('Mission introuvable');
+  return mission;
 }
 
 export async function deleteMission(id: string): Promise<void> {

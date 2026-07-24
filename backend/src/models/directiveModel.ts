@@ -8,6 +8,8 @@ import type {
   UpdateDirectiveInput,
 } from '@mha-bs/shared';
 
+import { aujourdhuiYmd, toYmd as ymd } from '../lib/dateOnly.js';
+
 import { query, queryAll, queryOne } from '../db/query.js';
 import { directiveAnneeClause } from '../lib/directiveAnneeFilter.js';
 
@@ -37,9 +39,8 @@ interface DirectiveRow {
   updatedAt: Date;
 }
 
-function toYmd(d: Date | null): string | null {
-  return d ? d.toISOString().slice(0, 10) : null;
-}
+// toYmd vit dans lib/dateOnly.ts (cf. piege UTC documente la-bas).
+const toYmd = (d: Date | null): string | null => (d ? ymd(d) : null);
 
 function toIso(d: Date | null): string | null {
   return d ? d.toISOString() : null;
@@ -231,7 +232,7 @@ export async function updateDirective(
   if (input.commentaires !== undefined) push('commentaires', input.commentaires);
 
   push('updatedBy', updatedBy);
-  push('derniereDateTraitement', new Date().toISOString().slice(0, 10));
+  push('derniereDateTraitement', aujourdhuiYmd());
 
   params.push(id);
   const row = await queryOne<DirectiveRow>(

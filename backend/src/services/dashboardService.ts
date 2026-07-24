@@ -1,5 +1,7 @@
 import type { AnneeMode } from '@mha-bs/shared';
 
+import { toYmd } from '../lib/dateOnly.js';
+
 import { queryAll, queryOne } from '../db/query.js';
 import { directiveAnneeClause } from '../lib/directiveAnneeFilter.js';
 
@@ -196,7 +198,7 @@ export async function getTopRetards(limit = 5): Promise<TopRetard[]> {
     codeDirective: r.codeDirective,
     texteDirective: r.texteDirective,
     etat: r.etat,
-    echeance: r.echeance ? r.echeance.toISOString().slice(0, 10) : null,
+    echeance: r.echeance ? toYmd(r.echeance) : null,
     daysLate: Number(r.daysLate),
   }));
 }
@@ -458,15 +460,32 @@ export async function getRecommandationsByCategorie(): Promise<CategorieRecomman
   }));
 }
 
+/**
+ * Condition SQL « reunion publiee ».
+ *
+ * Depuis la saisie en 2 etapes, une reunion nait avec `visibleSg = false` : elle
+ * n'a encore ni lieu, ni participants, ni ordre du jour. Tant que son auteur ne
+ * l'a pas publiee a l'etape 2, elle ne doit apparaitre dans AUCUN compteur SG,
+ * sinon le dashboard annonce plus de reunions que la liste n'en montre.
+ *
+ * Les reunions importees depuis Excel n'ecrivent pas la colonne et heritent donc
+ * du `DEFAULT TRUE` : les chiffres historiques sont inchanges.
+ */
+const REUNION_PUBLIEE = `"visibleSg" = TRUE`;
+
 export async function getReunionsTechniquesSummary(
   annee?: number,
 ): Promise<ReunionsTechniquesSummary> {
   const params: number[] = [];
-  let where = '';
+  // REUNION_PUBLIEE en tete : une reunion encore au stade « etape 1 » ne doit
+  // pas gonfler les compteurs remontes au SG.
+  const conditions: string[] = [REUNION_PUBLIEE];
   if (annee !== undefined) {
     params.push(annee);
-    where = `WHERE EXTRACT(YEAR FROM "dateReunion") = $1`;
+    conditions.push(`EXTRACT(YEAR FROM "dateReunion") = $1`);
   }
+  const where = `WHERE ${conditions.join(' AND ')}`;
+
   const totalRow = await queryOne<{ n: string }>(
     `SELECT COUNT(*)::TEXT AS "n" FROM "reunionsTechniques" ${where}`,
     params,
@@ -478,7 +497,8 @@ export async function getReunionsTechniquesSummary(
     `SELECT TO_CHAR("dateReunion", 'YYYY-MM') AS "yearMonth",
             COUNT(*)::TEXT AS "cnt"
      FROM "reunionsTechniques"
-     WHERE "dateReunion" >= (CURRENT_DATE - INTERVAL '6 months')
+     WHERE ${REUNION_PUBLIEE}
+       AND "dateReunion" >= (CURRENT_DATE - INTERVAL '6 months')
      GROUP BY 1
      ORDER BY 1 ASC`,
   );
@@ -496,7 +516,7 @@ export async function getReunionsTechniquesSummary(
     `SELECT "copilLie", COUNT(*)::TEXT AS "cnt"
      FROM "reunionsTechniques"
      ${where}
-     ${where ? 'AND' : 'WHERE'} "copilLie" IS NOT NULL AND "copilLie" <> ''
+       AND "copilLie" IS NOT NULL AND "copilLie" <> ''
      GROUP BY "copilLie"
      ORDER BY COUNT(*) DESC`,
     params,
@@ -596,7 +616,8 @@ export async function getActiviteParTrimestre(
        t."year" || '-T' || t."q" AS "trimestre",
        COALESCE((
          SELECT COUNT(*)::TEXT FROM "reunionsTechniques" r
-         WHERE EXTRACT(YEAR FROM r."dateReunion")::INT = t."year"
+         WHERE r."visibleSg" = TRUE
+           AND EXTRACT(YEAR FROM r."dateReunion")::INT = t."year"
            AND EXTRACT(QUARTER FROM r."dateReunion")::INT = t."q"
        ), '0') AS "reunions",
        COALESCE((
@@ -649,7 +670,7 @@ export async function getMissionsTerrainSummary(
     missionsEffectuees: row ? Number(row.missions) : 0,
     regionsCouvertes: row ? Number(row.regions) : 0,
     totalRegions: 14, // Sénégal : 14 régions administratives
-    prochaineDate: prochain?.dateMission ? prochain.dateMission.toISOString().slice(0, 10) : null,
+    prochaineDate: prochain?.dateMission ? toYmd(prochain.dateMission) : null,
     prochaineLocalite: prochain?.localite ?? null,
   };
 }
@@ -664,6 +685,7 @@ export async function getAvailableYears(): Promise<number[]> {
        SELECT "annee" FROM "rencontres" WHERE "annee" IS NOT NULL
        UNION
        SELECT EXTRACT(YEAR FROM "dateReunion")::INT FROM "reunionsTechniques"
+       WHERE ${REUNION_PUBLIEE}
        UNION
        SELECT EXTRACT(YEAR FROM "dateMission")::INT FROM "missionsTerrain"
      ) y

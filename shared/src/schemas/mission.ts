@@ -25,6 +25,12 @@ export const missionTerrainSchema = z.object({
   projetRattache: z.string().nullable(),
   constats: z.string().nullable(),
   recommandations: z.string().nullable(),
+  /**
+   * Nombre d'ouvrages visites rattaches a la mission, calcule par le serveur.
+   * Permet aux listes d'afficher un vrai total de sites sans devoir requeter
+   * les ouvrages mission par mission (N+1).
+   */
+  nbOuvrages: z.number().int().nonnegative(),
   createdBy: z.string().uuid().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -47,6 +53,9 @@ export type MissionTerrain = z.infer<typeof missionTerrainSchema>;
 export const createMissionTerrainSchema = missionTerrainSchema
   .omit({
     id: true,
+    // Calcule par le serveur a partir de la table "ouvragesVisites" : jamais
+    // fourni par le client.
+    nbOuvrages: true,
     createdBy: true,
     createdAt: true,
     updatedAt: true,

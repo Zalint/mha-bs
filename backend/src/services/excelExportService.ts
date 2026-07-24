@@ -578,6 +578,10 @@ async function addSuiviRtechniqueSheet(wb: ExcelJS.Workbook): Promise<number> {
     dateReunion: Date;
     theme: string;
   }>(
+    // PAS de filtre "visibleSg" ici, contrairement aux compteurs SG : ce
+    // classeur est le format pivot du roundtrip export -> /api/import (cf.
+    // en-tete de fichier). Y omettre les reunions non publiees les ferait
+    // disparaitre a la reimportation.
     `SELECT "dateReunion", "theme"
      FROM "reunionsTechniques"
      ORDER BY "dateReunion" DESC`,

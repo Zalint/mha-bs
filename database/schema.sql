@@ -700,6 +700,16 @@ ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "typeReunion" VARCHAR(
 -- formelle (decisions / ordreDuJour).
 ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "notesPrivees" TEXT;
 
+-- Colonne version : verrou OPTIMISTE. Le client renvoie la version qu'il a
+-- chargee ; l'UPDATE ne s'applique que si elle n'a pas bouge, sinon l'API
+-- repond 409 au lieu d'ecraser silencieusement le travail d'un collegue.
+--
+-- Pourquoi pas "updatedAt" comme jeton ? Le trigger setUpdatedAt() ecrit NOW(),
+-- de precision microseconde, alors que le driver pg rend un Date JS a la
+-- milliseconde : le jeton renvoye par le client ne pourrait jamais etre egal a
+-- la valeur stockee, et chaque enregistrement partirait en faux conflit.
+ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 1;
+
 
 -- =============================================================================
 -- VUES : agrégations dashboard

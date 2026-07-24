@@ -76,8 +76,11 @@ async function main(): Promise<void> {
     if (needCopil && nextCopil === null) noCopilDetected++;
 
     await query(
+      // "version" est le jeton du verrou optimiste : tout ecrivain doit le faire
+      // avancer, sinon un onglet ouvert avant le backfill enregistre par-dessus
+      // sans jamais declencher de conflit.
       `UPDATE "reunionsTechniques"
-       SET "sousSecteur" = $2, "copilLie" = $3
+       SET "sousSecteur" = $2, "copilLie" = $3, "version" = "version" + 1
        WHERE "id" = $1`,
       [row.id, nextSousSecteur, nextCopil],
     );

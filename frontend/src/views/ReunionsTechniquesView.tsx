@@ -21,6 +21,7 @@ import { KpiCard } from '../components/ui/KpiCard.js';
 import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
 import { api } from '../lib/apiClient.js';
+import { cn } from '../lib/cn.js';
 import { formatShort } from '../lib/formatDate.js';
 
 const SOUS_SECTEUR_DEF: { key: SousSecteur; label: string; color: string; icon: typeof Calendar }[] = [
@@ -38,6 +39,8 @@ interface CalendarEvent {
   day: number;
   theme: string;
   sousSecteur: SousSecteur | null;
+  /** false = saisie restée à l'étape 1, visible seulement par son auteur. */
+  visibleSg: boolean;
 }
 
 export function ReunionsTechniquesView() {
@@ -71,7 +74,7 @@ export function ReunionsTechniquesView() {
       if (d.getUTCFullYear() === year && d.getUTCMonth() === month) {
         const day = d.getUTCDate();
         if (!map[day]) map[day] = [];
-        map[day].push({ day, theme: r.theme, sousSecteur: r.sousSecteur });
+        map[day].push({ day, theme: r.theme, sousSecteur: r.sousSecteur, visibleSg: r.visibleSg });
       }
     }
     return map;
@@ -147,7 +150,16 @@ export function ReunionsTechniquesView() {
 
       {/* KPIs */}
       <div className="grid gap-4 mb-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Réunions tenues" value={reunions.length} delta="depuis le début" icon={Calendar} />
+        {/* Ne compte que les réunions publiées, pour rester cohérent avec le
+            badge du menu latéral et les KPI du dashboard SG (tous filtrés
+            côté serveur sur visibleSg). La liste ci-dessous, elle, montre en
+            plus les brouillons de l'utilisateur courant, signalés comme tels. */}
+        <KpiCard
+          label="Réunions tenues"
+          value={reunions.filter((r) => r.visibleSg).length}
+          delta="publiées, depuis le début"
+          icon={Calendar}
+        />
         <KpiCard
           label="COPIL réunis"
           value={copilStats.count}
@@ -218,8 +230,16 @@ export function ReunionsTechniquesView() {
                   {events.slice(0, 2).map((e, idx) => (
                     <div
                       key={idx}
-                      className="text-[10.5px] bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded mt-1 truncate"
-                      title={e.theme}
+                      // Une réunion non publiée est un brouillon visible du seul
+                      // auteur : elle ne doit pas se confondre avec une réunion
+                      // réellement tenue.
+                      className={cn(
+                        'text-[10.5px] px-1.5 py-0.5 rounded mt-1 truncate',
+                        e.visibleSg
+                          ? 'bg-primary-100 text-primary-700'
+                          : 'bg-transparent text-fg-muted border border-dashed border-border italic',
+                      )}
+                      title={e.visibleSg ? e.theme : `${e.theme} · non publiée`}
                     >
                       {e.theme}
                     </div>
@@ -289,10 +309,27 @@ export function ReunionsTechniquesView() {
                         {SOUS_SECTEUR_DEF.find((s) => s.key === r.sousSecteur)?.label ?? r.sousSecteur}
                       </span>
                     )}
+                    {!r.visibleSg && (
+                      <span
+                        className="badge bg-warning-bg text-warning text-[10.5px]"
+                        title="Réunion créée mais pas encore publiée au SG"
+                      >
+                        Non publiée
+                      </span>
+                    )}
                     {r.lieu && <span>· {r.lieu}</span>}
                   </div>
                 </div>
-                <button className="btn btn-ghost btn-sm" type="button">
+                {/* Rouvre la reunion a l'etape 2 du formulaire de saisie : sans
+                    ce lien, une reunion creee puis laissee au stade « thème »
+                    ne serait plus jamais completable. */}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={() => navigate(`/bs/reunion?reunion=${r.id}`)}
+                  title="Ouvrir / compléter cette réunion"
+                  aria-label={`Ouvrir la réunion ${r.theme}`}
+                >
                   <ExternalLink className="w-3.5 h-3.5" />
                 </button>
               </div>

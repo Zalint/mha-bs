@@ -1,9 +1,21 @@
 import { Router } from 'express';
 import { z } from 'zod';
 
-import { createReunionTechniqueSchema, SOUS_SECTEURS } from '@mha-bs/shared';
+import {
+  createReunionTechniqueSchema,
+  type ReunionTechnique,
+  SOUS_SECTEURS,
+  updateReunionTechniqueSchema,
+  type UpdateReunionTechniqueInput,
+} from '@mha-bs/shared';
 
-import { ForbiddenError, NotFoundError, UnauthorizedError } from '../../lib/errors.js';
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+  ValidationError,
+} from '../../lib/errors.js';
 import { authJwt } from '../../middlewares/authJwt.js';
 import { requireRole } from '../../middlewares/rbac.js';
 import { validate } from '../../middlewares/validate.js';
@@ -22,11 +34,19 @@ const listQuerySchema = z.object({
   sousSecteur: z.enum(SOUS_SECTEURS).optional(),
 });
 
+/**
+ * L'id de reunion transite desormais par la query string du formulaire de
+ * saisie (`/bs/reunion?reunion=<uuid>`), donc par l'URL que l'utilisateur voit
+ * et peut modifier. Sans ce garde-fou, un id non-UUID part tel quel dans le
+ * `WHERE "id" = $1` et Postgres remonte une erreur 22P02 -> 500. On veut un 422.
+ */
+const idParam = z.object({ id: z.string().uuid() });
+
 reunionRoutes.get('/', authJwt, validate(listQuerySchema, 'query'), async (req, res, next) => {
   try {
     const items = await listReunions(
       req.query as z.infer<typeof listQuerySchema>,
-      req.user?.userId ?? null,
+      req.user ?? null,
     );
     res.json({ items });
   } catch (err) {
@@ -42,10 +62,20 @@ reunionRoutes.get('/stats/sous-secteur', authJwt, async (_req, res, next) => {
   }
 });
 
-reunionRoutes.get('/:id', authJwt, async (req, res, next) => {
+reunionRoutes.get('/:id', authJwt, validate(idParam, 'params'), async (req, res, next) => {
   try {
     const item = await findReunionById(req.params.id, req.user?.userId ?? null);
     if (!item) throw new NotFoundError('Reunion introuvable');
+    // Meme regle de publication que listReunions : une reunion non publiee
+    // n'est lisible que par son createur et les admins. Sans ce controle, le
+    // filtre de la liste ne servait a rien — il suffisait de connaitre l'id,
+    // que le formulaire affiche en clair dans l'URL (?reunion=<uuid>).
+    //
+    // 404 et non 403 : repondre « interdit » confirmerait l'existence de la
+    // reunion a quelqu'un qui n'a pas le droit de la voir.
+    const visible =
+      item.visibleSg || item.createdBy === req.user?.userId || req.user?.role === 'admin';
+    if (!visible) throw new NotFoundError('Reunion introuvable');
     res.json(item);
   } catch (err) {
     next(err);
@@ -68,39 +98,92 @@ reunionRoutes.post(
   },
 );
 
+/**
+ * Charge une reunion et verifie que l'appelant a le droit de la MODIFIER.
+ *
+ * Regle : son createur, ou un admin. Une reunion sans createur (`createdBy`
+ * NULL — import, ou compte supprime : la FK est ON DELETE SET NULL) reste
+ * modifiable par tout profil `bs`, sinon on gelerait definitivement des
+ * donnees que plus personne ne possede.
+ */
+async function chargerReunionModifiable(
+  id: string,
+  user: { userId: string; role: string },
+): Promise<ReunionTechnique> {
+  const existante = await findReunionById(id, user.userId);
+  if (!existante) throw new NotFoundError('Reunion introuvable');
+  const estProprietaire = existante.createdBy === user.userId;
+  const sansProprietaire = existante.createdBy === null;
+  if (!estProprietaire && !sansProprietaire && user.role !== 'admin') {
+    throw new ForbiddenError(
+      'Seul le createur de cette reunion (ou un administrateur) peut la modifier',
+    );
+  }
+  return existante;
+}
+
 reunionRoutes.put(
   '/:id',
   authJwt,
   requireRole('bs', 'admin'),
-  validate(createReunionTechniqueSchema.partial()),
+  validate(idParam, 'params'),
+  validate(updateReunionTechniqueSchema),
   async (req, res, next) => {
     try {
       if (!req.user) throw new UnauthorizedError();
-      // Garde notesPrivees : si le body essaie de l'ecrire, on verifie d'abord
-      // que l'utilisateur courant est bien le createur. Sinon -> 403 (silencieux
-      // serait pire : l'UI penserait avoir sauve alors que rien n'a change).
-      if ('notesPrivees' in req.body) {
-        const existing = await findReunionById(req.params.id, req.user.userId);
-        if (!existing) throw new NotFoundError('Reunion introuvable');
-        if (existing.createdBy !== req.user.userId) {
-          throw new ForbiddenError(
-            'Seul le createur peut modifier les notes privees de cette reunion',
-          );
-        }
+      const { expectedVersion, ...champs } = req.body as UpdateReunionTechniqueInput;
+
+      // Un body vide (ou ne contenant que des cles inconnues, que Zod retire)
+      // arrivait jusqu'a updateReunion qui levait une Error nue -> 500.
+      if (Object.keys(champs).length === 0) {
+        throw new ValidationError('Aucun champ a mettre a jour');
       }
-      const updated = await updateReunion(req.params.id, req.body, req.user.userId);
-      res.json(updated);
+
+      const existante = await chargerReunionModifiable(req.params.id, req.user);
+
+      // Les notes privees sont plus restrictives encore que la propriete : meme
+      // un admin n'ecrit pas les notes de quelqu'un d'autre.
+      if ('notesPrivees' in champs && existante.createdBy !== req.user.userId) {
+        throw new ForbiddenError(
+          'Seul le createur peut modifier les notes privees de cette reunion',
+        );
+      }
+
+      const resultat = await updateReunion(
+        req.params.id,
+        champs,
+        req.user.userId,
+        expectedVersion,
+      );
+      if (resultat.statut === 'introuvable') throw new NotFoundError('Reunion introuvable');
+      if (resultat.statut === 'conflit') {
+        throw new ConflictError(
+          'Cette reunion a ete modifiee entre temps par quelqu\'un d\'autre',
+          { reunion: resultat.reunion },
+        );
+      }
+      res.json(resultat.reunion);
     } catch (err) {
       next(err);
     }
   },
 );
 
-reunionRoutes.delete('/:id', authJwt, requireRole('admin', 'bs'), async (req, res, next) => {
-  try {
-    await deleteReunion(req.params.id);
-    res.status(204).end();
-  } catch (err) {
-    next(err);
-  }
-});
+reunionRoutes.delete(
+  '/:id',
+  authJwt,
+  requireRole('admin', 'bs'),
+  validate(idParam, 'params'),
+  async (req, res, next) => {
+    try {
+      if (!req.user) throw new UnauthorizedError();
+      // Meme regle de propriete que le PUT : supprimer la reunion d'un collegue
+      // serait plus grave encore que la modifier.
+      await chargerReunionModifiable(req.params.id, req.user);
+      await deleteReunion(req.params.id);
+      res.status(204).end();
+    } catch (err) {
+      next(err);
+    }
+  },
+);

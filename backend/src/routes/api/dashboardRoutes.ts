@@ -92,8 +92,26 @@ dashboardRoutes.get('/top-retards', authJwt, async (_req, res, next) => {
  * Compteurs utilises par la sidebar — un seul roundtrip pour tous les badges.
  * Renvoie 0 si la table est vide (pas d'erreur, pas de cle absente).
  */
-dashboardRoutes.get('/nav-counts', authJwt, async (_req, res, next) => {
+dashboardRoutes.get('/nav-counts', authJwt, async (req, res, next) => {
   try {
+    /**
+     * Filtre annee OPTIONNEL sur les compteurs d'activite (reunions, missions,
+     * interpellations). Sans lui, le menu annoncait « 41 » a cote d'une page
+     * qui, filtree sur l'annee en cours, en affichait 5.
+     *
+     * Volontairement limite a ces trois entites : elles ont chacune une colonne
+     * DATE simple. Les directives et recommandations obeissent a une semantique
+     * d'annee bien plus fine (anneeMode active/creation/echeance, cf.
+     * lib/directiveAnneeFilter.ts) — y appliquer un EXTRACT(YEAR) naif ici
+     * contredirait les chiffres du dashboard.
+     */
+    const anneeBrute = req.query.annee;
+    const annee =
+      typeof anneeBrute === 'string' && /^\d{4}$/.test(anneeBrute) ? Number(anneeBrute) : null;
+    // `$1::INT IS NULL OR ...` : une seule requete couvre les deux cas, et
+    // l'annee reste un PARAMETRE — jamais concatenee dans le SQL.
+    const paramsAnnee = [annee];
+
     const [directives, matrices, matriceCategories, reunions, missions, interpellations] = await Promise.all([
       queryAll<{ typeRencontre: string; n: string }>(
         `SELECT r."typeRencontre", COUNT(*)::TEXT AS "n"
@@ -117,9 +135,24 @@ dashboardRoutes.get('/nav-counts', authJwt, async (_req, res, next) => {
         `SELECT "code" FROM "referentiels"
          WHERE "codeType" = 'matriceCategorie' AND "isActive" = TRUE`,
       ),
-      queryAll<{ n: string }>(`SELECT COUNT(*)::TEXT AS "n" FROM "reunionsTechniques"`),
-      queryAll<{ n: string }>(`SELECT COUNT(*)::TEXT AS "n" FROM "missionsTerrain"`),
-      queryAll<{ n: string }>(`SELECT COUNT(*)::TEXT AS "n" FROM "interpellations"`),
+      // Seules les reunions publiees comptent : une saisie restee a l'etape 1
+      // ne doit pas apparaitre dans le badge du menu ni dans les KPI SG.
+      queryAll<{ n: string }>(
+        `SELECT COUNT(*)::TEXT AS "n" FROM "reunionsTechniques"
+         WHERE "visibleSg" = TRUE
+           AND ($1::INT IS NULL OR EXTRACT(YEAR FROM "dateReunion") = $1)`,
+        paramsAnnee,
+      ),
+      queryAll<{ n: string }>(
+        `SELECT COUNT(*)::TEXT AS "n" FROM "missionsTerrain"
+         WHERE ($1::INT IS NULL OR EXTRACT(YEAR FROM "dateMission") = $1)`,
+        paramsAnnee,
+      ),
+      queryAll<{ n: string }>(
+        `SELECT COUNT(*)::TEXT AS "n" FROM "interpellations"
+         WHERE ($1::INT IS NULL OR EXTRACT(YEAR FROM "dateReception") = $1)`,
+        paramsAnnee,
+      ),
     ]);
 
     const directivesByType: Record<string, number> = {};

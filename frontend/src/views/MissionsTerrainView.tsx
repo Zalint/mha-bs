@@ -15,7 +15,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -46,6 +46,39 @@ interface EditOuvrage {
 }
 
 const SENEGAL_BOUNDS: [number, number] = [14.5, -14.5];
+
+/** Valeur sentinelle du <select> pour « toutes les années ». */
+const TOUTES_ANNEES = 'all';
+
+/**
+ * Le filtre année est mémorisé, comme celui du Dashboard global
+ * (`mha.dashboard.annee`) — deux écrans du même produit qui se comporteraient
+ * différemment seraient plus déroutants que la mémorisation elle-même.
+ * En l'absence de valeur stockée, on ouvre sur l'année en cours.
+ */
+const ANNEE_STORAGE_KEY = 'mha.missions.annee';
+
+function anneeInitiale(): number | null {
+  const courante = new Date().getUTCFullYear();
+  if (typeof window === 'undefined') return courante;
+  const raw = window.localStorage.getItem(ANNEE_STORAGE_KEY);
+  if (raw === TOUTES_ANNEES) return null;
+  if (!raw) return courante;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : courante;
+}
+
+/**
+ * Année d'une mission, extraite de `dateMission` au format YYYY-MM-DD.
+ * Découpage de chaîne et non `new Date()` : une date sans heure est interprétée
+ * en UTC par le moteur JS, et un `getFullYear()` local ferait basculer le
+ * 1er janvier sur l'année précédente pour les fuseaux à l'ouest de Greenwich.
+ */
+function anneeMission(m: MissionTerrain): number | null {
+  if (!m.dateMission) return null;
+  const y = Number(m.dateMission.slice(0, 4));
+  return Number.isFinite(y) ? y : null;
+}
 const PIN_ICON = L.divIcon({
   className: '',
   html: '<div style="background:#0284C7;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);font-family:Fira Mono, monospace">●</div>',
@@ -94,7 +127,35 @@ export function MissionsTerrainView() {
   const canDelete = canEdit;
 
   const query = useApi(() => api.get<{ items: MissionTerrain[] }>('/missions'), []);
-  const items = query.data?.items ?? [];
+  const toutesMissions = useMemo(() => query.data?.items ?? [], [query.data]);
+
+  // === Filtre année ===
+  // Année mémorisée, sinon l'année en cours. Pas de bascule automatique vers la
+  // dernière année remplie : elle ferait mentir le libellé affiché.
+  const [annee, setAnnee] = useState<number | null>(anneeInitiale);
+  useEffect(() => {
+    window.localStorage.setItem(ANNEE_STORAGE_KEY, annee === null ? TOUTES_ANNEES : String(annee));
+  }, [annee]);
+
+  const anneesDisponibles = useMemo(() => {
+    const set = new Set<number>();
+    for (const m of toutesMissions) {
+      const y = anneeMission(m);
+      if (y !== null) set.add(y);
+    }
+    // L'année en cours et l'année sélectionnée restent toujours proposées,
+    // sinon on ne pourrait plus revenir sur une année devenue vide.
+    set.add(new Date().getUTCFullYear());
+    if (annee !== null) set.add(annee);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [toutesMissions, annee]);
+
+  const items = useMemo(
+    () => (annee === null ? toutesMissions : toutesMissions.filter((m) => anneeMission(m) === annee)),
+    [toutesMissions, annee],
+  );
+
+  const anneeLabel = annee === null ? 'toutes années' : `année ${annee}`;
 
   // Referentiel type d'ouvrage : sert a afficher le libelle propre + alimenter
   // le dropdown du form 'Ajouter un ouvrage' dans le modal d'edition.
@@ -117,13 +178,21 @@ export function MissionsTerrainView() {
 
   // === Sélection multiple pour bulk delete ===
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Sélection RESTREINTE aux missions visibles : sans ça, cocher « tout » sur
+  // 2026 puis basculer sur 2025 enverrait au bulk-delete des ids que l'écran
+  // n'affiche plus. On garde la sélection en mémoire (revenir sur l'année la
+  // retrouve) mais on n'agit jamais au-delà de ce qui est à l'écran.
+  const selectedVisibles = useMemo(
+    () => items.filter((m) => selectedIds.has(m.id)).map((m) => m.id),
+    [items, selectedIds],
+  );
   const allSelected = items.length > 0 && items.every((m) => selectedIds.has(m.id));
   const toggleAll = (): void => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(items.map((m) => m.id)));
-    }
+    const next = new Set(selectedIds);
+    // Ne touche qu'aux lignes de l'année affichée.
+    if (allSelected) items.forEach((m) => next.delete(m.id));
+    else items.forEach((m) => next.add(m.id));
+    setSelectedIds(next);
   };
   const toggleOne = (id: string): void => {
     const next = new Set(selectedIds);
@@ -249,15 +318,14 @@ export function MissionsTerrainView() {
   };
 
   const bulkDelete = (): void => {
-    if (selectedIds.size === 0) return;
+    if (selectedVisibles.length === 0) return;
     setConfirmState({
-      title: `Supprimer ${selectedIds.size} mission(s) ?`,
-      description:
-        'Toutes les missions sélectionnées seront définitivement supprimées avec leurs ouvrages associés. Action irréversible.',
+      title: `Supprimer ${selectedVisibles.length} mission(s) ?`,
+      description: `Les missions sélectionnées (${anneeLabel}) seront définitivement supprimées avec leurs ouvrages associés. Action irréversible.`,
       onConfirm: async () => {
         try {
           const res = await api.post<{ deleted: number }>('/missions/bulk-delete', {
-            ids: Array.from(selectedIds),
+            ids: selectedVisibles,
           });
           toast.success(`${res.deleted} mission(s) supprimée(s)`);
           setSelectedIds(new Set());
@@ -273,6 +341,54 @@ export function MissionsTerrainView() {
     return new Set(items.map((i) => i.region).filter(Boolean));
   }, [items]);
 
+  // Vrai total d'ouvrages visités, via le sous-total `nbOuvrages` calculé par
+  // l'API. Auparavant cette carte affichait le nombre de MISSIONS, donc le même
+  // chiffre que « Missions effectuées » juste à côté, sous un libellé
+  // « ouvrages d'envergure » qui ne correspondait à rien.
+  const totalOuvrages = useMemo(
+    () => items.reduce((n, m) => n + m.nbOuvrages, 0),
+    [items],
+  );
+  const missionsSansOuvrage = useMemo(
+    () => items.filter((m) => m.nbOuvrages === 0).length,
+    [items],
+  );
+
+  /** « 2026 : 12 · 2025 : 20 · 2024 : 11 » — affiché en mode « toutes années ». */
+  const repartitionParAnnee = useMemo(() => {
+    const parAnnee = new Map<number, number>();
+    for (const m of toutesMissions) {
+      const y = anneeMission(m);
+      if (y !== null) parAnnee.set(y, (parAnnee.get(y) ?? 0) + 1);
+    }
+    return Array.from(parAnnee.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([y, n]) => `${y} : ${n}`)
+      .join(' · ');
+  }, [toutesMissions]);
+
+  /**
+   * Prochaine mission a venir dans la periode affichee ; a defaut, la plus
+   * recente deja passee. Remplace une date en dur (« 21-05-2026 ») qui restait
+   * du maquettage et ne bougeait jamais avec les donnees.
+   */
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const prochaineMission = useMemo(
+    () =>
+      items
+        .filter((m) => m.dateMission && m.dateMission >= aujourdhui)
+        .sort((a, b) => a.dateMission.localeCompare(b.dateMission))[0] ?? null,
+    [items, aujourdhui],
+  );
+  const derniereMission = useMemo(
+    () =>
+      items
+        .filter((m) => m.dateMission)
+        .sort((a, b) => b.dateMission.localeCompare(a.dateMission))[0] ?? null,
+    [items],
+  );
+  const reperMission = prochaineMission ?? derniereMission;
+
   if (query.isLoading) return <Spinner label="Chargement des missions terrain…" />;
 
   return (
@@ -281,18 +397,36 @@ export function MissionsTerrainView() {
         <div>
           <h1 className="text-2xl font-semibold text-fg leading-tight">Suivi missions terrain</h1>
           <p className="text-sm text-fg-muted mt-1">
-            Sites d'ouvrages visités par le MHA · cartographie nationale et observations
+            Sites d'ouvrages visités par le MHA · cartographie nationale et observations ·{' '}
+            <span className="text-fg-2 font-medium">{anneeLabel}</span>
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {canDelete && selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs font-medium text-fg-muted">
+            Année
+            <select
+              value={annee === null ? TOUTES_ANNEES : String(annee)}
+              onChange={(e) =>
+                setAnnee(e.target.value === TOUTES_ANNEES ? null : Number(e.target.value))
+              }
+              className="select block mt-1 font-mono"
+            >
+              {anneesDisponibles.map((y) => (
+                <option key={y} value={String(y)}>
+                  {y}
+                </option>
+              ))}
+              <option value={TOUTES_ANNEES}>Toutes les années</option>
+            </select>
+          </label>
+          {canDelete && selectedVisibles.length > 0 && (
             <button
               type="button"
               onClick={bulkDelete}
               className="btn bg-danger text-white hover:bg-danger/90"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              Supprimer ({selectedIds.size})
+              Supprimer ({selectedVisibles.length})
             </button>
           )}
           <button type="button" className="btn btn-primary" onClick={() => navigate('/bs/reunion')}>
@@ -303,23 +437,40 @@ export function MissionsTerrainView() {
 
       {/* KPIs */}
       <div className="grid gap-4 mb-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard label="Missions effectuées" value={items.length} delta="depuis le début" icon={MapPin} />
+        <KpiCard
+          label="Missions effectuées"
+          value={items.length}
+          delta={
+            annee === null
+              ? `toutes années · ${repartitionParAnnee}`
+              : `${anneeLabel} · ${toutesMissions.length} au total`
+          }
+          icon={MapPin}
+        />
         <KpiCard
           label="Sites visités"
-          value={items.length}
-          delta="ouvrages d'envergure"
+          value={totalOuvrages}
+          delta={
+            missionsSansOuvrage === 0
+              ? "ouvrages d'envergure"
+              : `ouvrages · ${missionsSansOuvrage} mission(s) sans ouvrage saisi`
+          }
           icon={Construction}
         />
         <KpiCard
           label="Régions couvertes"
           value={regions.size}
-          delta={Array.from(regions).slice(0, 3).join(' · ')}
+          delta={Array.from(regions).slice(0, 3).join(' · ') || 'aucune région renseignée'}
           icon={Globe}
         />
         <KpiCard
-          label="Prochaine mission"
-          value="21-05-2026"
-          delta="PDBH · Baie de Hann"
+          label={prochaineMission ? 'Prochaine mission' : 'Dernière mission'}
+          value={reperMission ? formatShort(reperMission.dateMission) : '—'}
+          delta={
+            reperMission
+              ? [reperMission.projetRattache, reperMission.localite].filter(Boolean).join(' · ')
+              : `aucune mission en ${anneeLabel}`
+          }
           icon={CalendarClock}
         />
       </div>
@@ -400,13 +551,28 @@ export function MissionsTerrainView() {
             )}
             <h2 className="text-md font-semibold">Sites visités</h2>
             <span className="ml-auto text-sm text-fg-muted">
-              {selectedIds.size > 0 ? `${selectedIds.size} / ` : ''}
-              {items.length} site(s)
+              {selectedVisibles.length > 0 ? `${selectedVisibles.length} / ` : ''}
+              {items.length} site(s) · {anneeLabel}
             </span>
           </div>
           <div className="max-h-[520px] overflow-auto">
             {items.length === 0 ? (
-              <p className="text-sm text-fg-muted text-center py-10">Aucune mission enregistrée.</p>
+              <div className="text-center py-10 px-4">
+                <p className="text-sm text-fg-muted">
+                  {toutesMissions.length === 0
+                    ? 'Aucune mission enregistrée.'
+                    : `Aucune mission en ${anneeLabel}.`}
+                </p>
+                {toutesMissions.length > 0 && annee !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setAnnee(null)}
+                    className="btn btn-ghost btn-sm mt-2"
+                  >
+                    Voir toutes les années ({toutesMissions.length})
+                  </button>
+                )}
+              </div>
             ) : (
               items.map((m) => (
                 <div
@@ -496,7 +662,7 @@ export function MissionsTerrainView() {
         </div>
       </div>
 
-      {items.length === 0 && (
+      {toutesMissions.length === 0 && (
         <p className="mt-3 text-xs text-fg-muted italic">
           Aucune mission terrain en base. Crée une nouvelle mission via le bouton ci-dessus.
         </p>

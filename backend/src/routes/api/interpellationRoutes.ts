@@ -1,4 +1,6 @@
 import { Router } from 'express';
+
+import { aujourdhuiYmd } from '../../lib/dateOnly.js';
 import { z } from 'zod';
 
 import { NotFoundError, UnauthorizedError } from '../../lib/errors.js';
@@ -108,7 +110,7 @@ interpellationRoutes.get('/export.xlsx', authJwt, async (_req, res, next) => {
     });
     ws.views = [{ state: 'frozen', ySplit: 1 }];
     const buffer = await wb.xlsx.writeBuffer();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = aujourdhuiYmd();
     const filename = `mha-interpellations-${today}.xlsx`;
     res.setHeader(
       'Content-Type',

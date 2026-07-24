@@ -1,11 +1,25 @@
 import 'leaflet/dist/leaflet.css';
 
 import L from 'leaflet';
-import { ArrowLeft, Construction, MapPin, Plus, Save, Trash2, Users } from 'lucide-react';
-import { useState } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  Construction,
+  ExternalLink,
+  Loader2,
+  Lock,
+  MapPin,
+  Plus,
+  RotateCcw,
+  Save,
+  Trash2,
+  Users,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import {
@@ -13,9 +27,11 @@ import {
   type CreateReunionTechniqueInput,
   REGIONS_SENEGAL,
   type RegionSenegal,
+  type ReunionTechnique,
   type SousSecteur,
 } from '@mha-bs/shared';
 
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog.js';
 import { FormField } from '../../components/ui/FormField.js';
 import {
   NotesPriveesField,
@@ -25,7 +41,7 @@ import {
 import { Textarea } from '../../components/ui/Textarea.js';
 import { useAuthStore } from '../../stores/authStore.js';
 import { useReferentiel } from '../../hooks/useReferentiel.js';
-import { api, formatApiError } from '../../lib/apiClient.js';
+import { ApiClientError, api, formatApiError } from '../../lib/apiClient.js';
 import { cn } from '../../lib/cn.js';
 import { todayYmd } from '../../lib/formatDate.js';
 
@@ -75,16 +91,118 @@ const PIN_ICON = L.divIcon({
   iconAnchor: [12, 12],
 });
 
+/**
+ * Saisie d'une reunion en DEUX etapes.
+ *
+ *  - `creation`   : contexte + theme, rien d'autre. Le bouton cree la reunion
+ *                   (POST /reunions) et fait donc exister un id.
+ *  - `complement` : le reste du formulaire — dont les NOTES PRIVEES, qui ont
+ *                   besoin d'une reunion reelle a laquelle s'attacher (avant,
+ *                   elles ne vivaient qu'en brouillon localStorage et etaient
+ *                   perdues si le formulaire n'etait jamais soumis).
+ *
+ * L'id est porte par la query string (`?reunion=<uuid>`) : un rechargement de
+ * page reprend donc l'etape 2 au lieu de repartir de zero.
+ */
+type EtapeReunion = 'creation' | 'complement';
+
+/**
+ * Valeurs d'un formulaire reunion vierge (etape 1).
+ * Fonction et non constante : `todayYmd()` doit etre evalue au moment ou l'on
+ * repart sur une saisie vierge, pas au chargement du module.
+ */
+function reunionDefaults(): ReunionFormValues {
+  return {
+    dateReunion: todayYmd(),
+    heureDebut: '10:00',
+    dureeEstimee: '2h',
+    theme: '',
+    lieu: 'SG MHA · Salle Plénière',
+    sousSecteur: '',
+    copilLie: '—',
+    typeReunion: 'technique',
+    ordreDuJour: '',
+    decisions: '',
+    notesPrivees: '',
+    participantsRaw: 'Cabinet MHA, DPGI, ONAS',
+    // Non publiee par defaut : c'est l'etape 2 qui rend la reunion visible au SG.
+    visibleSg: false,
+    inclusRapportHebdo: false,
+  };
+}
+
+/** Cle localStorage du brouillon de notes — scopee par user ET par reunion. */
+function notesDraftKey(userId: string | undefined, reunionId: string): string {
+  return `bs-reunion-notes-draft-${userId ?? 'anon'}-${reunionId}`;
+}
+
+/** Reunion renvoyee par l'API -> valeurs du formulaire (jamais de null dans un input). */
+function toReunionFormValues(
+  r: ReunionTechnique,
+  notesDraft: { content: string; ts: number } | null,
+): ReunionFormValues {
+  // Le brouillon local ne l'emporte que s'il est PLUS RECENT que la derniere
+  // ecriture serveur (colonne "updatedAt", maintenue par trgReunionsUpdatedAt).
+  // Sinon un brouillon perime — second onglet, session precedente — viendrait
+  // ecraser des notes deja enregistrees au prochain « Enregistrer ».
+  const brouillonPlusRecent = notesDraft != null && notesDraft.ts > Date.parse(r.updatedAt);
+  // L'etape 1 ne collecte ni le lieu ni les participants : ils arrivent donc
+  // vides ici. On re-propose les valeurs par defaut de la maison plutot que
+  // d'ouvrir l'etape 2 sur des champs blancs — et on le fait ICI pour que
+  // « continuer apres creation » et « rouvrir depuis la liste » se comportent
+  // exactement pareil. Contrepartie assumee : un lieu volontairement vide se
+  // reproposera a la reouverture.
+  const defauts = reunionDefaults();
+  return {
+    dateReunion: r.dateReunion,
+    heureDebut: r.heureDebut ?? '',
+    dureeEstimee: r.dureeEstimee ?? '',
+    theme: r.theme,
+    lieu: r.lieu ?? defauts.lieu,
+    sousSecteur: r.sousSecteur ?? '',
+    copilLie: r.copilLie ?? '—',
+    typeReunion: r.typeReunion ?? '',
+    ordreDuJour: r.ordreDuJour ?? '',
+    decisions: r.decisions ?? '',
+    notesPrivees: brouillonPlusRecent ? notesDraft.content : r.notesPrivees ?? '',
+    participantsRaw:
+      r.participants.length > 0 ? r.participants.join(', ') : defauts.participantsRaw,
+    visibleSg: r.visibleSg,
+    inclusRapportHebdo: r.inclusRapportHebdo,
+  };
+}
+
 export function BsReunionMissionView() {
   const [mode, setMode] = useState<Mode>('reunion');
   const [submitting, setSubmitting] = useState(false);
+  // Verrou anti-double-soumission, en ref pour etre lu/ecrit dans le meme tick.
+  const envoiEnCoursRef = useRef(false);
   const [ouvrages, setOuvrages] = useState<Ouvrage[]>([]);
   const userId = useAuthStore((s) => s.user?.id);
+  const role = useAuthStore((s) => s.user?.role);
 
-  // Clé localStorage pour le brouillon des notes privées — scopée par user.
-  // En l'absence de userId (devrait pas arriver, mais defense en profondeur),
-  // on tombe sur une clé générique partagée.
-  const notesStorageKey = `bs-reunion-notes-draft-${userId ?? 'anon'}`;
+  // L'id de la reunion en cours de saisie vit dans l'URL : l'etape 2 survit
+  // donc a un rechargement de page (cf. commentaire sur EtapeReunion).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reunionId = searchParams.get('reunion');
+  const etape: EtapeReunion = reunionId ? 'complement' : 'creation';
+
+  // Etat serveur de la reunion actuellement editee. Source unique pour :
+  //   - savoir si le formulaire reflete bien la reunion de l'URL (`id`)
+  //   - la garde « notes privees » (`createdBy`)
+  //   - le jeton de verrou optimiste (`version`)
+  const [reunionChargee, setReunionChargee] = useState<ReunionTechnique | null>(null);
+  const [chargement, setChargement] = useState(false);
+  const estCreateur = reunionChargee != null && reunionChargee.createdBy === userId;
+
+  // Miroir exact de chargerReunionModifiable() cote backend. Sans lui, la liste
+  // ouvre a tout le monde un formulaire pleinement editable dont l'API refusera
+  // l'enregistrement : on decouvrirait le 403 apres avoir tout ressaisi.
+  const peutModifier =
+    reunionChargee == null ||
+    estCreateur ||
+    reunionChargee.createdBy === null ||
+    role === 'admin';
 
   // Referentiels charges depuis l'API (gerables via /bs/config)
   const sousSecteursRef = useReferentiel('sousSecteur');
@@ -92,25 +210,89 @@ export function BsReunionMissionView() {
   const typeReunionRef = useReferentiel('typeReunion');
   const typeOuvrageRef = useReferentiel('typeOuvrage');
 
-  const reunionForm = useForm<ReunionFormValues>({
-    defaultValues: {
-      dateReunion: todayYmd(),
-      heureDebut: '10:00',
-      dureeEstimee: '2h',
-      theme: '',
-      lieu: 'SG MHA · Salle Plénière',
-      sousSecteur: '',
-      copilLie: '—',
-      typeReunion: 'technique',
-      ordreDuJour: '',
-      decisions: '',
-      // Restaure le brouillon des notes s'il y en a un en localStorage
-      notesPrivees: readNotesDraft(notesStorageKey)?.content ?? '',
-      participantsRaw: 'Cabinet MHA, DPGI, ONAS',
-      visibleSg: true,
-      inclusRapportHebdo: false,
-    },
-  });
+  const reunionForm = useForm<ReunionFormValues>({ defaultValues: reunionDefaults() });
+  // Lu PENDANT le rendu, volontairement : le formState de RHF est un Proxy qui
+  // n'abonne le composant qu'aux cles effectivement lues au rendu. Lu seulement
+  // dans un handler, `isDirty` resterait fige a false.
+  const reunionDirty = reunionForm.formState.isDirty;
+
+  // Les listes deroulantes (type de reunion, sous-secteur, COPIL) sont
+  // alimentees par des referentiels charges en asynchrone. Tant qu'elles sont
+  // vides, un reset() qui pose `sousSecteur: 'inondations'` ne trouve aucune
+  // <option> correspondante : le <select> retombe sur « — » et la valeur est
+  // silencieusement perdue au prochain enregistrement. On attend donc que les
+  // trois referentiels du formulaire reunion soient arrives.
+  const referentielsPrets =
+    !sousSecteursRef.isLoading && !copilProjetRef.isLoading && !typeReunionRef.isLoading;
+
+  // Hydratation de l'etape 2 : si l'URL porte deja un ?reunion=<id> (retour,
+  // rechargement, lien colle), on recharge la reunion depuis l'API.
+  const [erreurChargement, setErreurChargement] = useState<string | null>(null);
+  const [conflit, setConflit] = useState<ReunionTechnique | null>(null);
+  const [rechargeCount, setRechargeCount] = useState(0);
+  useEffect(() => {
+    if (!reunionId || !referentielsPrets || reunionChargee?.id === reunionId) return;
+    let annule = false;
+    setChargement(true);
+    setErreurChargement(null);
+    api
+      .get<ReunionTechnique>(`/reunions/${reunionId}`)
+      .then((r) => {
+        if (annule) return;
+        setReunionChargee(r);
+        setConflit(null);
+        const draft = readNotesDraft(notesDraftKey(userId, reunionId));
+        reunionForm.reset(toReunionFormValues(r, draft));
+      })
+      .catch((err: unknown) => {
+        if (annule) return;
+        // 404 : la reunion n'existe plus -> retour propre a l'etape 1.
+        // Panne reseau : on GARDE `?reunion=` et on bloque le formulaire. Vider
+        // l'id renverrait l'utilisateur en creation avec des valeurs par defaut,
+        // et un « Enregistrer » ecraserait la vraie reunion — ou en creerait un
+        // doublon.
+        const introuvable = err instanceof ApiClientError && err.status === 404;
+        if (introuvable) {
+          toast.error('Réunion introuvable — retour à la création');
+          // Remise a zero du formulaire, sinon il garde le contenu de la
+          // reunion precedemment hydratee : un « Créer » sur cet ecran en
+          // ferait un doublon.
+          setReunionChargee(null);
+          reunionForm.reset(reunionDefaults());
+          setSearchParams({}, { replace: true });
+        } else {
+          setErreurChargement(formatApiError(err, 'Chargement de la réunion impossible'));
+        }
+      })
+      .finally(() => {
+        if (!annule) setChargement(false);
+      });
+    return () => {
+      annule = true;
+      // Sans ce reset, une annulation (changement de dependance, passage a
+      // l'etape 1 pendant le chargement) laisse `chargement` bloque a true et
+      // le bouton Enregistrer desactive pour de bon.
+      setChargement(false);
+    };
+  }, [
+    reunionId,
+    userId,
+    referentielsPrets,
+    rechargeCount,
+    reunionChargee,
+    reunionForm,
+    setSearchParams,
+  ]);
+
+  // Formulaire gele tant qu'il n'affiche pas le vrai contenu de la reunion :
+  // sinon l'etape 2 s'ouvre sur les valeurs par defaut (le temps du GET, ou si
+  // celui-ci echoue) et un « Enregistrer » les ecrirait par-dessus la reunion.
+  const reunionVerrouillee =
+    etape === 'complement' &&
+    (reunionChargee?.id !== reunionId ||
+      chargement ||
+      erreurChargement !== null ||
+      !peutModifier);
 
   const missionForm = useForm<MissionFormValues>({
     defaultValues: {
@@ -125,35 +307,155 @@ export function BsReunionMissionView() {
     },
   });
 
-  const submitReunion = async (v: ReunionFormValues): Promise<void> => {
+  /**
+   * ETAPE 1 — cree la reunion avec le strict minimum (contexte + theme).
+   * Seules ces cles sont envoyees : le schema partage rend les autres
+   * facultatives, inutile de fabriquer des `null` cote client.
+   */
+  const creerReunion = async (v: ReunionFormValues): Promise<void> => {
+    // Meme garde que completerReunion : sans elle un double clic cree deux
+    // reunions, dont une orpheline (l'URL ne pointe que sur la derniere).
+    if (envoiEnCoursRef.current) return;
+    envoiEnCoursRef.current = true;
     setSubmitting(true);
     try {
       const payload: CreateReunionTechniqueInput = {
         dateReunion: v.dateReunion,
         heureDebut: v.heureDebut || null,
         dureeEstimee: v.dureeEstimee || null,
-        theme: v.theme,
+        theme: v.theme.trim(),
+        sousSecteur: v.sousSecteur || null,
+        copilLie: v.copilLie === '—' ? null : v.copilLie || null,
+        typeReunion: v.typeReunion || null,
+        // Une reunion sortie de l'etape 1 n'a ni lieu, ni participants, ni
+        // ordre du jour : elle ne doit pas remonter au SG dans cet etat. C'est
+        // l'etape 2 qui la publie, en cochant « Visible au SG ».
+        visibleSg: false,
+      };
+      const created = await api.post<ReunionTechnique>('/reunions', payload);
+      // L'etat serveur est deja connu -> on court-circuite l'effet d'hydratation
+      setReunionChargee(created);
+      setConflit(null);
+      reunionForm.reset(toReunionFormValues(created, null));
+      setSearchParams({ reunion: created.id }, { replace: true });
+      toast.success('Réunion créée — complétez-la, puis publiez-la vers le SG');
+    } catch (err) {
+      toast.error(formatApiError(err, 'Erreur à la création de la réunion'));
+    } finally {
+      envoiEnCoursRef.current = false;
+      setSubmitting(false);
+    }
+  };
+
+  /**
+   * ETAPE 2 — enregistre le formulaire complet sur la reunion deja creee.
+   *
+   * Verrou optimiste : on renvoie la `version` telle qu'elle etait au
+   * chargement. Si quelqu'un a enregistre entre temps, l'API repond 409 et on
+   * affiche le bandeau de conflit au lieu d'ecraser son travail. `forcer`
+   * omet le jeton — l'ecrasement devient alors un choix explicite.
+   */
+  const completerReunion = async (
+    v: ReunionFormValues,
+    { forcer = false }: { forcer?: boolean } = {},
+  ): Promise<void> => {
+    if (!reunionId) return;
+    // Garde par ref et non par le state `submitting` : deux clics dans le meme
+    // tick lisent tous les deux `submitting === false` (React n'a pas encore
+    // re-rendu). Les deux PUT partiraient avec la meme `expectedVersion`, le
+    // second se prendrait un 409 provoque par le premier — un faux conflit
+    // avec soi-meme.
+    if (envoiEnCoursRef.current) return;
+    envoiEnCoursRef.current = true;
+    setSubmitting(true);
+    try {
+      const payload: Partial<CreateReunionTechniqueInput> & { expectedVersion?: number } = {
+        dateReunion: v.dateReunion,
+        heureDebut: v.heureDebut || null,
+        dureeEstimee: v.dureeEstimee || null,
+        theme: v.theme.trim(),
         lieu: v.lieu || null,
         sousSecteur: v.sousSecteur || null,
         copilLie: v.copilLie === '—' ? null : v.copilLie || null,
         typeReunion: v.typeReunion || null,
         ordreDuJour: v.ordreDuJour || null,
         decisions: v.decisions || null,
-        notesPrivees: v.notesPrivees || null,
         participants: v.participantsRaw.split(',').map((s) => s.trim()).filter(Boolean),
         visibleSg: v.visibleSg,
         inclusRapportHebdo: v.inclusRapportHebdo,
       };
-      await api.post('/reunions', payload);
-      toast.success('Réunion enregistrée');
+      // `notesPrivees` n'est transmis QUE par le createur : le backend renvoie
+      // un 403 des que ce champ est present dans le body d'un autre profil, ce
+      // qui bloquerait l'enregistrement de tout le reste du formulaire.
+      if (estCreateur) payload.notesPrivees = v.notesPrivees || null;
+      if (!forcer && reunionChargee) payload.expectedVersion = reunionChargee.version;
+
+      const maj = await api.put<ReunionTechnique>(`/reunions/${reunionId}`, payload);
+      // Le jeton de verrou a avance : sans ce report, le 2e enregistrement
+      // d'affilee renverrait une version perimee et partirait en faux conflit.
+      setReunionChargee(maj);
+      setConflit(null);
       // Brouillon localStorage n'est plus utile -> on nettoie
-      clearNotesDraft(notesStorageKey);
-      reunionForm.reset();
+      if (estCreateur) clearNotesDraft(notesDraftKey(userId, reunionId));
+      // Reset sur les valeurs qui viennent d'etre enregistrees : sans ca le
+      // formulaire reste `isDirty` et la confirmation « modifications non
+      // enregistrees » se declenche a tort au clic suivant.
+      reunionForm.reset({ ...v, theme: v.theme.trim() });
+      toast.success(v.visibleSg ? 'Réunion enregistrée et publiée' : 'Réunion enregistrée');
     } catch (err) {
+      if (err instanceof ApiClientError && err.status === 409) {
+        // `?? reunionChargee` : si le corps du 409 n'a pas la reunion (proxy qui
+        // rogne les details, version d'API differente), on retombe sur ce qu'on
+        // connait plutot que sur null — sinon le bandeau ne s'afficherait pas
+        // et l'enregistrement resterait bloque sans aucune explication.
+        const details = err.details as { reunion?: ReunionTechnique } | undefined;
+        setConflit(details?.reunion ?? reunionChargee);
+        toast.error('Réunion modifiée entre temps — rien n’a été écrasé');
+        return;
+      }
       toast.error(formatApiError(err, 'Erreur à l\'enregistrement de la réunion'));
     } finally {
+      envoiEnCoursRef.current = false;
       setSubmitting(false);
     }
+  };
+
+  /** Repart sur une saisie vierge (retour etape 1). */
+  const nouvelleReunion = (): void => {
+    setReunionChargee(null);
+    setConflit(null);
+    setErreurChargement(null);
+    reunionForm.reset(reunionDefaults());
+    setSearchParams({}, { replace: true });
+  };
+
+  /** Conflit : abandonne les modifications locales et recharge l'etat serveur. */
+  const rechargerApresConflit = (): void => {
+    // Le bouton promet « perd ma saisie » : il faut donc AUSSI jeter le
+    // brouillon localStorage des notes, sinon l'hydratation le reinjecte (il
+    // est plus recent que updatedAt) et la saisie annoncee perdue revient.
+    if (reunionId && estCreateur) clearNotesDraft(notesDraftKey(userId, reunionId));
+    setConflit(null);
+    setReunionChargee(null); // force l'effet d'hydratation a refaire le GET
+  };
+
+  /**
+   * Conflit : ecrase volontairement la version du collegue.
+   * Le bandeau n'est PAS efface ici — seul un PUT reussi le retire. Sinon une
+   * validation qui echoue (theme vide, par exemple) ferait disparaitre le
+   * bandeau sans qu'aucune requete ne parte : plus d'explication a l'ecran, et
+   * le bouton Enregistrer normal continuerait a echouer en 409.
+   */
+  const ecraserMalgreConflit = (): void => {
+    void reunionForm.handleSubmit((v) => completerReunion(v, { forcer: true }))();
+  };
+
+  // Confirmation avant de quitter l'etape 2 avec des modifications non
+  // enregistrees (jamais de confirm() natif — cf. ConfirmDialog).
+  const [confirmNouvelle, setConfirmNouvelle] = useState(false);
+  const demanderNouvelleReunion = (): void => {
+    if (reunionDirty) setConfirmNouvelle(true);
+    else nouvelleReunion();
   };
 
   const submitMission = async (v: MissionFormValues): Promise<void> => {
@@ -231,19 +533,128 @@ export function BsReunionMissionView() {
 
       {mode === 'reunion' && (
         <form
-          onSubmit={(e) => void reunionForm.handleSubmit(submitReunion)(e)}
+          onSubmit={(e) =>
+            void reunionForm.handleSubmit(
+              // Lambda et non reference directe : RHF passe l'evenement en 2e
+              // argument, ce qui viendrait ecraser les options de
+              // `completerReunion` (`{ forcer }`).
+              etape === 'creation' ? (v) => creerReunion(v) : (v) => completerReunion(v),
+            )(e)
+          }
           className="card overflow-hidden grid grid-cols-1"
         >
-          <fieldset className="p-5 border-b border-border">
+          {/* Fil d'etapes : la reunion doit exister avant de pouvoir accueillir
+              ordre du jour, decisions et surtout notes privees. */}
+          <div className="px-5 py-3.5 border-b border-border bg-surface2/40">
+            <div className="flex items-center gap-3">
+              <EtapeBadge numero={1} label="Créer" etat={etape === 'creation' ? 'actif' : 'fait'} />
+              <div
+                className={cn(
+                  'h-0.5 flex-1 rounded-full',
+                  etape === 'complement' ? 'bg-primary' : 'bg-border',
+                )}
+              />
+              <EtapeBadge
+                numero={2}
+                label="Compléter"
+                etat={etape === 'complement' ? 'actif' : 'inactif'}
+              />
+            </div>
+            <p className="text-[11.5px] text-fg-muted mt-2">
+              {etape === 'creation'
+                ? 'Renseignez le contexte et le thème, puis créez la réunion. Le reste du formulaire — dont les notes privées — s’ouvrira ensuite.'
+                : 'La réunion existe. Complétez-la autant de fois que nécessaire : chaque enregistrement met à jour la même réunion.'}
+            </p>
+          </div>
+
+          {chargement && (
+            <div className="px-5 py-2 border-b border-border flex items-center gap-2 text-xs text-fg-muted">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Chargement de la réunion…
+            </div>
+          )}
+
+          {conflit !== null && (
+            <div className="px-5 py-3 border-b border-border bg-warning-bg text-warning text-sm">
+              <div className="flex items-start gap-2 mb-2">
+                <Lock className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <b>Cette réunion a été modifiée entre temps</b>
+                  {conflit.updatedAt && (
+                    <span className="text-[11.5px] opacity-80">
+                      {' '}
+                      · dernière écriture le{' '}
+                      {new Date(conflit.updatedAt).toLocaleString('fr-FR')}
+                    </span>
+                  )}
+                  <div className="text-[11.5px] mt-0.5">
+                    Rien n’a été écrasé. Rechargez pour repartir de la version enregistrée,
+                    ou forcez si vous êtes sûr que votre saisie fait référence.
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={rechargerApresConflit}
+                >
+                  <RotateCcw className="w-3 h-3" /> Recharger (perd ma saisie)
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={ecraserMalgreConflit}
+                  disabled={submitting}
+                >
+                  Écraser quand même
+                </button>
+              </div>
+            </div>
+          )}
+
+          {etape === 'complement' && !peutModifier && !chargement && (
+            <div className="px-5 py-3 border-b border-border bg-muted text-fg-2 text-sm flex items-start gap-2">
+              <Lock className="w-4 h-4 mt-0.5 flex-shrink-0" />
+              <span>
+                <b>Consultation seule.</b> Cette réunion a été créée par quelqu’un d’autre —
+                seul son auteur (ou un administrateur) peut la modifier.
+              </span>
+            </div>
+          )}
+
+          {erreurChargement && (
+            <div className="px-5 py-3 border-b border-border bg-danger-bg text-danger flex items-center gap-3 flex-wrap text-sm">
+              <span className="flex-1">
+                {erreurChargement} — le formulaire est bloqué pour ne pas écraser la réunion
+                avec des valeurs par défaut.
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setRechargeCount((c) => c + 1)}
+              >
+                <RotateCcw className="w-3 h-3" /> Réessayer
+              </button>
+            </div>
+          )}
+
+          <fieldset className="p-5 border-b border-border" disabled={reunionVerrouillee}>
             <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-4">
               Contexte
             </legend>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-              <FormField label="Date" required>
+              {/* `required` porte un MESSAGE : avec `required: true`, RHF bloque
+                  la soumission avec un message vide et l'utilisateur ne voit
+                  rien se passer au clic sur Créer. */}
+              <FormField
+                label="Date"
+                required
+                error={reunionForm.formState.errors.dateReunion?.message}
+              >
                 <input
                   type="date"
                   className="input font-mono"
-                  {...reunionForm.register('dateReunion', { required: true })}
+                  {...reunionForm.register('dateReunion', { required: 'Date requise' })}
                 />
               </FormField>
               <FormField label="Heure">
@@ -305,85 +716,189 @@ export function BsReunionMissionView() {
             </div>
           </fieldset>
 
-          <fieldset className="p-5 border-b border-border">
+          <fieldset className="p-5 border-b border-border" disabled={reunionVerrouillee}>
             <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-4">
               Réunion
             </legend>
-            <FormField label="Thème" required>
+            <FormField
+              label="Thème"
+              required
+              error={reunionForm.formState.errors.theme?.message}
+            >
               <input
                 type="text"
                 className="input"
                 placeholder="ex. Préparation hivernage 2026 · plan d'actions DPGI"
-                {...reunionForm.register('theme', { required: 'Thème requis' })}
+                {...reunionForm.register('theme', {
+                  required: 'Thème requis',
+                  // `validate` et NON `minLength` : le payload part avec
+                  // `theme.trim()`, or minLength compte les espaces. « ␣␣a␣␣ »
+                  // passerait la validation cliente puis serait rejete par le
+                  // min(3) du backend (422).
+                  validate: (v) =>
+                    v.trim().length >= 3 || 'Thème : 3 caractères minimum',
+                })}
               />
             </FormField>
-            <FormField label="Lieu" help="Saisie libre">
-              <input type="text" className="input" {...reunionForm.register('lieu')} />
-            </FormField>
-            <FormField label="Participants" help="Séparer les noms par des virgules">
-              <input
-                type="text"
-                className="input"
-                {...reunionForm.register('participantsRaw')}
-                placeholder="ex. Cabinet MHA, DPGI, ONAS, CPCSP"
+
+            {etape === 'creation' ? (
+              <p className="text-[11.5px] text-fg-muted">
+                Lieu, participants, ordre du jour, décisions, notes privées et visibilité
+                s’ajouteront à l’étape suivante.
+              </p>
+            ) : (
+              <>
+                <FormField label="Lieu" help="Saisie libre">
+                  <input type="text" className="input" {...reunionForm.register('lieu')} />
+                </FormField>
+                <FormField label="Participants" help="Séparer les noms par des virgules">
+                  <input
+                    type="text"
+                    className="input"
+                    {...reunionForm.register('participantsRaw')}
+                    placeholder="ex. Cabinet MHA, DPGI, ONAS, CPCSP"
+                  />
+                </FormField>
+                <FormField label="Ordre du jour">
+                  <Textarea
+                    rows={4}
+                    {...reunionForm.register('ordreDuJour')}
+                    placeholder="Point 1 :&#10;Point 2 :"
+                  />
+                </FormField>
+                <FormField label="Décisions / suites attendues">
+                  <Textarea rows={3} {...reunionForm.register('decisions')} />
+                </FormField>
+              </>
+            )}
+          </fieldset>
+
+          {/* Notes privees — disponibles seulement une fois la reunion creee
+              (elles s'attachent a un id reel), et uniquement pour son createur.
+              La meme garde existe cote backend : notesPrivees est renvoye null
+              aux autres viewers et un PUT qui tente de l'ecrire est refuse. */}
+          {etape === 'complement' && estCreateur && (
+            <fieldset className="p-5 border-b border-border" disabled={reunionVerrouillee}>
+              <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-2">
+                Notes privées
+                <span className="ml-2 text-fg-muted/70 normal-case tracking-normal">
+                  · texte libre, uniquement visible par vous
+                </span>
+              </legend>
+              <Controller
+                name="notesPrivees"
+                control={reunionForm.control}
+                render={({ field }) => (
+                  <NotesPriveesField
+                    value={field.value}
+                    onChange={field.onChange}
+                    storageKey={notesDraftKey(userId, reunionId ?? 'nouveau')}
+                    rows={10}
+                  />
+                )}
               />
-            </FormField>
-            <FormField label="Ordre du jour">
-              <Textarea rows={4} {...reunionForm.register('ordreDuJour')} placeholder="Point 1 :&#10;Point 2 :" />
-            </FormField>
-            <FormField label="Décisions / suites attendues">
-              <Textarea rows={3} {...reunionForm.register('decisions')} />
-            </FormField>
-          </fieldset>
+            </fieldset>
+          )}
 
-          {/* Notes privees — visible UNIQUEMENT par le createur (ici toujours
-              moi car je suis en creation; cote backend la garde est aussi
-              presente pour les autres viewers). */}
-          <fieldset className="p-5 border-b border-border">
-            <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-2">
-              Notes privées
-              <span className="ml-2 text-fg-muted/70 normal-case tracking-normal">
-                · texte libre, uniquement visible par vous
-              </span>
-            </legend>
-            <Controller
-              name="notesPrivees"
-              control={reunionForm.control}
-              render={({ field }) => (
-                <NotesPriveesField
-                  value={field.value}
-                  onChange={field.onChange}
-                  storageKey={notesStorageKey}
-                  rows={10}
-                />
-              )}
-            />
-          </fieldset>
+          {/* Un profil qui n'est pas le createur ne voit pas le bloc Notes : on
+              le dit, sinon le bandeau d'etape promet une section absente. */}
+          {etape === 'complement' && !estCreateur && !reunionVerrouillee && (
+            <div className="px-5 py-3 border-b border-border text-[11.5px] text-fg-muted">
+              Les notes privées de cette réunion appartiennent à son créateur — elles ne
+              vous sont ni visibles ni modifiables.
+            </div>
+          )}
 
-          <fieldset className="p-5 border-b border-border">
-            <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-4">
-              Visibilité
-            </legend>
-            <label className="inline-flex items-center gap-2 text-sm mr-6">
-              <input type="checkbox" className="accent-primary" {...reunionForm.register('visibleSg')} /> Visible au SG
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input type="checkbox" className="accent-primary" {...reunionForm.register('inclusRapportHebdo')} />{' '}
-              Inclure dans le rapport hebdo
-            </label>
-          </fieldset>
+          {etape === 'complement' && (
+            <fieldset className="p-5 border-b border-border" disabled={reunionVerrouillee}>
+              <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-2 flex items-center gap-2">
+                Visibilité
+                {reunionChargee && !reunionChargee.visibleSg && (
+                  <span className="badge bg-muted text-fg-2 text-[10px] normal-case tracking-normal">
+                    Non publiée
+                  </span>
+                )}
+              </legend>
+              <p className="text-[11.5px] text-fg-muted mb-3">
+                Une réunion créée à l’étape 1 n’est pas publiée : elle reste invisible au SG
+                tant que la case ci-dessous n’est pas cochée et enregistrée.
+              </p>
+              <label className="inline-flex items-center gap-2 text-sm mr-6">
+                <input type="checkbox" className="accent-primary" {...reunionForm.register('visibleSg')} />{' '}
+                Visible au SG
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="accent-primary"
+                  {...reunionForm.register('inclusRapportHebdo')}
+                />{' '}
+                Inclure dans le rapport hebdo
+              </label>
+            </fieldset>
+          )}
 
-          <div className="sticky bottom-0 bg-surface border-t border-border px-5 py-3.5 flex justify-end gap-2">
-            <Link to="/bs/liste" className="btn btn-ghost">
-              Annuler
-            </Link>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
-              <Save className="w-3.5 h-3.5" />
-              {submitting ? 'Enregistrement…' : 'Enregistrer la réunion'}
-            </button>
+          <div className="sticky bottom-0 bg-surface border-t border-border px-5 py-3.5 flex justify-between items-center gap-2 flex-wrap">
+            {etape === 'creation' ? (
+              <>
+                <span />
+                <div className="flex gap-2">
+                  <Link to="/bs/liste" className="btn btn-ghost">
+                    Annuler
+                  </Link>
+                  <button type="submit" className="btn btn-primary" disabled={submitting}>
+                    {submitting ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    )}
+                    {submitting ? 'Création…' : 'Créer et continuer'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={demanderNouvelleReunion}
+                  className="btn btn-ghost"
+                  title="Repartir sur une saisie vierge — la réunion actuelle reste enregistrée"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Nouvelle réunion
+                </button>
+                <div className="flex gap-2">
+                  <Link to="/reunions-techniques" className="btn btn-ghost">
+                    <ExternalLink className="w-3.5 h-3.5" /> Voir la liste
+                  </Link>
+                  {/* Aucun bouton Enregistrer si l'API refusera l'ecriture :
+                      mieux vaut ne pas le proposer que de le griser sans dire
+                      pourquoi (le bandeau « Consultation seule » l'explique). */}
+                  {peutModifier && (
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={submitting || reunionVerrouillee}
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      {submitting ? 'Enregistrement…' : 'Enregistrer la réunion'}
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </form>
       )}
+
+      <ConfirmDialog
+        open={confirmNouvelle}
+        onOpenChange={setConfirmNouvelle}
+        title="Repartir sur une nouvelle réunion ?"
+        description="Les modifications non enregistrées de la réunion en cours seront perdues. La réunion elle-même reste enregistrée et reste modifiable depuis la liste."
+        confirmLabel="Nouvelle réunion"
+        onConfirm={nouvelleReunion}
+      />
+
 
       {mode === 'mission' && (
         <form
@@ -593,6 +1108,40 @@ export function BsReunionMissionView() {
   );
 }
 
+/** Pastille numerotee du fil d'etapes de la saisie reunion. */
+function EtapeBadge({
+  numero,
+  label,
+  etat,
+}: {
+  numero: number;
+  label: string;
+  etat: 'actif' | 'fait' | 'inactif';
+}) {
+  return (
+    <div className="inline-flex items-center gap-2">
+      <span
+        className={cn(
+          'inline-flex items-center justify-center w-6 h-6 rounded-full text-[11px] font-bold flex-shrink-0',
+          etat === 'actif' && 'bg-primary text-white',
+          etat === 'fait' && 'bg-primary-100 text-primary-700',
+          etat === 'inactif' && 'bg-muted text-fg-muted',
+        )}
+      >
+        {etat === 'fait' ? <Check className="w-3.5 h-3.5" /> : numero}
+      </span>
+      <span
+        className={cn(
+          'text-xs font-medium whitespace-nowrap',
+          etat === 'inactif' ? 'text-fg-muted' : 'text-fg-2',
+        )}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
 function ClickHandler({ onPick }: { onPick: (lat: number, lng: number) => void }) {
   useMapEvents({
     click(e) {
@@ -662,6 +1211,3 @@ function NewOuvrageRow({
     </div>
   );
 }
-
-// Empêche le warning d'import non utilisé
-export const _TRASH_ICON = Trash2;
