@@ -19,8 +19,9 @@ interface MissionRow {
   projetRattache: string | null;
   constats: string | null;
   recommandations: string | null;
-  /** Present uniquement sur les requetes qui selectionnent le sous-total. */
+  /** Presents uniquement sur les requetes qui selectionnent les sous-totaux. */
   nbOuvrages?: number;
+  ouvragesParType?: Record<string, number>;
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -52,6 +53,7 @@ function toMission(row: MissionRow): MissionTerrain {
     constats: row.constats,
     recommandations: row.recommandations,
     nbOuvrages: row.nbOuvrages ?? 0,
+    ouvragesParType: row.ouvragesParType ?? {},
     createdBy: row.createdBy,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -77,21 +79,41 @@ const SELECT_MISSION = `
 `;
 
 /**
- * Colonnes de mission + sous-total d'ouvrages visites.
+ * Colonnes de mission + sous-totaux d'ouvrages visites.
  *
- * Sous-requete correlee et non JOIN + GROUP BY : le GROUP BY obligerait a
- * enumerer toutes les colonnes et casserait la reutilisation de SELECT_MISSION.
- * `idxOuvragesMission` couvre le predicat, le cout reste marginal.
+ * UN SEUL `LEFT JOIN LATERAL` plutot que deux sous-requetes correlees : le
+ * total et la ventilation par type sortent du meme parcours de
+ * `idxOuvragesMission`, et surtout ils ne peuvent pas diverger.
  *
- * `::INT` et non le bigint natif de COUNT : node-postgres rend les int8 sous
- * forme de chaine, ce qui donnerait un `nbOuvrages` string cote API alors que
- * le schema partage attend un number.
+ * `::INT` et non le bigint natif de COUNT/SUM : node-postgres rend les int8 en
+ * chaine, ce qui donnerait un `nbOuvrages` string alors que le schema partage
+ * attend un number.
+ *
+ * Le `FILTER (WHERE ... IS NOT NULL)` n'est pas cosmetique : `jsonb_object_agg`
+ * leve une erreur des qu'une cle est NULL, et `typeOuvrage` est nullable.
  */
+const JOIN_OUVRAGES = `
+  LEFT JOIN LATERAL (
+    SELECT
+      COALESCE(SUM(t."n"), 0)::INT AS "nbOuvrages",
+      COALESCE(
+        jsonb_object_agg(t."typeOuvrage", t."n") FILTER (WHERE t."typeOuvrage" IS NOT NULL),
+        '{}'::jsonb
+      ) AS "ouvragesParType"
+    FROM (
+      SELECT o."typeOuvrage", COUNT(*)::INT AS "n"
+      FROM "ouvragesVisites" o
+      WHERE o."missionId" = m."id"
+      GROUP BY o."typeOuvrage"
+    ) t
+  ) ouv ON TRUE
+`;
+
 const SELECT_MISSION_AVEC_OUVRAGES = `
   m."id", m."dateMission", m."localite", m."region", m."latitude", m."longitude",
   m."projetRattache", m."constats", m."recommandations",
   m."createdBy", m."createdAt", m."updatedAt",
-  (SELECT COUNT(*) FROM "ouvragesVisites" o WHERE o."missionId" = m."id")::INT AS "nbOuvrages"
+  ouv."nbOuvrages", ouv."ouvragesParType"
 `;
 
 export async function listMissions(opts: { annee?: number } = {}): Promise<MissionTerrain[]> {
@@ -102,7 +124,7 @@ export async function listMissions(opts: { annee?: number } = {}): Promise<Missi
     where = `WHERE EXTRACT(YEAR FROM m."dateMission") = $1`;
   }
   const rows = await queryAll<MissionRow>(
-    `SELECT ${SELECT_MISSION_AVEC_OUVRAGES} FROM "missionsTerrain" m
+    `SELECT ${SELECT_MISSION_AVEC_OUVRAGES} FROM "missionsTerrain" m ${JOIN_OUVRAGES}
      ${where}
      ORDER BY m."dateMission" DESC`,
     params,
@@ -112,7 +134,7 @@ export async function listMissions(opts: { annee?: number } = {}): Promise<Missi
 
 export async function findMissionById(id: string): Promise<MissionTerrain | null> {
   const row = await queryOne<MissionRow>(
-    `SELECT ${SELECT_MISSION_AVEC_OUVRAGES} FROM "missionsTerrain" m WHERE m."id" = $1`,
+    `SELECT ${SELECT_MISSION_AVEC_OUVRAGES} FROM "missionsTerrain" m ${JOIN_OUVRAGES} WHERE m."id" = $1`,
     [id],
   );
   return row ? toMission(row) : null;

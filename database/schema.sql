@@ -691,6 +691,29 @@ UPDATE "referentiels" SET "parentCode" = 'copil'    WHERE "codeType" = 'typeMatr
 UPDATE "referentiels" SET "parentCode" = 'reformes' WHERE "codeType" = 'typeMatrice' AND "code" LIKE 'reforme%' AND "parentCode" IS NULL;
 UPDATE "referentiels" SET "parentCode" = 'cngi'     WHERE "codeType" = 'typeMatrice' AND "code" = 'cngi'        AND "parentCode" IS NULL;
 
+-- Familles d'ouvrages : regroupent les 7 types en 4 ensembles, calques sur les
+-- sous-secteurs du MHA. Sert a colorer les marqueurs de la carte des missions.
+-- Quatre et non sept parce qu'au-dela, deux couleurs categorielles deviennent
+-- indistinguables sur une carte, y compris en vision normale (verifie au
+-- validateur de palette : 7 couleurs -> ecart perceptuel 12.9 pour un plancher
+-- de 15 ; 4 couleurs -> 16.3).
+--
+-- Meme mecanique que typeMatrice -> matriceCategorie : `parentCode` porte le
+-- rattachement, de sorte qu'un type ajoute via /bs/config puisse recevoir sa
+-- famille SANS redeploiement.
+INSERT INTO "referentiels" ("codeType", "code", "label", "ordreAffichage") VALUES
+  ('familleOuvrage', 'inondations',    'Eaux pluviales / inondations', 10),
+  ('familleOuvrage', 'assainissement', 'Assainissement',               20),
+  ('familleOuvrage', 'eauPotable',     'Eau potable',                  30),
+  ('familleOuvrage', 'autre',          'Autre ouvrage',                99)
+ON CONFLICT ("codeType", "code") DO NOTHING;
+
+-- Backfill : rattachement des 7 types d'ouvrage existants a leur famille
+UPDATE "referentiels" SET "parentCode" = 'inondations'    WHERE "codeType" = 'typeOuvrage' AND "code" IN ('bassinRetention', 'stationPompage')      AND "parentCode" IS NULL;
+UPDATE "referentiels" SET "parentCode" = 'assainissement' WHERE "codeType" = 'typeOuvrage' AND "code" IN ('reseauAssainissement', 'stationEpuration') AND "parentCode" IS NULL;
+UPDATE "referentiels" SET "parentCode" = 'eauPotable'     WHERE "codeType" = 'typeOuvrage' AND "code" IN ('forage', 'reseauAep')                    AND "parentCode" IS NULL;
+UPDATE "referentiels" SET "parentCode" = 'autre'          WHERE "codeType" = 'typeOuvrage' AND "code" = 'autre'                                     AND "parentCode" IS NULL;
+
 -- Colonne typeReunion sur reunionsTechniques (copil/technique/...)
 ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "typeReunion" VARCHAR(50);
 

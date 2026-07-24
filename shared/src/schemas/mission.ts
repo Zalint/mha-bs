@@ -31,6 +31,19 @@ export const missionTerrainSchema = z.object({
    * les ouvrages mission par mission (N+1).
    */
   nbOuvrages: z.number().int().nonnegative(),
+  /**
+   * Nombre d'ouvrages PAR CODE DE TYPE, ex. `{ bassinRetention: 2, forage: 1 }`.
+   *
+   * Un simple tableau des types distincts ne suffisait pas : l'interface doit
+   * pouvoir compter les ouvrages correspondant a un filtre de type, sinon un
+   * ecran filtre sur « bassin de retention » affiche le total d'ouvrages de la
+   * mission, ceux des autres types compris.
+   *
+   * Les cles donnent aussi les types presents (coloration du marqueur). Objet
+   * vide si la mission n'a aucun ouvrage. La somme des valeurs peut etre
+   * INFERIEURE a `nbOuvrages` : les ouvrages sans type n'y figurent pas.
+   */
+  ouvragesParType: z.record(z.string(), z.number().int().positive()),
   createdBy: z.string().uuid().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -53,9 +66,10 @@ export type MissionTerrain = z.infer<typeof missionTerrainSchema>;
 export const createMissionTerrainSchema = missionTerrainSchema
   .omit({
     id: true,
-    // Calcule par le serveur a partir de la table "ouvragesVisites" : jamais
-    // fourni par le client.
+    // Calcules par le serveur a partir de la table "ouvragesVisites" : jamais
+    // fournis par le client.
     nbOuvrages: true,
+    ouvragesParType: true,
     createdBy: true,
     createdAt: true,
     updatedAt: true,
