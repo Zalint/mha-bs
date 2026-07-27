@@ -53,8 +53,10 @@ interface ReunionFormValues {
   dureeEstimee: string;
   theme: string;
   lieu: string;
-  sousSecteur: SousSecteur | '';
-  copilLie: string;
+  // Multi-selection : une reunion peut relever de plusieurs sous-secteurs et
+  // etre rattachee a plusieurs COPIL/projets.
+  sousSecteurs: SousSecteur[];
+  copilLies: string[];
   typeReunion: string;
   ordreDuJour: string;
   decisions: string;
@@ -118,8 +120,8 @@ function reunionDefaults(): ReunionFormValues {
     dureeEstimee: '2h',
     theme: '',
     lieu: 'SG MHA · Salle Plénière',
-    sousSecteur: '',
-    copilLie: '—',
+    sousSecteurs: [],
+    copilLies: [],
     typeReunion: 'technique',
     ordreDuJour: '',
     decisions: '',
@@ -159,8 +161,8 @@ function toReunionFormValues(
     dureeEstimee: r.dureeEstimee ?? '',
     theme: r.theme,
     lieu: r.lieu ?? defauts.lieu,
-    sousSecteur: r.sousSecteur ?? '',
-    copilLie: r.copilLie ?? '—',
+    sousSecteurs: r.sousSecteurs,
+    copilLies: r.copilLies,
     typeReunion: r.typeReunion ?? '',
     ordreDuJour: r.ordreDuJour ?? '',
     decisions: r.decisions ?? '',
@@ -195,14 +197,14 @@ export function BsReunionMissionView() {
   const [chargement, setChargement] = useState(false);
   const estCreateur = reunionChargee != null && reunionChargee.createdBy === userId;
 
-  // Miroir exact de chargerReunionModifiable() cote backend. Sans lui, la liste
-  // ouvre a tout le monde un formulaire pleinement editable dont l'API refusera
-  // l'enregistrement : on decouvrirait le 403 apres avoir tout ressaisi.
-  const peutModifier =
-    reunionChargee == null ||
-    estCreateur ||
-    reunionChargee.createdBy === null ||
-    role === 'admin';
+  // Miroir de la regle backend : le Bureau de Suivi travaille en commun, tout
+  // profil bs (et admin) peut modifier n'importe quelle reunion apres
+  // enregistrement. Un sg/reader qui atteindrait ce formulaire reste en lecture
+  // seule (l'API refuserait de toute facon son PUT).
+  //
+  // NB : ceci ne concerne QUE le corps de la reunion. Les notes privees restent
+  // gardees a part par `estCreateur` (fieldset masque + non transmises au PUT).
+  const peutModifier = role === 'bs' || role === 'admin';
 
   // Referentiels charges depuis l'API (gerables via /bs/config)
   const sousSecteursRef = useReferentiel('sousSecteur');
@@ -324,8 +326,8 @@ export function BsReunionMissionView() {
         heureDebut: v.heureDebut || null,
         dureeEstimee: v.dureeEstimee || null,
         theme: v.theme.trim(),
-        sousSecteur: v.sousSecteur || null,
-        copilLie: v.copilLie === '—' ? null : v.copilLie || null,
+        sousSecteurs: v.sousSecteurs,
+        copilLies: v.copilLies,
         typeReunion: v.typeReunion || null,
         // Une reunion sortie de l'etape 1 n'a ni lieu, ni participants, ni
         // ordre du jour : elle ne doit pas remonter au SG dans cet etat. C'est
@@ -375,8 +377,8 @@ export function BsReunionMissionView() {
         dureeEstimee: v.dureeEstimee || null,
         theme: v.theme.trim(),
         lieu: v.lieu || null,
-        sousSecteur: v.sousSecteur || null,
-        copilLie: v.copilLie === '—' ? null : v.copilLie || null,
+        sousSecteurs: v.sousSecteurs,
+        copilLies: v.copilLies,
         typeReunion: v.typeReunion || null,
         ordreDuJour: v.ordreDuJour || null,
         decisions: v.decisions || null,
@@ -616,8 +618,8 @@ export function BsReunionMissionView() {
             <div className="px-5 py-3 border-b border-border bg-muted text-fg-2 text-sm flex items-start gap-2">
               <Lock className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>
-                <b>Consultation seule.</b> Cette réunion a été créée par quelqu’un d’autre —
-                seul son auteur (ou un administrateur) peut la modifier.
+                <b>Consultation seule.</b> Votre profil ne permet pas de modifier les
+                réunions du Bureau de Suivi.
               </span>
             </div>
           )}
@@ -686,34 +688,41 @@ export function BsReunionMissionView() {
                   ))}
                 </select>
               </FormField>
-              <FormField
-                label="Sous-secteur principal"
-                help={
-                  sousSecteursRef.items.length === 0 && !sousSecteursRef.isLoading
-                    ? "Aucun sous-secteur défini. Ajoutez-en via Configuration."
-                    : undefined
-                }
-              >
-                <select className="select" {...reunionForm.register('sousSecteur')}>
-                  <option value="">—</option>
-                  {sousSecteursRef.items.map((s) => (
-                    <option key={s.id} value={s.code}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-              <FormField label="Projet ou COPIL rattaché">
-                <select className="select" {...reunionForm.register('copilLie')}>
-                  <option value="—">—</option>
-                  {copilProjetRef.items.map((c) => (
-                    <option key={c.id} value={c.label}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
             </div>
+
+            {/* Sous-secteurs et COPIL en MULTI-selection : on peut en cocher
+                plusieurs. Rendus pleine largeur (et non dans la grille a 3
+                colonnes) pour laisser respirer les cases. */}
+            <Controller
+              name="sousSecteurs"
+              control={reunionForm.control}
+              render={({ field }) => (
+                <GroupeCases
+                  label="Sous-secteurs"
+                  aide={
+                    sousSecteursRef.items.length === 0 && !sousSecteursRef.isLoading
+                      ? 'Aucun sous-secteur défini. Ajoutez-en via Configuration.'
+                      : 'Cochez un ou plusieurs sous-secteurs.'
+                  }
+                  options={sousSecteursRef.items.map((s) => ({ value: s.code, label: s.label }))}
+                  values={field.value}
+                  onChange={field.onChange}
+                />
+              )}
+            />
+            <Controller
+              name="copilLies"
+              control={reunionForm.control}
+              render={({ field }) => (
+                <GroupeCases
+                  label="Projets / COPIL rattachés"
+                  aide="Cochez un ou plusieurs projets ou COPIL."
+                  options={copilProjetRef.items.map((c) => ({ value: c.label, label: c.label }))}
+                  values={field.value}
+                  onChange={field.onChange}
+                />
+              )}
+            />
           </fieldset>
 
           <fieldset className="p-5 border-b border-border" disabled={reunionVerrouillee}>
@@ -1109,6 +1118,95 @@ export function BsReunionMissionView() {
 }
 
 /** Pastille numerotee du fil d'etapes de la saisie reunion. */
+/**
+ * Groupe de cases a cocher pour une valeur MULTIPLE (sous-secteurs, COPIL).
+ * Remplace le <select> simple : on peut cocher plusieurs entrees, ou tout.
+ * L'ordre de `values` suit l'ordre de clic ; peu importe cote API (tableau).
+ */
+function GroupeCases({
+  label,
+  aide,
+  options,
+  values,
+  onChange,
+}: {
+  label: string;
+  aide?: string;
+  options: { value: string; label: string }[];
+  values: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const toutCoche = options.length > 0 && options.every((o) => values.includes(o.value));
+  // `values` vient du closure de rendu de RHF : deux clics dans le meme tick
+  // (avant re-render) verraient tous deux l'ancienne valeur et le second
+  // ecraserait le premier. Le ref, mis a jour a chaque rendu ET a chaque clic,
+  // fait que le clic suivant part toujours de la selection la plus fraiche.
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
+  const basculer = (value: string): void => {
+    const cur = valuesRef.current;
+    const next = cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value];
+    valuesRef.current = next;
+    onChange(next);
+  };
+  const toutOuRien = (): void => {
+    onChange(toutCoche ? [] : options.map((o) => o.value));
+  };
+
+  return (
+    <div className="mb-3.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="field-label mb-0">{label}</span>
+        {options.length > 1 && (
+          <button
+            type="button"
+            onClick={toutOuRien}
+            className="text-[11.5px] text-primary hover:underline"
+          >
+            {toutCoche ? 'Tout décocher' : 'Tout cocher'}
+          </button>
+        )}
+      </div>
+      {options.length === 0 ? (
+        <p className="field-help">{aide}</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            {options.map((o) => {
+              const actif = values.includes(o.value);
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => basculer(o.value)}
+                  aria-pressed={actif}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full border text-[12.5px] transition-colors',
+                    actif
+                      ? 'border-primary bg-primary-100 text-primary-700 font-medium'
+                      : 'border-border bg-surface text-fg-2 hover:bg-muted',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'inline-flex items-center justify-center w-3.5 h-3.5 rounded-[4px] border flex-shrink-0',
+                      actif ? 'bg-primary border-primary text-white' : 'border-fg-muted',
+                    )}
+                  >
+                    {actif && <Check className="w-2.5 h-2.5" strokeWidth={3} />}
+                  </span>
+                  {o.label}
+                </button>
+              );
+            })}
+          </div>
+          {aide && <p className="field-help mt-1">{aide}</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
 function EtapeBadge({
   numero,
   label,

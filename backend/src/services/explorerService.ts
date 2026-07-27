@@ -42,6 +42,12 @@ interface FilterDef {
   type: 'enum' | 'number' | 'text';
   /** Valeurs possibles (enum) — exposées au front pour les slicers. */
   values?: { value: string; label: string }[];
+  /**
+   * `jsonbAny` : `sql` designe une colonne JSONB tableau, la ligne est retenue
+   * si l'un des `values` selectionnes y figure (operateur `?|`). `in` (defaut) :
+   * comparaison scalaire classique.
+   */
+  match?: 'in' | 'jsonbAny';
 }
 
 interface SourceDef {
@@ -72,6 +78,15 @@ const TYPE_RENCONTRE_VALUES = [
   { value: 'conseilInterMinisteriel', label: 'Conseil Interministériel' },
   { value: 'coordinationSggSg', label: 'Coordination SGG/SG' },
 ];
+
+/**
+ * Expression SQL : joint les elements d'une colonne JSONB tableau en un libelle
+ * « A + B », ou `siVide` si le tableau est vide. Sert de dimension/colonne pour
+ * les champs multi-valeurs de l'explorer.
+ */
+function jsonbLabel(colonne: string, siVide: string): string {
+  return `COALESCE(NULLIF(array_to_string(ARRAY(SELECT jsonb_array_elements_text(${colonne}) ORDER BY 1), ' + '), ''), '${siVide}')`;
+}
 
 const SOUS_SECTEUR_VALUES = [
   { value: 'eau', label: 'Eau' },
@@ -205,8 +220,8 @@ const SOURCES: Record<string, SourceDef> = {
     rowColumns: [
       { sql: `rt."dateReunion"::TEXT`, label: 'Date' },
       { sql: `LEFT(rt."theme", 90)`, label: 'Thème' },
-      { sql: `COALESCE(rt."sousSecteur", '—')`, label: 'Sous-secteur' },
-      { sql: `COALESCE(rt."copilLie", '—')`, label: 'COPIL' },
+      { sql: `${jsonbLabel('rt."sousSecteurs"', '—')}`, label: 'Sous-secteur(s)' },
+      { sql: `${jsonbLabel('rt."copilLies"', '—')}`, label: 'COPIL' },
     ],
     dimensions: {
       annee: { key: 'annee', label: 'Année', sql: `EXTRACT(YEAR FROM rt."dateReunion")::TEXT` },
@@ -216,8 +231,18 @@ const SOURCES: Record<string, SourceDef> = {
         label: 'Trimestre',
         sql: `EXTRACT(YEAR FROM rt."dateReunion")::TEXT || '-T' || EXTRACT(QUARTER FROM rt."dateReunion")::TEXT`,
       },
-      sousSecteur: { key: 'sousSecteur', label: 'Sous-secteur', sql: `COALESCE(rt."sousSecteur", '(aucun)')` },
-      copil: { key: 'copil', label: 'COPIL', sql: `COALESCE(rt."copilLie", '(aucun)')` },
+      // Multi-valeur : ces colonnes etant des tableaux, une reunion a plusieurs
+      // sous-secteurs forme un bucket « A + B ». L'explorer groupe par une
+      // expression scalaire ; unnest dupliquerait la ligne et fausserait le
+      // COUNT des autres dimensions (annee, mois). La combinaison en bucket est
+      // le compromis correct de ce moteur — le filtre ci-dessous, lui, compte
+      // bien chaque sous-secteur.
+      sousSecteur: {
+        key: 'sousSecteur',
+        label: 'Sous-secteur(s)',
+        sql: jsonbLabel('rt."sousSecteurs"', '(aucun)'),
+      },
+      copil: { key: 'copil', label: 'COPIL', sql: jsonbLabel('rt."copilLies"', '(aucun)') },
     },
     measures: {
       count: { key: 'count', label: 'Nombre', sql: `COUNT(*)`, format: 'int' },
@@ -226,9 +251,13 @@ const SOURCES: Record<string, SourceDef> = {
       sousSecteur: {
         key: 'sousSecteur',
         label: 'Sous-secteur',
-        sql: `rt."sousSecteur"`,
+        sql: `rt."sousSecteurs"`,
         type: 'enum',
         values: SOUS_SECTEUR_VALUES,
+        // `?|` : la reunion est retenue si l'un des sous-secteurs coches figure
+        // dans son tableau — donc un vrai comptage multi-tag, contrairement a
+        // la dimension qui, elle, groupe par combinaison.
+        match: 'jsonbAny',
       },
     },
   },
@@ -300,12 +329,16 @@ function buildWhere(
   for (const f of filters) {
     const def = source.filters[f.key];
     if (!def || f.values.length === 0) continue;
-    // IN (...) paramétré
     const placeholders = f.values.map((v) => {
       params.push(def.type === 'number' ? Number(v) : v);
       return `$${params.length}`;
     });
-    clauses.push(`${def.sql} IN (${placeholders.join(', ')})`);
+    if (def.match === 'jsonbAny') {
+      // Colonne JSONB tableau : retenue si elle contient l'une des valeurs.
+      clauses.push(`${def.sql} ?| array[${placeholders.join(', ')}]`);
+    } else {
+      clauses.push(`${def.sql} IN (${placeholders.join(', ')})`);
+    }
   }
   return clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
 }

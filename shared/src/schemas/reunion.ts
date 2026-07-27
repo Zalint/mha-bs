@@ -12,8 +12,10 @@ export const reunionTechniqueSchema = z.object({
   dureeEstimee: z.string().nullable(),
   theme: z.string().min(3),
   lieu: z.string().nullable(),
-  sousSecteur: z.enum(SOUS_SECTEURS).nullable(),
-  copilLie: z.string().nullable(),
+  // Multi-valeurs : une reunion peut relever de plusieurs sous-secteurs et
+  // etre rattachee a plusieurs COPIL/projets. Vides = aucun.
+  sousSecteurs: z.array(z.enum(SOUS_SECTEURS)),
+  copilLies: z.array(z.string()),
   // Nature de la réunion (copil/technique/...) — code d'un référentiel typeReunion (extensible)
   typeReunion: z.string().max(50).nullable(),
   ordreDuJour: z.string().nullable(),
@@ -71,8 +73,10 @@ export const createReunionTechniqueSchema = reunionTechniqueSchema
     // qui la rejette (22001) -> 500 au lieu d'un 422 lisible.
     heureDebut: timeString.nullish(),
     dureeEstimee: z.string().max(20).nullish(),
-    sousSecteur: z.enum(SOUS_SECTEURS).nullish(),
-    copilLie: z.string().max(50).nullish(),
+    // Facultatifs a l'etape 1 (donc `.optional()`), mais jamais null : le
+    // modele attend un tableau, `[]` par defaut.
+    sousSecteurs: z.array(z.enum(SOUS_SECTEURS)).optional(),
+    copilLies: z.array(z.string().max(50)).optional(),
     typeReunion: z.string().max(50).nullish(),
     // --- Etape 2, renseignes une fois la reunion creee ---
     lieu: z.string().max(200).nullish(),

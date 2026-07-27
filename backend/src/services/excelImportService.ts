@@ -541,10 +541,17 @@ async function migrateReunions(
     const copilLie = inferCopil(`${theme} ${normalizeString(row[2]) ?? ''}`);
 
     if (!opts.dryRun) {
+      // Colonnes multi-valeurs : l'inference produit au plus une valeur, qu'on
+      // emballe dans un tableau (ou tableau vide si rien n'est detecte).
       await query(
-        `INSERT INTO "reunionsTechniques" ("dateReunion", "theme", "participants", "sousSecteur", "copilLie")
-         VALUES ($1, $2, '[]'::jsonb, $3, $4)`,
-        [date, theme, sousSecteur, copilLie],
+        `INSERT INTO "reunionsTechniques" ("dateReunion", "theme", "participants", "sousSecteurs", "copilLies")
+         VALUES ($1, $2, '[]'::jsonb, $3::jsonb, $4::jsonb)`,
+        [
+          date,
+          theme,
+          JSON.stringify(sousSecteur ? [sousSecteur] : []),
+          JSON.stringify(copilLie ? [copilLie] : []),
+        ],
       );
     }
     inserted++;
@@ -664,17 +671,18 @@ async function migrateReunionsExport(
       await query(
         `INSERT INTO "reunionsTechniques"
            ("dateReunion", "heureDebut", "dureeEstimee", "theme", "lieu",
-            "sousSecteur", "copilLie", "typeReunion",
+            "sousSecteurs", "copilLies", "typeReunion",
             "ordreDuJour", "decisions", "participants")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`,
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11::jsonb)`,
         [
           date,
           heureDebut,
           dureeEstimee,
           theme,
           lieu,
-          sousSecteur,
-          copilLie,
+          // Une seule valeur inferee/importee, emballee en tableau.
+          JSON.stringify(sousSecteur ? [sousSecteur] : []),
+          JSON.stringify(copilLie ? [copilLie] : []),
           typeReunion,
           ordreDuJour,
           decisions,

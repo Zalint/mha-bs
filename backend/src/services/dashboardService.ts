@@ -503,21 +503,27 @@ export async function getReunionsTechniquesSummary(
      ORDER BY 1 ASC`,
   );
 
-  // Répartitions par sous-secteur et par COPIL — filtrées par l'année active
+  // Répartitions par sous-secteur et par COPIL — filtrées par l'année active.
+  // `sousSecteurs`/`copilLies` etant des tableaux, on les aplatit : une reunion
+  // a 2 sous-secteurs compte dans chacun (multi-tag). Le `where` reste valide
+  // sans qualifier ses colonnes : elles n'existent que sur la table de base, la
+  // sous-requete laterale n'exposant que `value`.
   const parSousSecteurRows = await queryAll<{ sousSecteur: string | null; cnt: string }>(
-    `SELECT "sousSecteur", COUNT(*)::TEXT AS "cnt"
+    `SELECT ss.value AS "sousSecteur", COUNT(*)::TEXT AS "cnt"
      FROM "reunionsTechniques"
+     CROSS JOIN LATERAL jsonb_array_elements_text("sousSecteurs") ss
      ${where}
-     GROUP BY "sousSecteur"
+     GROUP BY ss.value
      ORDER BY COUNT(*) DESC`,
     params,
   );
   const parCopilRows = await queryAll<{ copilLie: string | null; cnt: string }>(
-    `SELECT "copilLie", COUNT(*)::TEXT AS "cnt"
+    `SELECT cp.value AS "copilLie", COUNT(*)::TEXT AS "cnt"
      FROM "reunionsTechniques"
+     CROSS JOIN LATERAL jsonb_array_elements_text("copilLies") cp
      ${where}
-       AND "copilLie" IS NOT NULL AND "copilLie" <> ''
-     GROUP BY "copilLie"
+       AND cp.value <> ''
+     GROUP BY cp.value
      ORDER BY COUNT(*) DESC`,
     params,
   );

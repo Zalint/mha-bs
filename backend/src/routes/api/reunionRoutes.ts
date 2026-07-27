@@ -99,14 +99,16 @@ reunionRoutes.post(
 );
 
 /**
- * Charge une reunion et verifie que l'appelant a le droit de la MODIFIER.
+ * Charge une reunion et verifie que l'appelant a le droit de la SUPPRIMER.
  *
- * Regle : son createur, ou un admin. Une reunion sans createur (`createdBy`
- * NULL — import, ou compte supprime : la FK est ON DELETE SET NULL) reste
- * modifiable par tout profil `bs`, sinon on gelerait definitivement des
- * donnees que plus personne ne possede.
+ * La suppression reste restreinte a son createur ou a un admin, meme si tout
+ * profil `bs` peut desormais MODIFIER n'importe quelle reunion (bureau qui
+ * travaille en commun) : effacer le travail d'un collegue est irreversible, la
+ * modifier ne l'est pas. Une reunion sans createur (`createdBy` NULL — import,
+ * ou compte supprime : la FK est ON DELETE SET NULL) reste supprimable par tout
+ * `bs`, sinon on gelerait des donnees que plus personne ne possede.
  */
-async function chargerReunionModifiable(
+async function chargerReunionSupprimable(
   id: string,
   user: { userId: string; role: string },
 ): Promise<ReunionTechnique> {
@@ -116,7 +118,7 @@ async function chargerReunionModifiable(
   const sansProprietaire = existante.createdBy === null;
   if (!estProprietaire && !sansProprietaire && user.role !== 'admin') {
     throw new ForbiddenError(
-      'Seul le createur de cette reunion (ou un administrateur) peut la modifier',
+      'Seul le createur de cette reunion (ou un administrateur) peut la supprimer',
     );
   }
   return existante;
@@ -139,10 +141,15 @@ reunionRoutes.put(
         throw new ValidationError('Aucun champ a mettre a jour');
       }
 
-      const existante = await chargerReunionModifiable(req.params.id, req.user);
+      // MODIFICATION ouverte a tout profil bs/admin (la route est deja gardee
+      // par requireRole) : le Bureau de Suivi travaille en commun. On charge
+      // donc juste la reunion pour distinguer 404 de conflit.
+      const existante = await findReunionById(req.params.id, req.user.userId);
+      if (!existante) throw new NotFoundError('Reunion introuvable');
 
-      // Les notes privees sont plus restrictives encore que la propriete : meme
-      // un admin n'ecrit pas les notes de quelqu'un d'autre.
+      // SEULE exception : les notes privees restent celles de leur auteur. Elles
+      // sont libellees « uniquement visible par vous » ; meme un collegue qui
+      // edite le reste de la reunion, et meme un admin, ne les touche pas.
       if ('notesPrivees' in champs && existante.createdBy !== req.user.userId) {
         throw new ForbiddenError(
           'Seul le createur peut modifier les notes privees de cette reunion',
@@ -177,9 +184,9 @@ reunionRoutes.delete(
   async (req, res, next) => {
     try {
       if (!req.user) throw new UnauthorizedError();
-      // Meme regle de propriete que le PUT : supprimer la reunion d'un collegue
-      // serait plus grave encore que la modifier.
-      await chargerReunionModifiable(req.params.id, req.user);
+      // La suppression, elle, reste reservee au createur ou a un admin : elle
+      // est irreversible, contrairement a la modification.
+      await chargerReunionSupprimable(req.params.id, req.user);
       await deleteReunion(req.params.id);
       res.status(204).end();
     } catch (err) {

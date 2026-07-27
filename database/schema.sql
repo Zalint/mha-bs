@@ -246,9 +246,11 @@ CREATE TABLE IF NOT EXISTS "reunionsTechniques" (
   "dureeEstimee"         VARCHAR(20),
   "theme"                TEXT        NOT NULL,
   "lieu"                 VARCHAR(200),
-  "sousSecteur"          VARCHAR(40)
-                         CHECK ("sousSecteur" IN ('eau', 'gire', 'assainissement', 'inondations', 'transversal', 'reformeInstitutionnelle')),
-  "copilLie"             VARCHAR(50),
+  -- Multi-valeurs : une reunion peut relever de plusieurs sous-secteurs et de
+  -- plusieurs COPIL. Stockees en JSONB comme "participants" ; la validation des
+  -- codes est portee par Zod (l'ancien CHECK enum ne tient pas sur un array).
+  "sousSecteurs"         JSONB       NOT NULL DEFAULT '[]',
+  "copilLies"            JSONB       NOT NULL DEFAULT '[]',
   "ordreDuJour"          TEXT,
   "decisions"            TEXT,
   "participants"         JSONB       NOT NULL DEFAULT '[]',
@@ -716,6 +718,38 @@ UPDATE "referentiels" SET "parentCode" = 'autre'          WHERE "codeType" = 'ty
 
 -- Colonne typeReunion sur reunionsTechniques (copil/technique/...)
 ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "typeReunion" VARCHAR(50);
+
+-- Migration sousSecteur/copilLie (scalaire) -> sousSecteurs/copilLies (JSONB).
+-- Sur une base fraiche, les colonnes plurielles existent deja (cf. CREATE TABLE)
+-- et ce bloc ne trouve rien a migrer. Sur une base ancienne : on ajoute les
+-- colonnes, on recopie l'ancienne valeur scalaire dans un tableau a un element,
+-- puis on retire les colonnes scalaires. La recopie precede la suppression dans
+-- la meme transaction : aucune perte de donnee.
+ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "sousSecteurs" JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "copilLies"    JSONB NOT NULL DEFAULT '[]';
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'reunionsTechniques' AND column_name = 'sousSecteur'
+  ) THEN
+    UPDATE "reunionsTechniques"
+      SET "sousSecteurs" = jsonb_build_array("sousSecteur")
+      WHERE "sousSecteur" IS NOT NULL AND "sousSecteurs" = '[]'::jsonb;
+    ALTER TABLE "reunionsTechniques" DROP COLUMN "sousSecteur";
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'reunionsTechniques' AND column_name = 'copilLie'
+  ) THEN
+    UPDATE "reunionsTechniques"
+      SET "copilLies" = jsonb_build_array("copilLie")
+      WHERE "copilLie" IS NOT NULL AND "copilLie" <> '' AND "copilLies" = '[]'::jsonb;
+    ALTER TABLE "reunionsTechniques" DROP COLUMN "copilLie";
+  END IF;
+END $$;
 
 -- Colonne notesPrivees : texte libre attache a une reunion, visible UNIQUEMENT
 -- par le createur (filtrage applicatif cote model + routes). Pas de limite de
