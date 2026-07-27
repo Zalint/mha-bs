@@ -10,17 +10,20 @@ import {
   Plus,
   Recycle,
   Shuffle,
+  Trash2,
   Waves,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import type { ReunionTechnique, SousSecteur } from '@mha-bs/shared';
 
+import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { KpiCard } from '../components/ui/KpiCard.js';
 import { Spinner } from '../components/ui/Spinner.js';
 import { useApi } from '../hooks/useApi.js';
-import { api } from '../lib/apiClient.js';
+import { api, formatApiError } from '../lib/apiClient.js';
 import { cn } from '../lib/cn.js';
 import { formatShort } from '../lib/formatDate.js';
 
@@ -38,7 +41,7 @@ const DAYS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 interface CalendarEvent {
   day: number;
   theme: string;
-  sousSecteur: SousSecteur | null;
+  sousSecteurs: SousSecteur[];
   /** false = saisie restée à l'étape 1, visible seulement par son auteur. */
   visibleSg: boolean;
 }
@@ -105,6 +108,22 @@ export function ReunionsTechniquesView() {
 
   const anneeLabel = annee === null ? 'toutes années' : `année ${annee}`;
 
+  // Suppression d'une réunion (confirmation via ConfirmDialog — jamais confirm()).
+  const [aSupprimer, setASupprimer] = useState<ReunionTechnique | null>(null);
+  const demanderSuppression = (r: ReunionTechnique): void => setASupprimer(r);
+  const confirmerSuppression = async (): Promise<void> => {
+    if (!aSupprimer) return;
+    try {
+      await api.delete(`/reunions/${aSupprimer.id}`);
+      toast.success('Réunion supprimée');
+      setASupprimer(null);
+      reunionsQuery.refetch();
+    } catch (err) {
+      // L'API refuse (403) si l'utilisateur n'est ni le créateur ni admin.
+      toast.error(formatApiError(err, 'Suppression impossible'));
+    }
+  };
+
   // Changer d'année remet le calendrier sur le mois de reference de cette
   // annee : sans ca, un decalage accumule sur l'annee precedente resterait
   // applique et afficherait un mois sans rapport.
@@ -136,7 +155,7 @@ export function ReunionsTechniquesView() {
       if (d.getUTCFullYear() === year && d.getUTCMonth() === month) {
         const day = d.getUTCDate();
         if (!map[day]) map[day] = [];
-        map[day].push({ day, theme: r.theme, sousSecteur: r.sousSecteur, visibleSg: r.visibleSg });
+        map[day].push({ day, theme: r.theme, sousSecteurs: r.sousSecteurs, visibleSg: r.visibleSg });
       }
     }
     return map;
@@ -151,8 +170,11 @@ export function ReunionsTechniquesView() {
       transversal: 0,
       reformeInstitutionnelle: 0,
     };
+    // Multi-tag : une reunion a plusieurs sous-secteurs compte dans chacun.
     for (const r of reunions) {
-      if (r.sousSecteur && counts[r.sousSecteur] !== undefined) counts[r.sousSecteur]++;
+      for (const ss of r.sousSecteurs) {
+        if (counts[ss] !== undefined) counts[ss]++;
+      }
     }
     return counts;
   }, [reunions]);
@@ -167,7 +189,7 @@ export function ReunionsTechniquesView() {
   const copilStats = useMemo(() => {
     const copils = new Set<string>();
     for (const r of reunions) {
-      if (r.copilLie) copils.add(r.copilLie);
+      for (const c of r.copilLies) copils.add(c);
     }
     const list = Array.from(copils);
     return {
@@ -386,11 +408,11 @@ export function ReunionsTechniquesView() {
                 <div>
                   <div className="text-sm font-medium text-fg">{r.theme}</div>
                   <div className="text-[11.5px] text-fg-muted mt-1 flex items-center gap-2 flex-wrap">
-                    {r.sousSecteur && (
-                      <span className="badge bg-muted text-fg-2 text-[10.5px]">
-                        {SOUS_SECTEUR_DEF.find((s) => s.key === r.sousSecteur)?.label ?? r.sousSecteur}
+                    {r.sousSecteurs.map((ss) => (
+                      <span key={ss} className="badge bg-muted text-fg-2 text-[10.5px]">
+                        {SOUS_SECTEUR_DEF.find((s) => s.key === ss)?.label ?? ss}
                       </span>
-                    )}
+                    ))}
                     {!r.visibleSg && (
                       <span
                         className="badge bg-warning-bg text-warning text-[10.5px]"
@@ -402,23 +424,50 @@ export function ReunionsTechniquesView() {
                     {r.lieu && <span>· {r.lieu}</span>}
                   </div>
                 </div>
-                {/* Rouvre la reunion a l'etape 2 du formulaire de saisie : sans
-                    ce lien, une reunion creee puis laissee au stade « thème »
-                    ne serait plus jamais completable. */}
-                <button
-                  className="btn btn-ghost btn-sm"
-                  type="button"
-                  onClick={() => navigate(`/bs/reunion?reunion=${r.id}`)}
-                  title="Ouvrir / compléter cette réunion"
-                  aria-label={`Ouvrir la réunion ${r.theme}`}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-0.5">
+                  {/* Rouvre la reunion a l'etape 2 du formulaire de saisie : sans
+                      ce lien, une reunion creee puis laissee au stade « thème »
+                      ne serait plus jamais completable. */}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    type="button"
+                    onClick={() => navigate(`/bs/reunion?reunion=${r.id}`)}
+                    title="Ouvrir / compléter cette réunion"
+                    aria-label={`Ouvrir la réunion ${r.theme}`}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm text-fg-muted hover:text-danger"
+                    type="button"
+                    onClick={() => demanderSuppression(r)}
+                    title="Supprimer cette réunion"
+                    aria-label={`Supprimer la réunion ${r.theme}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             ))
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={aSupprimer !== null}
+        onOpenChange={(open) => {
+          if (!open) setASupprimer(null);
+        }}
+        title="Supprimer cette réunion ?"
+        description={
+          aSupprimer
+            ? `« ${aSupprimer.theme} » du ${formatShort(aSupprimer.dateReunion)}. Action irréversible.`
+            : undefined
+        }
+        variant="danger"
+        confirmLabel="Supprimer"
+        onConfirm={confirmerSuppression}
+      />
     </div>
   );
 }

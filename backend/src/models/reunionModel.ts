@@ -11,8 +11,8 @@ interface ReunionRow {
   dureeEstimee: string | null;
   theme: string;
   lieu: string | null;
-  sousSecteur: SousSecteur | null;
-  copilLie: string | null;
+  sousSecteurs: SousSecteur[];
+  copilLies: string[];
   typeReunion: string | null;
   ordreDuJour: string | null;
   decisions: string | null;
@@ -48,8 +48,8 @@ function toReunion(row: ReunionRow, viewerUserId?: string | null): ReunionTechni
     dureeEstimee: row.dureeEstimee,
     theme: row.theme,
     lieu: row.lieu,
-    sousSecteur: row.sousSecteur,
-    copilLie: row.copilLie,
+    sousSecteurs: Array.isArray(row.sousSecteurs) ? row.sousSecteurs : [],
+    copilLies: Array.isArray(row.copilLies) ? row.copilLies : [],
     typeReunion: row.typeReunion,
     ordreDuJour: row.ordreDuJour,
     decisions: row.decisions,
@@ -67,7 +67,7 @@ function toReunion(row: ReunionRow, viewerUserId?: string | null): ReunionTechni
 
 const SELECT_COLS = `
   "id", "dateReunion", "heureDebut", "dureeEstimee", "theme", "lieu",
-  "sousSecteur", "copilLie", "typeReunion", "ordreDuJour", "decisions", "participants",
+  "sousSecteurs", "copilLies", "typeReunion", "ordreDuJour", "decisions", "participants",
   "visibleSg", "inclusRapportHebdo", "notesPrivees", "version",
   "createdBy", "createdAt", "updatedAt"
 `;
@@ -91,8 +91,10 @@ export async function listReunions(
   const conditions: string[] = [];
   const params: unknown[] = [];
   if (filters.sousSecteur) {
-    params.push(filters.sousSecteur);
-    conditions.push(`"sousSecteur" = $${params.length}`);
+    // Containment JSONB : la reunion est retenue si le sous-secteur demande
+    // figure parmi les siens.
+    params.push(JSON.stringify([filters.sousSecteur]));
+    conditions.push(`"sousSecteurs" @> $${params.length}::jsonb`);
   }
   if (viewer?.role !== 'admin') {
     // `"createdBy" = NULL` n'est jamais vrai : un viewer anonyme ne voit que
@@ -127,13 +129,13 @@ export async function createReunion(
   const row = await queryOne<ReunionRow>(
     `INSERT INTO "reunionsTechniques" (
        "dateReunion", "heureDebut", "dureeEstimee", "theme", "lieu",
-       "sousSecteur", "copilLie", "typeReunion", "ordreDuJour", "decisions", "participants",
+       "sousSecteurs", "copilLies", "typeReunion", "ordreDuJour", "decisions", "participants",
        "visibleSg", "inclusRapportHebdo", "notesPrivees", "createdBy"
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10, $11::jsonb, $12, $13, $14, $15)
      RETURNING ${SELECT_COLS}`,
-    // `?? null` systematique : depuis le formulaire en 2 etapes, l'etape 1
-    // n'envoie que le contexte + le theme, toutes les autres cles sont
+    // `?? null` / `?? []` systematique : depuis le formulaire en 2 etapes,
+    // l'etape 1 n'envoie que le contexte + le theme, les autres cles sont
     // absentes du payload (donc `undefined` ici).
     [
       input.dateReunion,
@@ -141,8 +143,8 @@ export async function createReunion(
       input.dureeEstimee ?? null,
       input.theme,
       input.lieu ?? null,
-      input.sousSecteur ?? null,
-      input.copilLie ?? null,
+      JSON.stringify(input.sousSecteurs ?? []),
+      JSON.stringify(input.copilLies ?? []),
       input.typeReunion ?? null,
       input.ordreDuJour ?? null,
       input.decisions ?? null,
@@ -197,8 +199,8 @@ export async function updateReunion(
   if (input.dureeEstimee !== undefined) push('dureeEstimee', input.dureeEstimee);
   if (input.theme !== undefined) push('theme', input.theme);
   if (input.lieu !== undefined) push('lieu', input.lieu);
-  if (input.sousSecteur !== undefined) push('sousSecteur', input.sousSecteur);
-  if (input.copilLie !== undefined) push('copilLie', input.copilLie);
+  if (input.sousSecteurs !== undefined) push('sousSecteurs', input.sousSecteurs, true);
+  if (input.copilLies !== undefined) push('copilLies', input.copilLies, true);
   if (input.typeReunion !== undefined) push('typeReunion', input.typeReunion);
   if (input.ordreDuJour !== undefined) push('ordreDuJour', input.ordreDuJour);
   if (input.decisions !== undefined) push('decisions', input.decisions);
@@ -245,12 +247,15 @@ export interface ReunionStatsBySousSecteur {
 
 export async function getReunionStatsBySousSecteur(): Promise<ReunionStatsBySousSecteur[]> {
   const rows = await queryAll<{ sousSecteur: SousSecteur | null; cnt: string }>(
-    // Meme regle que listReunions et que les compteurs du dashboard : un
-    // agregat ne doit pas laisser deviner l'existence de reunions non publiees.
-    `SELECT "sousSecteur", COUNT(*)::TEXT AS "cnt"
-     FROM "reunionsTechniques"
-     WHERE "visibleSg" = TRUE
-     GROUP BY "sousSecteur"
+    // `sousSecteurs` etant un tableau, on l'aplatit : une reunion a 2 sous-
+    // secteurs compte dans chacun (choix multi-tag). Meme regle de publication
+    // que listReunions : un agregat ne doit pas trahir les reunions non
+    // publiees.
+    `SELECT ss.value AS "sousSecteur", COUNT(*)::TEXT AS "cnt"
+     FROM "reunionsTechniques" r
+     CROSS JOIN LATERAL jsonb_array_elements_text(r."sousSecteurs") ss
+     WHERE r."visibleSg" = TRUE
+     GROUP BY ss.value
      ORDER BY "cnt" DESC`,
   );
   return rows.map((r) => ({ sousSecteur: r.sousSecteur, count: Number(r.cnt) }));

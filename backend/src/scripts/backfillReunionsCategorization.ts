@@ -14,8 +14,8 @@ interface ReunionRow {
   id: string;
   theme: string;
   lieu: string | null;
-  sousSecteur: string | null;
-  copilLie: string | null;
+  sousSecteurs: string[];
+  copilLies: string[];
 }
 
 const SOUS_SECTEUR_PATTERNS: { regex: RegExp; key: string }[] = [
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
   await pingDb();
 
   const rows = await queryAll<ReunionRow>(
-    `SELECT "id", "theme", "lieu", "sousSecteur", "copilLie"
+    `SELECT "id", "theme", "lieu", "sousSecteurs", "copilLies"
      FROM "reunionsTechniques"`,
   );
 
@@ -62,27 +62,31 @@ async function main(): Promise<void> {
 
   for (const row of rows) {
     const haystack = `${row.theme ?? ''} ${row.lieu ?? ''}`;
-    const needSousSecteur = !row.sousSecteur;
-    const needCopil = !row.copilLie;
+    // On ne complete que les tableaux VIDES : une categorisation manuelle
+    // multi-valeurs ne doit pas etre ecrasee par l'inference.
+    const needSousSecteur = row.sousSecteurs.length === 0;
+    const needCopil = row.copilLies.length === 0;
 
     if (!needSousSecteur && !needCopil) {
       alreadyCategorized++;
       continue;
     }
 
-    const nextSousSecteur = needSousSecteur ? inferSousSecteur(haystack) : row.sousSecteur;
-    const nextCopil = needCopil ? inferCopil(haystack) : row.copilLie;
+    const inferSs = needSousSecteur ? inferSousSecteur(haystack) : null;
+    const inferCp = needCopil ? inferCopil(haystack) : null;
+    const nextSousSecteurs = needSousSecteur ? (inferSs ? [inferSs] : []) : row.sousSecteurs;
+    const nextCopils = needCopil ? (inferCp ? [inferCp] : []) : row.copilLies;
 
-    if (needCopil && nextCopil === null) noCopilDetected++;
+    if (needCopil && inferCp === null) noCopilDetected++;
 
     await query(
       // "version" est le jeton du verrou optimiste : tout ecrivain doit le faire
       // avancer, sinon un onglet ouvert avant le backfill enregistre par-dessus
       // sans jamais declencher de conflit.
       `UPDATE "reunionsTechniques"
-       SET "sousSecteur" = $2, "copilLie" = $3, "version" = "version" + 1
+       SET "sousSecteurs" = $2::jsonb, "copilLies" = $3::jsonb, "version" = "version" + 1
        WHERE "id" = $1`,
-      [row.id, nextSousSecteur, nextCopil],
+      [row.id, JSON.stringify(nextSousSecteurs), JSON.stringify(nextCopils)],
     );
     updated++;
   }

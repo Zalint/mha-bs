@@ -160,7 +160,8 @@ function fromReunion(r: ReunionTechnique, _today: string): UnifiedItem {
     date: r.dateReunion,
     etat: null,
     retardJours: null,
-    secondary: [r.lieu, r.sousSecteur, r.copilLie].filter(Boolean).join(' · ') || null,
+    secondary:
+      [r.lieu, ...r.sousSecteurs, ...r.copilLies].filter(Boolean).join(' · ') || null,
     detailUrl: '/reunions-techniques',
   };
 }
