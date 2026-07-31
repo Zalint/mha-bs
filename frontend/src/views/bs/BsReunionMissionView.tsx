@@ -309,6 +309,14 @@ export function BsReunionMissionView() {
     },
   });
 
+  // Au moins une localité nommée est requise (le schéma impose min(1) et
+  // submitMission filtre les noms < 2 car.). Sans cette garde, un formulaire
+  // laissé sur la ligne vide partait et se prenait un 422 avec un toast
+  // générique. Même règle que le bouton du modal d'édition (MissionsTerrainView).
+  const missionLocalites = missionForm.watch('localites');
+  const missionSansLocalite =
+    missionLocalites.filter((l) => l.nom.trim().length >= 2).length === 0;
+
   /**
    * ETAPE 1 — cree la reunion avec le strict minimum (contexte + theme).
    * Seules ces cles sont envoyees : le schema partage rend les autres
@@ -1066,7 +1074,12 @@ export function BsReunionMissionView() {
             <Link to="/bs/liste" className="btn btn-ghost">
               Annuler
             </Link>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={submitting || missionSansLocalite}
+              title={missionSansLocalite ? 'Renseignez au moins une localité' : undefined}
+            >
               <Save className="w-3.5 h-3.5" />
               {submitting ? 'Enregistrement…' : 'Enregistrer la mission'}
             </button>

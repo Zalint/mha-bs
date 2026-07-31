@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import type { AppSettings } from '@mha-bs/shared';
-import { APP_SETTINGS_META } from '@mha-bs/shared';
+import { APP_SETTINGS_DEFAULTS, APP_SETTINGS_META } from '@mha-bs/shared';
 
 import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { FormField } from '../components/ui/FormField.js';
@@ -257,7 +257,10 @@ function ParametresSection() {
   const query = useApi(() => api.get<AppSettings>('/settings'), []);
   const [saving, setSaving] = useState<string | null>(null);
 
-  const settings = query.data;
+  // Pendant le chargement ou après un échec, on retombe sur les défauts
+  // PARTAGÉS (et non `false`) : sinon l'interrupteur d'un paramètre à `true` par
+  // défaut afficherait OFF à tort tant que la requête n'a pas abouti.
+  const settings: AppSettings = { ...APP_SETTINGS_DEFAULTS, ...(query.data ?? {}) };
 
   const toggle = async (key: keyof AppSettings, value: boolean): Promise<void> => {
     setSaving(key);
@@ -280,7 +283,7 @@ function ParametresSection() {
       </div>
       <div className="card-body space-y-3">
         {APP_SETTINGS_META.map((meta) => {
-          const value = settings?.[meta.key] ?? false;
+          const value = settings[meta.key];
           return (
             <div
               key={meta.key}
