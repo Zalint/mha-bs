@@ -262,7 +262,10 @@ CREATE TABLE IF NOT EXISTS "reunionsTechniques" (
 );
 
 CREATE INDEX IF NOT EXISTS "idxReunionsDate"        ON "reunionsTechniques" ("dateReunion");
-CREATE INDEX IF NOT EXISTS "idxReunionsSousSecteur" ON "reunionsTechniques" ("sousSecteur");
+-- Index GIN sur le tableau JSONB des sous-secteurs : couvre le filtre par
+-- containment (`"sousSecteurs" @> '["eau"]'`). L'ancien index btree portait sur
+-- la colonne scalaire "sousSecteur", supprimee lors du passage en multi-valeurs.
+CREATE INDEX IF NOT EXISTS "idxReunionsSousSecteurs" ON "reunionsTechniques" USING GIN ("sousSecteurs");
 
 DROP TRIGGER IF EXISTS "trgReunionsUpdatedAt" ON "reunionsTechniques";
 CREATE TRIGGER "trgReunionsUpdatedAt"
@@ -276,6 +279,12 @@ CREATE TRIGGER "trgReunionsUpdatedAt"
 CREATE TABLE IF NOT EXISTS "missionsTerrain" (
   "id"                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "dateMission"         DATE        NOT NULL,
+  -- Source de verite de la geolocalisation : une entree par localite visitee,
+  -- chacune { nom, latitude, longitude } (coords nullables -> repli region au
+  -- rendu). Stockee en JSONB comme "participants"/"sousSecteurs".
+  "localites"           JSONB       NOT NULL DEFAULT '[]',
+  -- Projection de la localite principale (localites[0]), maintenue par le
+  -- modele. Conservee pour les vues resume et la cle naturelle d'import.
   "localite"            VARCHAR(200) NOT NULL,
   "region"              VARCHAR(50),
   "latitude"            DECIMAL(9,6),
@@ -751,6 +760,21 @@ BEGIN
   END IF;
 END $$;
 
+-- Migration missions : localite scalaire -> "localites" JSONB (une par localite
+-- visitee). NON destructive : les colonnes scalaires localite/latitude/longitude
+-- RESTENT (projection de la localite principale, maintenue par le modele). On se
+-- contente de peupler "localites" a partir d'elles quand il est encore vide.
+ALTER TABLE "missionsTerrain" ADD COLUMN IF NOT EXISTS "localites" JSONB NOT NULL DEFAULT '[]';
+UPDATE "missionsTerrain"
+  SET "localites" = jsonb_build_array(
+        jsonb_build_object(
+          'nom', "localite",
+          'latitude',  CASE WHEN "latitude"  IS NULL THEN NULL ELSE "latitude"::float8  END,
+          'longitude', CASE WHEN "longitude" IS NULL THEN NULL ELSE "longitude"::float8 END
+        )
+      )
+  WHERE "localites" = '[]'::jsonb;
+
 -- Colonne notesPrivees : texte libre attache a une reunion, visible UNIQUEMENT
 -- par le createur (filtrage applicatif cote model + routes). Pas de limite de
 -- taille — utilise pour la prise de notes brute en seance avant la saisie
@@ -766,6 +790,24 @@ ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "notesPrivees" TEXT;
 -- milliseconde : le jeton renvoye par le client ne pourrait jamais etre egal a
 -- la valeur stockee, et chaque enregistrement partirait en faux conflit.
 ALTER TABLE "reunionsTechniques" ADD COLUMN IF NOT EXISTS "version" INTEGER NOT NULL DEFAULT 1;
+
+
+-- =============================================================================
+-- TABLE : appSettings — paramètres applicatifs (clé/valeur booléenne)
+-- =============================================================================
+-- Réglages globaux modifiables via /bs/config (section Paramètres), distincts
+-- des référentiels (qui sont des LISTES). Valeur stockée en texte 'true'/'false'
+-- ; les clés connues et leurs valeurs par défaut vivent dans shared/appSettings.
+CREATE TABLE IF NOT EXISTS "appSettings" (
+  "key"       VARCHAR(60) PRIMARY KEY,
+  "value"     TEXT        NOT NULL,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Seed idempotent : réunions visibles au SG par défaut (case pré-cochée).
+INSERT INTO "appSettings" ("key", "value") VALUES
+  ('reunionVisibleSgParDefaut', 'true')
+ON CONFLICT ("key") DO NOTHING;
 
 
 -- =============================================================================

@@ -15,7 +15,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import type {
@@ -181,6 +181,41 @@ function fromMission(m: MissionTerrain, _today: string): UnifiedItem {
 }
 
 // ---------------------------------------------------------------------------
+// Filtre année (même mécanique que Missions/Réunions)
+// ---------------------------------------------------------------------------
+
+const FDT_TOUTES_ANNEES = 'all';
+const FDT_ANNEE_STORAGE_KEY = 'mha.filedetravail.annee';
+
+function anneeInitiale(): number | null {
+  const courante = new Date().getUTCFullYear();
+  if (typeof window === 'undefined') return courante;
+  const raw = window.localStorage.getItem(FDT_ANNEE_STORAGE_KEY);
+  if (raw === FDT_TOUTES_ANNEES) return null;
+  if (!raw) return courante;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : courante;
+}
+
+/** Année d'un item (colonne DATE), ou null s'il n'a pas de date. */
+function anneeItem(it: UnifiedItem): number | null {
+  if (!it.date) return null;
+  const y = Number(it.date.slice(0, 4));
+  return Number.isFinite(y) ? y : null;
+}
+
+/**
+ * Filtre DOUX : un item passe si l'année n'est pas filtrée, s'il n'a pas de date
+ * (toujours visible, cf. décision recommandations), ou si sa date tombe dans
+ * l'année choisie.
+ */
+function passeAnnee(it: UnifiedItem, annee: number | null): boolean {
+  if (annee === null) return true;
+  const y = anneeItem(it);
+  return y === null || y === annee;
+}
+
+// ---------------------------------------------------------------------------
 // Composant
 // ---------------------------------------------------------------------------
 
@@ -190,6 +225,19 @@ export function BsListeView() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('tout');
   const [stateTab, setStateTab] = useState<StateTab>('tous');
   const [search, setSearch] = useState('');
+
+  // === Filtre année ===
+  // Année en cours par défaut, mémorisée (même mécanique que Missions/Réunions).
+  // Filtre DOUX : une ligne sans date (recommandations, directives sans
+  // échéance) reste toujours visible ; seules les lignes datées hors de l'année
+  // choisie sont masquées.
+  const [annee, setAnnee] = useState<number | null>(anneeInitiale);
+  useEffect(() => {
+    window.localStorage.setItem(
+      FDT_ANNEE_STORAGE_KEY,
+      annee === null ? FDT_TOUTES_ANNEES : String(annee),
+    );
+  }, [annee]);
 
   // Fetch des 4 entités en parallèle (1ère page, large pageSize)
   const directivesQuery = useApi(
@@ -264,9 +312,9 @@ export function BsListeView() {
     return items;
   }, [typeFilter, directivesQuery.data, recosQuery.data, reunionsQuery.data, missionsQuery.data, today]);
 
-  // Filtre état + recherche
+  // Filtre année (doux) + état + recherche
   const filtered = useMemo(() => {
-    let list = allItems;
+    let list = allItems.filter((it) => passeAnnee(it, annee));
     if (stateTab !== 'tous') {
       list = list.filter((it) => {
         if (it.etat === null) {
@@ -297,28 +345,59 @@ export function BsListeView() {
       const dateB = b.date ?? '';
       return dateB.localeCompare(dateA);
     });
-  }, [allItems, stateTab, search]);
+  }, [allItems, annee, stateTab, search]);
 
-  // Compteurs par état (pour les badges des onglets)
+  // Compteurs par état — sur l'ensemble filtré par l'année, pour que les badges
+  // des onglets d'état correspondent à ce qui est affiché.
   const stateCounts = useMemo(() => {
+    const base = allItems.filter((it) => passeAnnee(it, annee));
     return {
-      enCours: allItems.filter((it) => it.etat === 'enCours' || it.etat === null).length,
-      attente: allItems.filter((it) => it.etat === 'attente').length,
-      retard: allItems.filter((it) => it.retardJours !== null && it.retardJours > 0).length,
-      realisee: allItems.filter((it) => it.etat === 'realisee').length,
-      ineligible: allItems.filter((it) => it.etat === 'ineligible').length,
+      tous: base.length,
+      enCours: base.filter((it) => it.etat === 'enCours' || it.etat === null).length,
+      attente: base.filter((it) => it.etat === 'attente').length,
+      retard: base.filter((it) => it.retardJours !== null && it.retardJours > 0).length,
+      realisee: base.filter((it) => it.etat === 'realisee').length,
+      ineligible: base.filter((it) => it.etat === 'ineligible').length,
     };
-  }, [allItems]);
+  }, [allItems, annee]);
 
-  // Compteurs par type (pour les badges des onglets type)
-  const typeCounts = useMemo(() => {
-    return {
-      directive: directivesQuery.data?.totalCount ?? directivesQuery.data?.items.length ?? 0,
-      recommandation: recosQuery.data?.items.length ?? 0,
-      reunion: reunionsQuery.data?.items.length ?? 0,
-      mission: missionsQuery.data?.items.length ?? 0,
-    };
-  }, [directivesQuery.data, recosQuery.data, reunionsQuery.data, missionsQuery.data]);
+  // Les quatre entités mappées en UnifiedItem, INDÉPENDAMMENT du filtre de type
+  // — sert aux compteurs par type et aux années disponibles.
+  const parType = useMemo(
+    () => ({
+      directive: (directivesQuery.data?.items ?? []).map((d) => fromDirective(d, today)),
+      recommandation: (recosQuery.data?.items ?? []).map((r) => fromRecommandation(r, today)),
+      reunion: (reunionsQuery.data?.items ?? []).map((r) => fromReunion(r, today)),
+      mission: (missionsQuery.data?.items ?? []).map((m) => fromMission(m, today)),
+    }),
+    [directivesQuery.data, recosQuery.data, reunionsQuery.data, missionsQuery.data, today],
+  );
+
+  // Compteurs par type — filtrés par l'année (doux), pour rester cohérents avec
+  // la liste et les compteurs d'état.
+  const typeCounts = useMemo(
+    () => ({
+      directive: parType.directive.filter((it) => passeAnnee(it, annee)).length,
+      recommandation: parType.recommandation.filter((it) => passeAnnee(it, annee)).length,
+      reunion: parType.reunion.filter((it) => passeAnnee(it, annee)).length,
+      mission: parType.mission.filter((it) => passeAnnee(it, annee)).length,
+    }),
+    [parType, annee],
+  );
+
+  // Années présentes dans les données (colonne DATE), toutes entités confondues.
+  const anneesDisponibles = useMemo(() => {
+    const set = new Set<number>();
+    for (const liste of Object.values(parType)) {
+      for (const it of liste) {
+        const y = anneeItem(it);
+        if (y !== null) set.add(y);
+      }
+    }
+    set.add(new Date().getUTCFullYear());
+    if (annee !== null) set.add(annee);
+    return Array.from(set).sort((a, b) => b - a);
+  }, [parType, annee]);
 
   const newItemMenu: { label: string; to: string }[] = [
     { label: 'Nouvelle directive', to: '/bs/fiche' },
@@ -338,7 +417,24 @@ export function BsListeView() {
             Vue unifiée : directives, recommandations, réunions et missions à suivre
           </p>
         </div>
-        <div className="flex gap-2 relative">
+        <div className="flex items-end gap-2 relative">
+          <label className="text-xs font-medium text-fg-muted">
+            Année
+            <select
+              value={annee === null ? FDT_TOUTES_ANNEES : String(annee)}
+              onChange={(e) =>
+                setAnnee(e.target.value === FDT_TOUTES_ANNEES ? null : Number(e.target.value))
+              }
+              className="select block mt-1 font-mono"
+            >
+              {anneesDisponibles.map((y) => (
+                <option key={y} value={String(y)}>
+                  {y}
+                </option>
+              ))}
+              <option value={FDT_TOUTES_ANNEES}>Toutes les années</option>
+            </select>
+          </label>
           <button type="button" className="btn btn-secondary">
             <Filter className="w-3.5 h-3.5" /> Filtres avancés
           </button>
@@ -418,7 +514,7 @@ export function BsListeView() {
             const isActive = stateTab === t.value;
             const count =
               t.value === 'tous'
-                ? allItems.length
+                ? stateCounts.tous
                 : t.value === 'enCours'
                   ? stateCounts.enCours
                   : t.value === 'attente'

@@ -5,7 +5,6 @@ import {
   CalendarClock,
   ChevronRight,
   Construction,
-  Crosshair,
   Globe,
   Layers,
   MapPin,
@@ -20,10 +19,10 @@ import { MapContainer, Marker, Popup, TileLayer, useMapEvents } from 'react-leaf
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import type { MissionTerrain } from '@mha-bs/shared';
-import { REGIONS_SENEGAL } from '@mha-bs/shared';
+import type { LocaliteMission, MissionTerrain, RegionSenegal } from '@mha-bs/shared';
+import { REGION_CENTROIDS, REGIONS_SENEGAL } from '@mha-bs/shared';
 
-import { LocationPickerMap } from '../components/maps/LocationPickerMap.js';
+import { LocalitesField } from '../components/missions/LocalitesField.js';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { KpiCard } from '../components/ui/KpiCard.js';
 import { Spinner } from '../components/ui/Spinner.js';
@@ -88,6 +87,29 @@ function anneeMission(m: MissionTerrain): number | null {
   const y = Number(m.dateMission.slice(0, 4));
   return Number.isFinite(y) ? y : null;
 }
+
+/** Retire les localités sans nom et trim les noms avant envoi à l'API. */
+function nettoyerLocalites(localites: LocaliteMission[]): LocaliteMission[] {
+  return localites
+    .map((l) => ({ ...l, nom: l.nom.trim() }))
+    .filter((l) => l.nom.length >= 2);
+}
+
+/**
+ * Point d'affichage effectif d'une localité : ses coordonnées si saisies, sinon
+ * le centroïde de la région de la mission (repli demandé), sinon `null` (ni
+ * coords ni région -> pas de marqueur).
+ */
+function pointLocalite(
+  l: LocaliteMission,
+  region: RegionSenegal | null,
+): { latitude: number; longitude: number } | null {
+  if (l.latitude !== null && l.longitude !== null) {
+    return { latitude: l.latitude, longitude: l.longitude };
+  }
+  if (region && REGION_CENTROIDS[region]) return REGION_CENTROIDS[region];
+  return null;
+}
 /**
  * Brouillon de mission en cours d'édition. On extrait les champs éditables et
  * on garde l'id en clé pour la requête PUT. Tous les champs nullable côté DB
@@ -96,10 +118,10 @@ function anneeMission(m: MissionTerrain): number | null {
 interface MissionDraft {
   id: string;
   dateMission: string;
-  localite: string;
+  // Une ligne par localité, chacune avec ses coordonnées (nullables -> repli
+  // sur le centroïde de la région au rendu de la carte).
+  localites: LocaliteMission[];
   region: string; // '' = null
-  latitude: number | null;
-  longitude: number | null;
   projetRattache: string; // '' = null
   constats: string; // '' = null
   recommandations: string; // '' = null
@@ -109,10 +131,9 @@ function missionToDraft(m: MissionTerrain): MissionDraft {
   return {
     id: m.id,
     dateMission: m.dateMission,
-    localite: m.localite,
+    // Toujours au moins une entrée (garanti côté schéma) ; défense au cas où.
+    localites: m.localites.length > 0 ? m.localites.map((l) => ({ ...l })) : [{ nom: m.localite, latitude: m.latitude, longitude: m.longitude }],
     region: m.region ?? '',
-    latitude: m.latitude,
-    longitude: m.longitude,
     projetRattache: m.projetRattache ?? '',
     constats: m.constats ?? '',
     recommandations: m.recommandations ?? '',
@@ -236,7 +257,6 @@ export function MissionsTerrainView() {
 
   // Édition : draft de mission + modal picker carte
   const [editDraft, setEditDraft] = useState<MissionDraft | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Ouvrages associes a la mission en cours d'edition. Liste melangee :
@@ -295,7 +315,6 @@ export function MissionsTerrainView() {
   };
   const cancelEdit = (): void => {
     setEditDraft(null);
-    setShowPicker(false);
     setEditOuvrages([]);
     setDeletedOuvrageIds(new Set());
   };
@@ -327,13 +346,12 @@ export function MissionsTerrainView() {
     if (!editDraft) return;
     setSaving(true);
     try {
-      // 1) Update champs principaux de la mission
+      // 1) Update champs principaux de la mission. `localites` est la source de
+      //    verite ; le serveur en derive localite/latitude/longitude scalaires.
       await api.put(`/missions/${editDraft.id}`, {
         dateMission: editDraft.dateMission,
-        localite: editDraft.localite,
+        localites: nettoyerLocalites(editDraft.localites),
         region: editDraft.region || null,
-        latitude: editDraft.latitude,
-        longitude: editDraft.longitude,
         projetRattache: editDraft.projetRattache || null,
         constats: editDraft.constats || null,
         recommandations: editDraft.recommandations || null,
@@ -411,6 +429,21 @@ export function MissionsTerrainView() {
   const regions = useMemo(() => {
     return new Set(items.map((i) => i.region).filter(Boolean));
   }, [items]);
+
+  /** Premier point affichable d'une mission (coords saisies, sinon repli région). */
+  const centrePointMission = (m: MissionTerrain): { latitude: number; longitude: number } | null => {
+    for (const l of m.localites) {
+      const pt = pointLocalite(l, m.region);
+      if (pt) return pt;
+    }
+    return null;
+  };
+  const centrerSurMission = (m: MissionTerrain): void => {
+    const pt = centrePointMission(m);
+    if (mapRef.current && pt) {
+      mapRef.current.setView([pt.latitude, pt.longitude], 12, { animate: true });
+    }
+  };
 
   /**
    * Famille d'un type d'ouvrage, lue dans le referentiel (`parentCode`).
@@ -499,16 +532,15 @@ export function MissionsTerrainView() {
   );
 
   /**
-   * Missions geolocalisees, positions ecartees quand plusieurs partagent le
-   * meme point. Sans cet ecartement, les cinq missions 2026 — toutes en region
-   * de Dakar — se superposent au pixel pres et seule la couleur du dernier
-   * marqueur rendu est lisible : le codage couleur ne sert plus a rien
-   * precisement la ou il y a le plus de missions.
+   * UN marqueur PAR LOCALITÉ : une mission à 3 localités pose 3 points, chacun à
+   * ses coordonnées (ou au centroïde de sa région si non saisies). Tous
+   * partagent la couleur (famille d'ouvrage) et l'infobulle de la mission.
+   *
+   * Les positions coïncidentes sont ensuite écartées en éventail — sans ça, des
+   * localités au même point (ou plusieurs missions sur Dakar) se superposent au
+   * pixel près et une seule couleur reste lisible.
    */
   const marqueurs = useMemo(() => {
-    // L'ecart est calcule a la projection du zoom COURANT : `zoomCarte` est dans
-    // les dependances pour que l'eventail se resserre quand on zoome et ne
-    // devienne pas une constellation trompeuse.
     const projection =
       carte !== null
         ? {
@@ -516,12 +548,15 @@ export function MissionsTerrainView() {
             versLatLng: (x: number, y: number) => carte.unproject([x, y], zoomCarte),
           }
         : null;
-    return ecarterCoincidences(
-      items
-        .filter((m) => m.latitude !== null && m.longitude !== null)
-        .map((m) => ({ ...m, latitude: m.latitude as number, longitude: m.longitude as number })),
-      projection,
+    const points = items.flatMap((m) =>
+      m.localites
+        .map((l) => {
+          const pt = pointLocalite(l, m.region);
+          return pt ? { mission: m, nomLocalite: l.nom, ...pt } : null;
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null),
     );
+    return ecarterCoincidences(points, projection);
   }, [items, carte, zoomCarte]);
 
   /** « 2026 : 12 · 2025 : 20 · 2024 : 11 » — affiché en mode « toutes années ». */
@@ -679,17 +714,25 @@ export function MissionsTerrainView() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
               <SuiviCarte onCarte={majCarte} />
-              {marqueurs.map((m) => (
+              {marqueurs.map((pt, i) => {
+                const m = pt.mission;
+                return (
                   <Marker
-                    key={m.id}
-                    position={m.position}
+                    key={`${m.id}-${i}`}
+                    position={pt.position}
                     icon={iconeFamilles(
                       famillesDeMission(Object.keys(m.ouvragesParType), familleDeType),
                     )}
                   >
                     <Popup>
                       <div style={{ fontFamily: 'Fira Sans, system-ui, sans-serif' }}>
-                        <b style={{ color: '#0284C7' }}>{m.localite}</b>
+                        <b style={{ color: '#0284C7' }}>{pt.nomLocalite}</b>
+                        {m.localites.length > 1 && (
+                          <span style={{ color: '#94A3B8', fontSize: 11 }}>
+                            {' '}
+                            · 1 des {m.localites.length} localités
+                          </span>
+                        )}
                         <br />
                         <span style={{ color: '#64748B' }}>{m.projetRattache ?? '—'}</span>
                         <br />
@@ -739,7 +782,8 @@ export function MissionsTerrainView() {
                       </div>
                     </Popup>
                   </Marker>
-              ))}
+                );
+              })}
             </MapContainer>
           </div>
 
@@ -876,32 +920,25 @@ export function MissionsTerrainView() {
                   )}
                   <button
                     type="button"
-                    onClick={() => {
-                      if (mapRef.current && m.latitude !== null && m.longitude !== null) {
-                        mapRef.current.setView([m.latitude, m.longitude], 13, { animate: true });
-                      }
-                    }}
+                    onClick={() => centrerSurMission(m)}
                     className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center font-mono font-semibold text-[11px] hover:opacity-80"
                     aria-label="Centrer sur la carte"
                     title={
-                      m.latitude !== null
-                        ? 'Centrer sur la carte'
-                        : 'Coordonnées non renseignées'
+                      centrePointMission(m) ? 'Centrer sur la carte' : 'Coordonnées non renseignées'
                     }
                   >
                     {m.localite.slice(0, 2).toUpperCase()}
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      if (mapRef.current && m.latitude !== null && m.longitude !== null) {
-                        mapRef.current.setView([m.latitude, m.longitude], 13, { animate: true });
-                      }
-                    }}
+                    onClick={() => centrerSurMission(m)}
                     className="text-left min-w-0"
                   >
-                    <div className="text-sm font-semibold truncate">{m.localite}</div>
+                    <div className="text-sm font-semibold truncate">
+                      {m.localites.map((l) => l.nom).join(', ') || m.localite}
+                    </div>
                     <div className="text-[11.5px] text-fg-muted font-mono">
+                      {m.localites.length > 1 && `${m.localites.length} localités · `}
                       {m.projetRattache ?? '—'} · {m.region ?? '—'} ·{' '}
                       {m.dateMission ? formatShort(m.dateMission) : '—'}
                     </div>
@@ -955,7 +992,6 @@ export function MissionsTerrainView() {
           onChange={setEditDraft}
           onCancel={cancelEdit}
           onSave={() => void saveEdit()}
-          onOpenPicker={() => setShowPicker(true)}
           saving={saving}
           ouvrages={editOuvrages}
           onAddOuvrage={addEditOuvrage}
@@ -964,27 +1000,6 @@ export function MissionsTerrainView() {
             code: t.code,
             label: t.label,
           }))}
-        />
-      )}
-
-      {/* Modal picker carte (au-dessus du modal d'édition) */}
-      {showPicker && editDraft && (
-        <LocationPickerMap
-          value={
-            editDraft.latitude !== null && editDraft.longitude !== null
-              ? { latitude: editDraft.latitude, longitude: editDraft.longitude }
-              : null
-          }
-          title={`Localisation de ${editDraft.localite || 'la mission'}`}
-          onCancel={() => setShowPicker(false)}
-          onConfirm={(coords) => {
-            setEditDraft({
-              ...editDraft,
-              latitude: coords?.latitude ?? null,
-              longitude: coords?.longitude ?? null,
-            });
-            setShowPicker(false);
-          }}
         />
       )}
 
@@ -1007,7 +1022,7 @@ export function MissionsTerrainView() {
 }
 
 // ---------------------------------------------------------------------------
-// Modal d'édition d'une mission — formulaire + bouton "Choisir sur la carte"
+// Modal d'édition d'une mission
 // ---------------------------------------------------------------------------
 
 interface MissionEditModalProps {
@@ -1015,7 +1030,6 @@ interface MissionEditModalProps {
   onChange: (next: MissionDraft) => void;
   onCancel: () => void;
   onSave: () => void;
-  onOpenPicker: () => void;
   saving: boolean;
   ouvrages: EditOuvrage[];
   onAddOuvrage: (o: EditOuvrage) => void;
@@ -1028,7 +1042,6 @@ function MissionEditModal({
   onChange,
   onCancel,
   onSave,
-  onOpenPicker,
   saving,
   ouvrages,
   onAddOuvrage,
@@ -1102,15 +1115,13 @@ function MissionEditModal({
             </Field>
           </div>
 
-          <Field label="Localité" required>
-            <input
-              type="text"
-              value={draft.localite}
-              onChange={(e) => set('localite', e.target.value)}
-              className="input"
-              placeholder="ex. Touba, Tivaouane Peulh…"
-            />
-          </Field>
+          {/* Localités : une par ligne, chacune avec ses coordonnées. Sans GPS
+              saisi, le marqueur retombe sur le centre de la région. */}
+          <LocalitesField
+            localites={draft.localites}
+            region={draft.region ? (draft.region as RegionSenegal) : null}
+            onChange={(next) => set('localites', next)}
+          />
 
           <Field label="Projet rattaché">
             <input
@@ -1121,40 +1132,6 @@ function MissionEditModal({
               placeholder="ex. PROGEP II, ONAS, PISEA…"
             />
           </Field>
-
-          {/* Localisation : coords + bouton carte */}
-          <div className="border border-border rounded-lg p-3 bg-surface2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-fg-muted uppercase tracking-wider">
-                Coordonnées GPS
-              </span>
-              <button
-                type="button"
-                onClick={onOpenPicker}
-                className="btn btn-secondary btn-sm"
-              >
-                <Crosshair className="w-3.5 h-3.5" />
-                Choisir sur la carte
-              </button>
-            </div>
-            {draft.latitude !== null && draft.longitude !== null ? (
-              <div className="font-mono text-xs grid grid-cols-2 gap-3">
-                <div>
-                  <span className="text-fg-muted">Latitude :</span>{' '}
-                  <span className="font-semibold">{draft.latitude.toFixed(6)}</span>
-                </div>
-                <div>
-                  <span className="text-fg-muted">Longitude :</span>{' '}
-                  <span className="font-semibold">{draft.longitude.toFixed(6)}</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-fg-muted italic">
-                Aucune coordonnée saisie. Cliquez sur « Choisir sur la carte » pour
-                pointer la localisation.
-              </p>
-            )}
-          </div>
 
           <Field label="Constats">
             <textarea
@@ -1279,7 +1256,11 @@ function MissionEditModal({
             type="button"
             className="btn btn-primary"
             onClick={onSave}
-            disabled={saving || !draft.dateMission || !draft.localite}
+            disabled={
+              saving ||
+              !draft.dateMission ||
+              draft.localites.filter((l) => l.nom.trim().length >= 2).length === 0
+            }
           >
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>

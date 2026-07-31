@@ -738,12 +738,15 @@ async function migrateMissions(
     const region = rawRegion ?? geo?.region ?? null;
 
     if (!opts.dryRun) {
+      // Import mono-localité : on construit un tableau `localites` a une entree
+      // (source de verite) en plus des colonnes scalaires (projection).
+      const localites = JSON.stringify([{ nom: localite, latitude, longitude }]);
       await query(
         `INSERT INTO "missionsTerrain"
-           ("dateMission", "localite", "region", "latitude", "longitude",
+           ("dateMission", "localites", "localite", "region", "latitude", "longitude",
             "projetRattache", "constats", "recommandations")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [date, localite, region, latitude, longitude, projetRattache, constats, recommandations],
+         VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8, $9)`,
+        [date, localites, localite, region, latitude, longitude, projetRattache, constats, recommandations],
       );
     }
     inserted++;
@@ -1469,11 +1472,12 @@ export async function importMissionsFromSheet(
     const region = rawRegion ?? geo?.region ?? null;
 
     if (!opts.dryRun) {
+      const localites = JSON.stringify([{ nom: localite, latitude, longitude }]);
       await query(
         `INSERT INTO "missionsTerrain"
-           ("dateMission", "localite", "region", "latitude", "longitude", "projetRattache", "constats")
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [date, localite, region, latitude, longitude, projetRattache, constats],
+           ("dateMission", "localites", "localite", "region", "latitude", "longitude", "projetRattache", "constats")
+         VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8)`,
+        [date, localites, localite, region, latitude, longitude, projetRattache, constats],
       );
     }
     imported++;

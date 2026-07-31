@@ -13,3 +13,4 @@ export * from './schemas/mission.js';
 export * from './schemas/interpellation.js';
 export * from './schemas/pagination.js';
 export * from './schemas/apiError.js';
+export * from './schemas/appSettings.js';

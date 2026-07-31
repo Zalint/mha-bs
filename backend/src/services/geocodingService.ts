@@ -24,67 +24,84 @@ export interface BackfillSummary {
   unmatchedLocalites: string[];
 }
 
+interface LocaliteJson {
+  nom: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 interface MissionRow {
   id: string;
-  localite: string;
-  latitude: string | null;
-  longitude: string | null;
+  localites: LocaliteJson[];
   region: string | null;
 }
 
 /**
- * Backfill toutes les missions qui ont au moins une des colonnes
- * `latitude`/`longitude`/`region` à NULL.
- *
- * - `latitude` ou `longitude` NULL → on remplit les deux à partir du gazetteer
- *   (jamais un seul des deux, ça n'a pas de sens).
- * - `region` NULL → on la remplit depuis le gazetteer si match.
- *
- * Une mission peut donc être :
- *   - touchée sur (lat,lng) seulement, ou (region) seulement, ou les trois
- *   - skipped si aucun match dans le gazetteer pour son nom de localité
+ * Complète, PAR LOCALITÉ, les coordonnées manquantes à partir du gazetteer, et
+ * la région de la mission si elle est nulle. `localites` étant la source de
+ * vérité, on géocode chaque entrée dont lat/lng est NULL, puis on réécrit le
+ * tableau ET la projection scalaire (localite/latitude/longitude = première
+ * localité). Idempotent : on ne touche jamais une coordonnée déjà saisie.
  */
 export async function backfillMissionsGeocoding(): Promise<BackfillSummary> {
-  // On ne sélectionne que les lignes qui ont au moins une colonne géo manquante
   const rows = await queryAll<MissionRow>(
-    `SELECT "id", "localite", "latitude", "longitude", "region"
+    // Lignes ayant la region nulle, ou au moins une localité sans coordonnées.
+    `SELECT "id", "localites", "region"
      FROM "missionsTerrain"
-     WHERE "latitude" IS NULL OR "longitude" IS NULL OR "region" IS NULL`,
+     WHERE "region" IS NULL
+        OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements("localites") e
+          WHERE e->>'latitude' IS NULL OR e->>'longitude' IS NULL
+        )`,
   );
 
   let updated = 0;
   const unmatched = new Set<string>();
 
   for (const r of rows) {
-    const geo = geocodeLocalite(r.localite);
-    if (!geo) {
-      unmatched.add(r.localite);
-      continue;
+    const localites = Array.isArray(r.localites) ? r.localites : [];
+    let touche = false;
+
+    const complet = localites.map((l) => {
+      if (l.latitude !== null && l.longitude !== null) return l;
+      const geo = geocodeLocalite(l.nom);
+      if (!geo) {
+        unmatched.add(l.nom);
+        return l;
+      }
+      touche = true;
+      return { nom: l.nom, latitude: geo.latitude, longitude: geo.longitude };
+    });
+
+    // Région : depuis le gazetteer de la 1re localité, si elle est nulle.
+    let region = r.region;
+    if (region === null && complet[0]) {
+      const geo = geocodeLocalite(complet[0].nom);
+      if (geo) {
+        region = geo.region;
+        touche = true;
+      }
     }
 
-    // Détermine ce qu'il faut écrire : on ne remplace JAMAIS une valeur non-null
-    const sets: string[] = [];
-    const params: unknown[] = [];
+    if (!touche) continue;
 
-    const needLatLng = r.latitude === null || r.longitude === null;
-    if (needLatLng) {
-      params.push(geo.latitude);
-      sets.push(`"latitude" = $${params.length}`);
-      params.push(geo.longitude);
-      sets.push(`"longitude" = $${params.length}`);
-    }
-
-    if (r.region === null) {
-      params.push(geo.region);
-      sets.push(`"region" = $${params.length}`);
-    }
-
-    if (sets.length === 0) continue; // rien à faire (ne devrait pas arriver vu le WHERE)
-
-    params.push(r.id);
+    const principale = complet[0];
     await query(
-      `UPDATE "missionsTerrain" SET ${sets.join(', ')} WHERE "id" = $${params.length}`,
-      params,
+      `UPDATE "missionsTerrain"
+         SET "localites" = $1::jsonb,
+             "localite"  = $2,
+             "latitude"  = $3,
+             "longitude" = $4,
+             "region"    = $5
+       WHERE "id" = $6`,
+      [
+        JSON.stringify(complet),
+        principale?.nom ?? '',
+        principale?.latitude ?? null,
+        principale?.longitude ?? null,
+        region,
+        r.id,
+      ],
     );
     updated++;
   }
