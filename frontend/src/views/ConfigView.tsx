@@ -2,6 +2,9 @@ import { Plus, Settings, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
+import type { AppSettings } from '@mha-bs/shared';
+import { APP_SETTINGS_META } from '@mha-bs/shared';
+
 import { ConfirmDialog } from '../components/ui/ConfirmDialog.js';
 import { FormField } from '../components/ui/FormField.js';
 import { Spinner } from '../components/ui/Spinner.js';
@@ -9,6 +12,7 @@ import { useApi } from '../hooks/useApi.js';
 import { type Referentiel, useReferentiel } from '../hooks/useReferentiel.js';
 import { ApiClientError, api } from '../lib/apiClient.js';
 import { cn } from '../lib/cn.js';
+import { useAuthStore } from '../stores/authStore.js';
 
 // Mapping codeType -> codeType de son parent référentiel (pour exposer un select Catégorie)
 const PARENT_REF: Record<string, string> = {
@@ -141,6 +145,9 @@ export function ConfigView() {
         </div>
       </div>
 
+      {/* Paramètres applicatifs (réglages globaux, distincts des listes) */}
+      <ParametresSection />
+
       {/* Type selector */}
       <div className="grid gap-2.5 mb-5 grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
         {REF_TYPES.map((t) => (
@@ -238,6 +245,84 @@ interface RefRowProps {
   parentOptions: Referentiel[] | null;
   onChange: () => void;
   onDelete: () => void;
+}
+
+/**
+ * Section Paramètres : réglages globaux booléens (table appSettings), distincts
+ * des référentiels. Lecture pour tous, modification réservée aux admins.
+ */
+function ParametresSection() {
+  const role = useAuthStore((s) => s.user?.role);
+  const isAdmin = role === 'admin';
+  const query = useApi(() => api.get<AppSettings>('/settings'), []);
+  const [saving, setSaving] = useState<string | null>(null);
+
+  const settings = query.data;
+
+  const toggle = async (key: keyof AppSettings, value: boolean): Promise<void> => {
+    setSaving(key);
+    try {
+      await api.put('/settings', { key, value });
+      toast.success('Paramètre enregistré');
+      query.refetch();
+    } catch (err) {
+      toast.error(err instanceof ApiClientError ? err.message : 'Erreur');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="card mb-5">
+      <div className="card-header">
+        <h2 className="text-md font-semibold">Paramètres</h2>
+        <p className="text-xs text-fg-muted ml-3">Réglages globaux de l'application</p>
+      </div>
+      <div className="card-body space-y-3">
+        {APP_SETTINGS_META.map((meta) => {
+          const value = settings?.[meta.key] ?? false;
+          return (
+            <div
+              key={meta.key}
+              className="flex items-start justify-between gap-4 py-1"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-fg">{meta.label}</div>
+                <div className="text-[11.5px] text-fg-muted mt-0.5">{meta.description}</div>
+              </div>
+              {/* Interrupteur simple. Désactivé si non-admin ou pendant l'écriture. */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={value}
+                aria-label={meta.label}
+                disabled={!isAdmin || saving === meta.key || query.isLoading}
+                onClick={() => void toggle(meta.key, !value)}
+                className={cn(
+                  'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full transition-colors',
+                  value ? 'bg-primary' : 'bg-muted',
+                  (!isAdmin || saving === meta.key) && 'opacity-50 cursor-not-allowed',
+                )}
+                title={isAdmin ? undefined : 'Réservé aux administrateurs'}
+              >
+                <span
+                  className={cn(
+                    'inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform mt-0.5',
+                    value ? 'translate-x-[22px]' : 'translate-x-0.5',
+                  )}
+                />
+              </button>
+            </div>
+          );
+        })}
+        {!isAdmin && (
+          <p className="text-[11px] text-fg-muted italic">
+            Seuls les administrateurs peuvent modifier ces paramètres.
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function RefRow({ item, parentOptions, onChange, onDelete }: RefRowProps) {

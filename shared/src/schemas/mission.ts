@@ -15,9 +15,32 @@ export const ouvrageVisiteSchema = z.object({
 });
 export type OuvrageVisite = z.infer<typeof ouvrageVisiteSchema>;
 
+/**
+ * Une localité visitée lors de la mission, avec ses coordonnées propres.
+ * `latitude`/`longitude` peuvent être null : dans ce cas l'affichage retombe
+ * sur le centroïde de la région de la mission (cf. REGION_CENTROIDS).
+ */
+export const localiteMissionSchema = z.object({
+  nom: z.string().min(2),
+  latitude: z.number().min(-90).max(90).nullable(),
+  longitude: z.number().min(-180).max(180).nullable(),
+});
+export type LocaliteMission = z.infer<typeof localiteMissionSchema>;
+
 export const missionTerrainSchema = z.object({
   id: z.string().uuid(),
   dateMission: dateString,
+  /**
+   * Localités visitées, une par entrée, chacune avec ses coordonnées. Source de
+   * vérité de la géolocalisation. Au moins une entrée.
+   */
+  localites: z.array(localiteMissionSchema).min(1),
+  /**
+   * PROJECTION de la localité principale (première de `localites`), maintenue
+   * par le serveur. Conservées pour les vues résumé (listes, mini-cartes du
+   * dashboard) qui affichent un point unique par mission ; la carte des
+   * missions, elle, lit `localites` pour poser un marqueur par localité.
+   */
   localite: z.string().min(2),
   region: z.enum(REGIONS_SENEGAL).nullable(),
   latitude: z.number().min(-90).max(90).nullable(),
@@ -70,17 +93,21 @@ export const createMissionTerrainSchema = missionTerrainSchema
     // fournis par le client.
     nbOuvrages: true,
     ouvragesParType: true,
+    // Projections derivees de `localites[0]` par le serveur : le client
+    // n'envoie que `localites`.
+    localite: true,
+    latitude: true,
+    longitude: true,
     createdBy: true,
     createdAt: true,
     updatedAt: true,
   })
   .extend({
+    localites: z.array(localiteMissionSchema).min(1, 'Au moins une localité'),
     region: z.preprocess(
       (v) => (v === '' || v === undefined ? null : v),
       z.enum(REGIONS_SENEGAL).nullable(),
     ),
-    latitude: z.number().min(-90).max(90).nullish(),
-    longitude: z.number().min(-180).max(180).nullish(),
     projetRattache: z.string().nullish(),
     constats: z.string().nullish(),
     recommandations: z.string().nullish(),

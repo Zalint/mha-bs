@@ -1,5 +1,6 @@
 import type {
   CreateMissionTerrainInput,
+  LocaliteMission,
   MissionTerrain,
   OuvrageVisite,
   RegionSenegal,
@@ -12,6 +13,7 @@ import { query, queryAll, queryOne } from '../db/query.js';
 interface MissionRow {
   id: string;
   dateMission: Date;
+  localites: LocaliteMission[];
   localite: string;
   region: RegionSenegal | null;
   latitude: string | null;
@@ -41,10 +43,19 @@ interface OuvrageRow {
 // la date en UTC et reculait d'un jour hors Greenwich.
 const toYmd = (d: Date | null): string => (d ? ymd(d) : '');
 
+/** Normalise une localité venant de JSONB (coords en string ou number selon le driver). */
+function toLocalite(l: LocaliteMission): LocaliteMission {
+  const num = (v: unknown): number | null =>
+    v === null || v === undefined ? null : Number(v);
+  return { nom: l.nom, latitude: num(l.latitude), longitude: num(l.longitude) };
+}
+
 function toMission(row: MissionRow): MissionTerrain {
+  const localites = (Array.isArray(row.localites) ? row.localites : []).map(toLocalite);
   return {
     id: row.id,
     dateMission: toYmd(row.dateMission),
+    localites,
     localite: row.localite,
     region: row.region,
     latitude: row.latitude !== null ? Number(row.latitude) : null,
@@ -73,10 +84,27 @@ function toOuvrage(row: OuvrageRow): OuvrageVisite {
 }
 
 const SELECT_MISSION = `
-  "id", "dateMission", "localite", "region", "latitude", "longitude",
+  "id", "dateMission", "localites", "localite", "region", "latitude", "longitude",
   "projetRattache", "constats", "recommandations",
   "createdBy", "createdAt", "updatedAt"
 `;
+
+/**
+ * Derive les colonnes scalaires (projection de la localite principale) a partir
+ * de `localites[0]`. `localites` est la source de verite ; ces scalaires ne
+ * servent qu'aux vues resume et a la cle naturelle d'import, on les recalcule
+ * donc a chaque ecriture. `localite` etant NOT NULL, on garantit au moins une
+ * entree (le schema Zod l'impose deja avec min(1)).
+ */
+function projectionPrincipale(localites: LocaliteMission[]): {
+  localite: string;
+  latitude: number | null;
+  longitude: number | null;
+} {
+  const p = localites[0];
+  if (!p) throw new Error('Une mission doit comporter au moins une localité');
+  return { localite: p.nom, latitude: p.latitude ?? null, longitude: p.longitude ?? null };
+}
 
 /**
  * Colonnes de mission + sous-totaux d'ouvrages visites.
@@ -110,7 +138,7 @@ const JOIN_OUVRAGES = `
 `;
 
 const SELECT_MISSION_AVEC_OUVRAGES = `
-  m."id", m."dateMission", m."localite", m."region", m."latitude", m."longitude",
+  m."id", m."dateMission", m."localites", m."localite", m."region", m."latitude", m."longitude",
   m."projetRattache", m."constats", m."recommandations",
   m."createdBy", m."createdAt", m."updatedAt",
   ouv."nbOuvrages", ouv."ouvragesParType"
@@ -155,19 +183,21 @@ export async function createMission(
   input: CreateMissionTerrainInput,
   createdBy: string,
 ): Promise<MissionTerrain> {
+  const principale = projectionPrincipale(input.localites);
   const row = await queryOne<MissionRow>(
     `INSERT INTO "missionsTerrain" (
-       "dateMission", "localite", "region", "latitude", "longitude",
+       "dateMission", "localites", "localite", "region", "latitude", "longitude",
        "projetRattache", "constats", "recommandations", "createdBy"
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING ${SELECT_MISSION}`,
     [
       input.dateMission,
-      input.localite,
+      JSON.stringify(input.localites),
+      principale.localite,
       input.region,
-      input.latitude,
-      input.longitude,
+      principale.latitude,
+      principale.longitude,
       input.projetRattache,
       input.constats,
       input.recommandations,
@@ -191,10 +221,16 @@ export async function updateMission(
     sets.push(`"${col}" = $${params.length}`);
   };
   if (input.dateMission !== undefined) push('dateMission', input.dateMission);
-  if (input.localite !== undefined) push('localite', input.localite);
+  // `localites` mis a jour -> on reecrit aussi la projection principale.
+  if (input.localites !== undefined) {
+    const principale = projectionPrincipale(input.localites);
+    params.push(JSON.stringify(input.localites));
+    sets.push(`"localites" = $${params.length}::jsonb`);
+    push('localite', principale.localite);
+    push('latitude', principale.latitude);
+    push('longitude', principale.longitude);
+  }
   if (input.region !== undefined) push('region', input.region);
-  if (input.latitude !== undefined) push('latitude', input.latitude);
-  if (input.longitude !== undefined) push('longitude', input.longitude);
   if (input.projetRattache !== undefined) push('projetRattache', input.projetRattache);
   if (input.constats !== undefined) push('constats', input.constats);
   if (input.recommandations !== undefined) push('recommandations', input.recommandations);

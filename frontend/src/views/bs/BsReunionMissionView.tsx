@@ -1,6 +1,3 @@
-import 'leaflet/dist/leaflet.css';
-
-import L from 'leaflet';
 import {
   ArrowLeft,
   ArrowRight,
@@ -18,19 +15,20 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import {
   type CreateMissionTerrainInput,
   type CreateReunionTechniqueInput,
+  type LocaliteMission,
   REGIONS_SENEGAL,
   type RegionSenegal,
   type ReunionTechnique,
   type SousSecteur,
 } from '@mha-bs/shared';
 
+import { LocalitesField } from '../../components/missions/LocalitesField.js';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog.js';
 import { FormField } from '../../components/ui/FormField.js';
 import {
@@ -39,6 +37,7 @@ import {
   readNotesDraft,
 } from '../../components/ui/NotesPriveesField.js';
 import { Textarea } from '../../components/ui/Textarea.js';
+import { useAppSettings } from '../../hooks/useAppSettings.js';
 import { useAuthStore } from '../../stores/authStore.js';
 import { useReferentiel } from '../../hooks/useReferentiel.js';
 import { ApiClientError, api, formatApiError } from '../../lib/apiClient.js';
@@ -68,10 +67,9 @@ interface ReunionFormValues {
 
 interface MissionFormValues {
   dateMission: string;
-  localite: string;
+  // Une entrée par localité, chacune avec ses coordonnées propres.
+  localites: LocaliteMission[];
   region: RegionSenegal | '';
-  latitude: string;
-  longitude: string;
   projetRattache: string;
   constats: string;
   recommandations: string;
@@ -83,15 +81,6 @@ interface Ouvrage {
   etatOuvrage: 'fonctionnel' | 'maintenance' | 'horsService' | 'enConstruction';
 }
 
-const SENEGAL_CENTER: [number, number] = [14.7167, -17.4677];
-
-// Icone leaflet custom (sinon icones par defaut cassees en bundle)
-const PIN_ICON = L.divIcon({
-  className: '',
-  html: '<div style="background:#0284C7;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25)">●</div>',
-  iconSize: [24, 24],
-  iconAnchor: [12, 12],
-});
 
 /**
  * Saisie d'une reunion en DEUX etapes.
@@ -113,7 +102,7 @@ type EtapeReunion = 'creation' | 'complement';
  * Fonction et non constante : `todayYmd()` doit etre evalue au moment ou l'on
  * repart sur une saisie vierge, pas au chargement du module.
  */
-function reunionDefaults(): ReunionFormValues {
+function reunionDefaults(visibleSgParDefaut: boolean): ReunionFormValues {
   return {
     dateReunion: todayYmd(),
     heureDebut: '10:00',
@@ -127,8 +116,11 @@ function reunionDefaults(): ReunionFormValues {
     decisions: '',
     notesPrivees: '',
     participantsRaw: 'Cabinet MHA, DPGI, ONAS',
-    // Non publiee par defaut : c'est l'etape 2 qui rend la reunion visible au SG.
-    visibleSg: false,
+    // Valeur par defaut de la case « Visible au SG », pilotee par le parametre
+    // Config `reunionVisibleSgParDefaut`. Ne publie PAS a l'etape 1 (la creation
+    // force toujours visibleSg=false) : c'est l'enregistrement de l'etape 2 avec
+    // la case cochee qui publie.
+    visibleSg: visibleSgParDefaut,
     inclusRapportHebdo: false,
   };
 }
@@ -154,7 +146,9 @@ function toReunionFormValues(
   // « continuer apres creation » et « rouvrir depuis la liste » se comportent
   // exactement pareil. Contrepartie assumee : un lieu volontairement vide se
   // reproposera a la reouverture.
-  const defauts = reunionDefaults();
+  // Ici on ne réutilise que lieu/participants par défaut ; `visibleSg` provient
+  // toujours de la réunion chargée (`r.visibleSg`), donc l'argument est neutre.
+  const defauts = reunionDefaults(false);
   return {
     dateReunion: r.dateReunion,
     heureDebut: r.heureDebut ?? '',
@@ -181,6 +175,8 @@ export function BsReunionMissionView() {
   const envoiEnCoursRef = useRef(false);
   const [ouvrages, setOuvrages] = useState<Ouvrage[]>([]);
   const userId = useAuthStore((s) => s.user?.id);
+  // Paramètre Config : la case « Visible au SG » démarre-t-elle cochée ?
+  const { reunionVisibleSgParDefaut } = useAppSettings();
   const role = useAuthStore((s) => s.user?.role);
 
   // L'id de la reunion en cours de saisie vit dans l'URL : l'etape 2 survit
@@ -212,7 +208,9 @@ export function BsReunionMissionView() {
   const typeReunionRef = useReferentiel('typeReunion');
   const typeOuvrageRef = useReferentiel('typeOuvrage');
 
-  const reunionForm = useForm<ReunionFormValues>({ defaultValues: reunionDefaults() });
+  const reunionForm = useForm<ReunionFormValues>({
+    defaultValues: reunionDefaults(reunionVisibleSgParDefaut),
+  });
   // Lu PENDANT le rendu, volontairement : le formState de RHF est un Proxy qui
   // n'abonne le composant qu'aux cles effectivement lues au rendu. Lu seulement
   // dans un handler, `isDirty` resterait fige a false.
@@ -260,7 +258,7 @@ export function BsReunionMissionView() {
           // reunion precedemment hydratee : un « Créer » sur cet ecran en
           // ferait un doublon.
           setReunionChargee(null);
-          reunionForm.reset(reunionDefaults());
+          reunionForm.reset(reunionDefaults(reunionVisibleSgParDefaut));
           setSearchParams({}, { replace: true });
         } else {
           setErreurChargement(formatApiError(err, 'Chargement de la réunion impossible'));
@@ -284,6 +282,10 @@ export function BsReunionMissionView() {
     reunionChargee,
     reunionForm,
     setSearchParams,
+    // Utilisé seulement dans la branche 404 (reset du formulaire vierge). Le
+    // garde `reunionChargee?.id === reunionId` en tête d'effet évite tout
+    // refetch superflu si le paramètre change après hydratation.
+    reunionVisibleSgParDefaut,
   ]);
 
   // Formulaire gele tant qu'il n'affiche pas le vrai contenu de la reunion :
@@ -299,10 +301,8 @@ export function BsReunionMissionView() {
   const missionForm = useForm<MissionFormValues>({
     defaultValues: {
       dateMission: todayYmd(),
-      localite: '',
+      localites: [{ nom: '', latitude: null, longitude: null }],
       region: 'Dakar',
-      latitude: String(SENEGAL_CENTER[0]),
-      longitude: String(SENEGAL_CENTER[1]),
       projetRattache: '',
       constats: '',
       recommandations: '',
@@ -338,7 +338,13 @@ export function BsReunionMissionView() {
       // L'etat serveur est deja connu -> on court-circuite l'effet d'hydratation
       setReunionChargee(created);
       setConflit(null);
-      reunionForm.reset(toReunionFormValues(created, null));
+      // La reunion vient d'etre creee non publiee (visibleSg=false cote serveur),
+      // mais a l'etape 2 on PRE-COCHE la case selon le parametre Config : ainsi
+      // « Enregistrer » publie directement si le defaut est ON.
+      reunionForm.reset({
+        ...toReunionFormValues(created, null),
+        visibleSg: reunionVisibleSgParDefaut,
+      });
       setSearchParams({ reunion: created.id }, { replace: true });
       toast.success('Réunion créée — complétez-la, puis publiez-la vers le SG');
     } catch (err) {
@@ -427,7 +433,7 @@ export function BsReunionMissionView() {
     setReunionChargee(null);
     setConflit(null);
     setErreurChargement(null);
-    reunionForm.reset(reunionDefaults());
+    reunionForm.reset(reunionDefaults(reunionVisibleSgParDefaut));
     setSearchParams({}, { replace: true });
   };
 
@@ -463,19 +469,15 @@ export function BsReunionMissionView() {
   const submitMission = async (v: MissionFormValues): Promise<void> => {
     setSubmitting(true);
     try {
-      // Number() renvoie NaN sur une saisie non numérique, et Zod rejette NaN
-      // ('Expected number, received nan') -> on ne transmet que des nombres finis.
-      const toCoord = (raw: string): number | null => {
-        if (!raw) return null;
-        const n = Number(raw);
-        return Number.isFinite(n) ? n : null;
-      };
+      // `localites` est la source de vérité ; on ne garde que les entrées
+      // nommées (le serveur en dérive localite/latitude/longitude scalaires).
+      const localites = v.localites
+        .map((l) => ({ ...l, nom: l.nom.trim() }))
+        .filter((l) => l.nom.length >= 2);
       const payload: CreateMissionTerrainInput = {
         dateMission: v.dateMission,
-        localite: v.localite.trim(),
+        localites,
         region: v.region || null,
-        latitude: toCoord(v.latitude),
-        longitude: toCoord(v.longitude),
         projetRattache: v.projetRattache || null,
         constats: v.constats || null,
         recommandations: v.recommandations || null,
@@ -935,80 +937,38 @@ export function BsReunionMissionView() {
                 />
               </FormField>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <FormField label="Localité" required>
-                <input
-                  type="text"
-                  className="input"
-                  placeholder="ex. Keur Massar — Tivaoune Peulh"
-                  {...missionForm.register('localite', { required: 'Localité requise' })}
-                />
-              </FormField>
-              <FormField label="Région">
-                {/* Options issues de REGIONS_SENEGAL (la constante que le backend
-                    valide), et NON du référentiel : ses libellés sont sans
-                    accents ('Thies', 'Kedougou', 'Sedhiou') et étaient rejetés
-                    par l'enum ('Thiès', 'Kédougou', 'Sédhiou') -> 422. */}
-                <select className="select" {...missionForm.register('region')}>
-                  <option value="">—</option>
-                  {REGIONS_SENEGAL.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-            </div>
+            <FormField label="Région">
+              {/* Options issues de REGIONS_SENEGAL (la constante que le backend
+                  valide), et NON du référentiel : ses libellés sans accents
+                  ('Thies', 'Kedougou', 'Sedhiou') étaient rejetés par l'enum. */}
+              <select className="select" {...missionForm.register('region')}>
+                <option value="">—</option>
+                {REGIONS_SENEGAL.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            </FormField>
           </fieldset>
 
           <fieldset className="p-5 border-b border-border">
             <legend className="text-xs font-semibold uppercase tracking-wider text-fg-muted mb-3">
-              Géolocalisation
+              Localités visitées
             </legend>
-            <p className="text-xs text-fg-muted mb-2">Cliquez sur la carte pour positionner le site.</p>
             <Controller
               control={missionForm.control}
-              name="latitude"
-              render={({ field: latField }) => (
+              name="localites"
+              render={({ field }) => (
                 <Controller
                   control={missionForm.control}
-                  name="longitude"
-                  render={({ field: lngField }) => (
-                    <>
-                      <div className="rounded border border-border overflow-hidden" style={{ height: 280 }}>
-                        <MapContainer
-                          center={[Number(latField.value) || SENEGAL_CENTER[0], Number(lngField.value) || SENEGAL_CENTER[1]]}
-                          zoom={9}
-                          scrollWheelZoom={false}
-                          style={{ height: '100%', width: '100%' }}
-                        >
-                          <TileLayer
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                          />
-                          <ClickHandler
-                            onPick={(lat, lng) => {
-                              latField.onChange(String(lat.toFixed(6)));
-                              lngField.onChange(String(lng.toFixed(6)));
-                            }}
-                          />
-                          {Number(latField.value) && Number(lngField.value) && (
-                            <Marker
-                              position={[Number(latField.value), Number(lngField.value)]}
-                              icon={PIN_ICON}
-                            />
-                          )}
-                        </MapContainer>
-                      </div>
-                      <div className="flex gap-3 mt-2 text-xs font-mono text-fg-muted">
-                        <span>
-                          Latitude : <b className="text-fg-2">{latField.value || '—'}</b>
-                        </span>
-                        <span>
-                          Longitude : <b className="text-fg-2">{lngField.value || '—'}</b>
-                        </span>
-                      </div>
-                    </>
+                  name="region"
+                  render={({ field: regionField }) => (
+                    <LocalitesField
+                      localites={field.value}
+                      region={regionField.value || null}
+                      onChange={field.onChange}
+                    />
                   )}
                 />
               )}
@@ -1238,15 +1198,6 @@ function EtapeBadge({
       </span>
     </div>
   );
-}
-
-function ClickHandler({ onPick }: { onPick: (lat: number, lng: number) => void }) {
-  useMapEvents({
-    click(e) {
-      onPick(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
 }
 
 function NewOuvrageRow({
